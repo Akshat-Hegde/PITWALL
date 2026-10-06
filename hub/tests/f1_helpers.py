@@ -26,3 +26,19 @@ def make_header(packet_format: int, packet_id: int, *, session_uid: int = 0xDEAD
 def make_packet(packet_format: int, packet_id: int, total_size: int, **header_kwargs) -> bytes:
     header = make_header(packet_format, packet_id, **header_kwargs)
     return header + bytes(total_size - len(header))
+
+
+def blank_packet(packet_format: int, packet_id: int, **header_kwargs) -> bytearray:
+    """Zero-filled packet of the documented size with a valid header."""
+    from simtelemetry.adapters.f1.sizes import DOCUMENTED_SIZES
+    return bytearray(make_packet(packet_format, packet_id, DOCUMENTED_SIZES[packet_format][packet_id],
+                                 **header_kwargs))
+
+
+def decode_packet(data: bytes | bytearray):
+    """validate() then decode(); the packet must be accepted."""
+    from simtelemetry.adapters.f1.decode import decode
+    from simtelemetry.adapters.f1.validate import Accepted, validate
+    accepted = validate(data)
+    assert isinstance(accepted, Accepted), accepted
+    return decode(accepted, data)
