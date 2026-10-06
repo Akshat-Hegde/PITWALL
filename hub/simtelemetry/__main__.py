@@ -14,7 +14,7 @@ import uvicorn
 
 from .adapters.f1.adapter import F1Adapter
 from .api.app import create_app
-from .config import AppConfig, load_config
+from .config import AppConfig, ConfigError, load_config
 from .core.health import RigState
 from .core.rigs import RigRegistry
 from .hub import Hub
@@ -164,7 +164,11 @@ def port_in_use_message(exc: PortInUseError) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    config = apply_overrides(load_config(args.config), args)
+    try:
+        config = apply_overrides(load_config(args.config), args)
+    except ConfigError as exc:
+        print(f"\nERROR: {exc}\n", file=sys.stderr)
+        return 2
     setup_logging(config.data_dir / "logs", args.verbose)
 
     registry = RigRegistry(config, config.data_dir / "rigs.json")
