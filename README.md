@@ -2,8 +2,9 @@
 
 Local LAN telemetry hub and TV dashboard for sim racing cafes. Milestone 1: F1 25 (UDP formats 2025 and 2026), two rigs.
 
-Status: step 3 of 6. Packet parsing, UDP listener, rig registry, health, recorder/replay and the health API
-are done; normalisation, WebSocket and the dashboard are next.
+Status: hub steps 1–3 are done (packet parsing, UDP listener, rig registry, health, recorder/replay, health API).
+The dashboard shell runs against a built-in mock. Lap tracking, the hub's WebSocket feed and connecting the two
+wait for the first real 2-PC capture.
 
 ## Setup (Windows, Python 3.11+)
 
@@ -68,6 +69,35 @@ space on that drive at start and every `disk_check_interval_s` (30 s):
 
 A write error (e.g. the drive filling up between checks) stops recording the same way.
 
+## Dashboard (TV screen)
+
+React + Vite + TypeScript in `dashboard/`, built for a full-screen 1080p or 4K TV. Needs Node.js 20+.
+
+```powershell
+cd dashboard
+npm install
+npm run dev        # http://localhost:5173: uses the built-in mock data, no hub needed
+npm test           # schema conformance of the mock, state, formatting, map geometry
+npm run build      # production files in dashboard/dist (fonts bundled: works offline on the LAN)
+```
+
+The dashboard reads only the WebSocket messages described in [docs/WS_SCHEMA.md](docs/WS_SCHEMA.md).
+Data source: `?source=mock` (default in `npm run dev`) or `?source=ws` (default when served by the hub; in dev
+it is proxied to a hub on `localhost:8000`). The hub doesn't send the WebSocket feed yet.
+
+Mock options, combined in the URL, e.g. `http://localhost:5173/?outline=late&mismatch=1`:
+
+| Option | Effect |
+|---|---|
+| `speed=N` | Run the simulation N times faster (e.g. `speed=8` to reach a leaderboard quickly). |
+| `outline=late` | No track outline until the first valid lap: trail-only map. |
+| `mismatch=1` | Rig 2 reports UDP format 2026: format warning. |
+| `recorder=recording\|low\|stopped` | Recorder status / low-disk warnings in the status bar. |
+| `offline=0` | Hide the configured-but-offline Rig 3. |
+
+Branding comes from `[cafe]` in the hub config: `name`, plus CSS variables in `[cafe.branding]` (e.g.
+`"--brand-accent" = "#0a7cff"`), applied to the page as-is.
+
 ## Python on the dev machine
 
 The current dev machine uses the **Microsoft Store** build of Python 3.11. That's fine for development, but
@@ -80,6 +110,7 @@ launcher). Until then, use the port-based firewall rule in [docs/TEST_PLAN.md](d
 
 - [docs/RIG_SETUP.md](docs/RIG_SETUP.md): in-game UDP settings for each rig.
 - [docs/TEST_PLAN.md](docs/TEST_PLAN.md): firewall setup and the 2-PC test checklist.
+- [docs/WS_SCHEMA.md](docs/WS_SCHEMA.md): hub → dashboard WebSocket message format (v1 draft).
 - Specs (source of truth for the parser): `docs/F1_25_structures.txt`, `docs/F1_2026_SeasonPack_structures.txt`,
   `docs/F1_25_UDP_Spec.pdf`.
 
@@ -95,4 +126,11 @@ hub/simtelemetry/
   hub.py         packet pipeline
 hub/tests/       pytest suite (spec conformance, decoding, pipeline, CLI)
 config/          hub.example.toml
+dashboard/src/
+  schema.ts      TypeScript twin of docs/WS_SCHEMA.md
+  data/          data sources: mock, WebSocket (reconnect, resync on seq gap)
+  mock/          simulated track and rigs that emit schema messages
+  state/         reducer, store, position trails
+  map/           map geometry (display transform, fit)
+  components/    status bar, track map, rig panel, comparison, leaderboard
 ```

@@ -27,3 +27,6 @@ config/hub.toml
 .idea/
 Thumbs.db
 .DS_Store
+
+# Local dashboard screenshots
+dashboard/.screens/
