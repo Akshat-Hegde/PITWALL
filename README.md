@@ -23,6 +23,21 @@ copy config\hub.example.toml config\hub.toml   # optional: edit cafe name, rig n
 .venv\Scripts\python -m pytest                               # tests
 ```
 
+Replay options:
+
+- `--from-ip IP`: only replay packets the recording received from that source IP.
+- `--as-ip IP`: replay them as if sent from another IP (i.e. as a different rig). If the recording holds
+  several source IPs, pick one with `--from-ip`.
+- `--live`: also listen for live UDP rigs, so the recording plays **alongside** them in the same hub,
+  e.g. drive one real rig while a capture plays as Rig 2. Keeps running after the replay ends:
+
+  ```powershell
+  .venv\Scripts\python -m simtelemetry replay data\recordings\<file>.f1rec --from-ip 192.168.1.21 --as-ip 192.168.50.2 --live
+  ```
+
+  Use this instead of a separate `listen`/`run` (one hub process owns the UDP port). Choose an `--as-ip`
+  that no live rig uses; the hub warns if a live rig sends from it.
+
 Common options: `--config PATH`, `--port N` (UDP), `--http-port N`, `--data-dir PATH`,
 `--record` / `--no-record`, `--duration SECONDS`, `-v`.
 

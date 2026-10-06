@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import difflib
+import re
 import tomllib
 from pathlib import Path
 from typing import Any, get_args, get_origin
@@ -75,12 +76,33 @@ def load_config(path: Path | None = None) -> AppConfig:
             return AppConfig()
         path = DEFAULT_CONFIG_PATH
     with path.open("rb") as f:
-        data = tomllib.load(f)
+        try:
+            data = tomllib.load(f)
+        except tomllib.TOMLDecodeError as exc:
+            raise ConfigError(f"Invalid config file {path}:\n  {_describe_syntax_error(path, exc)}") from None
     try:
         return AppConfig.model_validate(data)
     except ValidationError as exc:
         problems = "\n".join(f"  {_describe(path, err)}" for err in exc.errors())
         raise ConfigError(f"Invalid config file {path}:\n{problems}") from None
+
+
+# Python 3.11's TOMLDecodeError only carries the position inside its message.
+_TOML_POSITION = re.compile(r"^(?P<msg>.*?) \(at line (?P<line>\d+), column (?P<col>\d+)\)$", re.S)
+
+
+def _describe_syntax_error(path: Path, exc: tomllib.TOMLDecodeError) -> str:
+    line, col = getattr(exc, "lineno", None), getattr(exc, "colno", None)  # Python 3.14+
+    msg = getattr(exc, "msg", None) or str(exc)
+    position = ""
+    m = _TOML_POSITION.match(str(exc))
+    if m:
+        msg, line, col = m["msg"], int(m["line"]), int(m["col"])
+    elif str(exc).endswith(" (at end of document)"):
+        msg, position = str(exc).removesuffix(" (at end of document)"), " at end of file"
+    if line is not None:
+        position = f" line {line}, column {col}"
+    return f"{path}{position}: TOML syntax error: {msg}"
 
 
 def _section_model(loc: tuple) -> type[BaseModel] | None:

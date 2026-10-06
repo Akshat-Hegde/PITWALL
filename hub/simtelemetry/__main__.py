@@ -21,7 +21,7 @@ from .hub import Hub
 from .logging_setup import setup_logging
 from .net.udp import PortInUseError, UdpListener, bind_socket
 from .tools.recorder import Recorder
-from .tools.replay import replay
+from .tools.replay import ReplayError, SourceSelection, replay, select_source
 
 log = logging.getLogger("simtelemetry")
 
@@ -73,6 +73,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--no-api", action="store_true", help="don't serve the HTTP API while replaying")
     p.add_argument("--hold", action="store_true", help="keep serving the API after the replay ends")
     p.add_argument("--quiet", action="store_true", help="don't print per-rig status lines")
+    p.add_argument("--from-ip", help="only replay packets recorded from this source IP")
+    p.add_argument("--as-ip", help="replay packets as if sent from this IP (needs --from-ip if the file has "
+                                   "several source IPs)")
+    p.add_argument("--live", action="store_true",
+                   help="also listen for live UDP rigs, so the recording plays alongside them in one hub; "
+                        "keeps running after the replay ends")
+    p.add_argument("--duration", type=float, help="stop after this many seconds")
     return parser
 
 
@@ -96,17 +103,47 @@ async def print_status_lines(hub: Hub) -> None:
                 print(f"{stamp} {hub.listen_line(rig, now)}", flush=True)
 
 
-async def run_hub(args: argparse.Namespace, hub: Hub) -> None:
+async def replay_and_report(args: argparse.Namespace, hub: Hub, selection: SourceSelection) -> None:
+    try:
+        await replay(args.files, hub.on_datagram, args.speed, selection)
+    except Exception:  # with --live nothing awaits this task, so report here
+        log.exception("Replay failed")
+        return
+    await hub.drain()
+    hub.health.tick(time.monotonic())
+    for line in hub.summary_lines(time.monotonic()):
+        log.info("%s", line)
+
+
+def live_handler(hub: Hub, replay_ip: str | None):
+    """UDP handler for replay --live: warns once if a live rig uses the IP the recording plays as."""
+    warned = False
+
+    def handle(data: bytes, ip: str, wall_time: float) -> None:
+        nonlocal warned
+        if ip == replay_ip and not warned:
+            warned = True
+            log.warning("Live packets are arriving from %s, the same IP the recording is replayed as; "
+                        "both will be mixed into one rig. Use a different --as-ip.", ip)
+        hub.on_datagram(data, ip, wall_time)
+
+    return handle
+
+
+async def run_hub(args: argparse.Namespace, hub: Hub, selection: SourceSelection = SourceSelection()) -> None:
     cmd = args.command
     net = hub.config.network
-    serve_api = cmd == "run" or (cmd == "replay" and not args.no_api)
-    print_lines = cmd == "listen" or (cmd == "replay" and not args.quiet)
+    is_replay = cmd == "replay"
+    live = not is_replay or args.live
+    serve_api = cmd == "run" or (is_replay and not args.no_api)
+    print_lines = cmd == "listen" or (is_replay and not args.quiet)
 
     # Bind everything first so a taken port fails before anything starts.
     http_sock = bind_socket(socket.SOCK_STREAM, net.http_host, net.http_port) if serve_api else None
     listener = None
-    if cmd != "replay":
-        listener = UdpListener(net.udp_host, net.udp_port, net.udp_receive_buffer_bytes, hub.on_datagram)
+    if live:
+        handler = live_handler(hub, selection.as_ip or selection.from_ip) if is_replay else hub.on_datagram
+        listener = UdpListener(net.udp_host, net.udp_port, net.udp_receive_buffer_bytes, handler)
         try:
             await listener.start()
         except PortInUseError:
@@ -126,15 +163,14 @@ async def run_hub(args: argparse.Namespace, hub: Hub) -> None:
         log.info("API on http://%s:%d/api/health", "localhost" if net.http_host == "0.0.0.0" else net.http_host,
                  net.http_port)
 
+    replay_task = None
+    if is_replay:
+        replay_task = asyncio.create_task(replay_and_report(args, hub, selection))
+        tasks.append(replay_task)
+
     try:
-        if cmd == "replay":
-            await replay(args.files, hub.on_datagram, args.speed)
-            await hub.drain()
-            hub.health.tick(time.monotonic())
-            for line in hub.summary_lines(time.monotonic()):
-                log.info("%s", line)
-            if args.hold and server_task is not None:
-                await server_task
+        if is_replay and not args.live and not args.hold:
+            await replay_task
         elif args.duration is not None:
             await asyncio.sleep(args.duration)
         elif server_task is not None:
@@ -178,9 +214,19 @@ def main(argv: list[str] | None = None) -> int:
         recorder = Recorder(out, config.recorder.max_file_mb * 1024 * 1024, config.recorder.keep_files)
     hub = Hub(config, F1Adapter(config.track_names), registry, recorder)
 
+    selection = SourceSelection()
+    if args.command == "replay":
+        try:
+            if args.as_ip or args.from_ip:
+                log.info("Scanning recording for source IPs")
+            selection = select_source(args.files, args.from_ip, args.as_ip)
+        except ReplayError as exc:
+            print(f"\nERROR: {exc}\n", file=sys.stderr)
+            return 2
+
     exit_code = 0
     try:
-        asyncio.run(run_hub(args, hub))
+        asyncio.run(run_hub(args, hub, selection))
     except PortInUseError as exc:
         print(f"\nERROR: {port_in_use_message(exc)}\n", file=sys.stderr)
         exit_code = 2
