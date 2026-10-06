@@ -26,6 +26,24 @@ from .tools.replay import replay
 log = logging.getLogger("simtelemetry")
 
 
+def add_record_flags(p: argparse.ArgumentParser) -> None:
+    group = p.add_mutually_exclusive_group()
+    group.add_argument("--record", dest="record", action="store_true", default=None,
+                       help="record raw packets (overrides config)")
+    group.add_argument("--no-record", dest="record", action="store_false",
+                       help="don't record raw packets (overrides config)")
+
+
+def should_record(args: argparse.Namespace, config: AppConfig) -> bool:
+    if args.command == "record":
+        return True
+    if args.command == "replay":
+        return False
+    if args.record is not None:
+        return args.record
+    return config.recorder.enabled_in_run if args.command == "run" else config.recorder.enabled_in_listen
+
+
 def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--config", type=Path, help="TOML config (default: config/hub.toml if present)")
@@ -38,11 +56,11 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("run", parents=[common], help="hub + API (dashboard added in a later step)")
-    p.add_argument("--no-record", action="store_true", help="disable the raw packet recorder")
+    add_record_flags(p)
     p.add_argument("--duration", type=float, help="stop after this many seconds")
 
     p = sub.add_parser("listen", parents=[common], help="debug: no API, one status line per rig per second")
-    p.add_argument("--no-record", action="store_true", help="disable the raw packet recorder")
+    add_record_flags(p)
     p.add_argument("--duration", type=float, help="stop after this many seconds")
 
     p = sub.add_parser("record", parents=[common], help="capture raw packets to file (health summary only)")
@@ -151,9 +169,7 @@ def main(argv: list[str] | None = None) -> int:
 
     registry = RigRegistry(config, config.data_dir / "rigs.json")
     recorder = None
-    record = args.command == "record" or (
-        args.command in ("run", "listen") and config.recorder.enabled and not args.no_record)
-    if record:
+    if should_record(args, config):
         out = getattr(args, "out", None) or config.data_dir / "recordings"
         recorder = Recorder(out, config.recorder.max_file_mb * 1024 * 1024, config.recorder.keep_files)
     hub = Hub(config, F1Adapter(config.track_names), registry, recorder)

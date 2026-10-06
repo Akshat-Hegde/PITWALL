@@ -25,7 +25,9 @@ class NetworkConfig(BaseModel):
 
 
 class RecorderConfig(BaseModel):
-    enabled: bool = True
+    # Raw capture is for debugging. Off in production `run` (10 rigs ~ 7.5 GB/hour), on for `listen`.
+    enabled_in_run: bool = False
+    enabled_in_listen: bool = True
     max_file_mb: int = Field(256, ge=1)
     keep_files: int = Field(24, ge=0)  # 0 = never delete old recordings
 

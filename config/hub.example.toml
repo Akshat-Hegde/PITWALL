@@ -16,7 +16,8 @@ http_host = "0.0.0.0"
 http_port = 8000
 
 [recorder]
-enabled = true                         # raw packet capture for debugging
+enabled_in_run = false                 # production: off (10 rigs ~ 7.5 GB/hour); `run --record` to override
+enabled_in_listen = true               # debug `listen` mode: on; `listen --no-record` to override
 max_file_mb = 256                      # rotate after this size
 keep_files = 24                        # newest files kept; 0 = keep all
 

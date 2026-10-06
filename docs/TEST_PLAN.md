@@ -57,7 +57,8 @@ Python"**. Tick **Private networks** only, and click **Allow access**.
 
 > On this hub PC Python is the Microsoft Store build, and the venv's `python.exe` is only a launcher. Firewall
 > rules tied to a program are unreliable in that case, so rely on the port rule from 1b. If you dismissed
-> the prompt or chose "Public", the port rule still works.
+> the prompt or chose "Public", the port rule still works. (Before packaging, a later milestone, the hub
+> moves to a python.org 3.11 install; Store Python is also unreliable with PyInstaller.)
 
 ## 2. First contact: `listen` mode
 
@@ -92,7 +93,7 @@ Start F1 25 on both rigs and go into Time Trial on the same track. Check, in thi
 - [ ] **Track name** is correct on both lines (e.g. `Silverstone`).
 - [ ] **Lap number, lap time and speed match the in-game HUD** while driving (the line updates once per second).
 - [ ] Health JSON also works with `run` mode: `.venv\Scripts\python -m simtelemetry run`, then open
-      `http://localhost:8000/api/health`.
+      `http://localhost:8000/api/health`. (`run` does **not** record by default; add `--record` if needed.)
 
 *Track map, timing panels, comparison and leaderboard checks will be added here as those steps are built.*
 

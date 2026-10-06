@@ -117,7 +117,7 @@ def test_run_serves_health_api(tmp_path):
             result.update(json.load(r))
     poller = threading.Thread(target=poll)
     poller.start()
-    code = main(["run", "--port", str(udp_port), "--http-port", str(http_port), "--no-record",
+    code = main(["run", "--port", str(udp_port), "--http-port", str(http_port),
                  "--data-dir", str(tmp_path), "--duration", "2.5"])
     poller.join()
     sender.join()
@@ -125,3 +125,29 @@ def test_run_serves_health_api(tmp_path):
     assert result["udp_port"] == udp_port
     rig = result["rigs"][0]
     assert rig["ip"] == "127.0.0.1" and rig["driver_name"] == "Akshat" and rig["data_format"] == "2025"
+    assert result["recording"] is None
+    assert not list(tmp_path.glob("recordings/*.f1rec"))  # run: recorder off by default
+
+
+@pytest.mark.parametrize("argv,config_kwargs,expected", [
+    (["run"], {}, False),                                  # production default
+    (["listen"], {}, True),                                # dev default
+    (["run", "--record"], {}, True),
+    (["listen", "--no-record"], {}, False),
+    (["run"], {"enabled_in_run": True}, True),
+    (["listen"], {"enabled_in_listen": False}, False),
+    (["run", "--no-record"], {"enabled_in_run": True}, False),  # flag beats config
+    (["record"], {"enabled_in_run": False, "enabled_in_listen": False}, True),
+    (["replay", "x.f1rec"], {"enabled_in_run": True, "enabled_in_listen": True}, False),
+])
+def test_should_record(argv, config_kwargs, expected):
+    from simtelemetry.__main__ import build_parser, should_record
+    from simtelemetry.config import AppConfig, RecorderConfig
+    config = AppConfig(recorder=RecorderConfig(**config_kwargs))
+    assert should_record(build_parser().parse_args(argv), config) is expected
+
+
+def test_record_flags_are_mutually_exclusive():
+    from simtelemetry.__main__ import build_parser
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["run", "--record", "--no-record"])
