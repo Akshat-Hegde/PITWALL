@@ -56,6 +56,18 @@ enabled_in_listen = true   # dev / first tests
 `--record` / `--no-record` override the config for a single run. Files rotate at `max_file_mb` and only the
 newest `keep_files` are kept.
 
+**Where recordings go and disk safety.** Recordings are written to `[recorder] directory`, or to
+`<data_dir>/recordings` if that isn't set. Either can point to another drive (`data_dir = "D:/simtelemetry"`
+moves everything, including logs and the database; `directory` moves only recordings). The recorder checks free
+space on that drive at start and every `disk_check_interval_s` (30 s):
+
+- below `warn_free_gb` (default 5 GB): a warning in the log and in the 10 s console summary;
+- below `stop_free_gb` (default 1 GB): recording stops cleanly (current file flushed and closed) while the hub
+  keeps running; `/api/health` → `recorder.message` and the console summary show
+  `recording stopped: low disk`. Restart the hub after freeing space to record again.
+
+A write error (e.g. the drive filling up between checks) stops recording the same way.
+
 ## Python on the dev machine
 
 The current dev machine uses the **Microsoft Store** build of Python 3.11. That's fine for development, but

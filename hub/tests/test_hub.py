@@ -157,3 +157,19 @@ async def test_api_health(tmp_path):
 @pytest.mark.parametrize("ms,text", [(0, "0:00.000"), (83456, "1:23.456"), (600001, "10:00.001")])
 def test_format_lap_time(ms, text):
     assert format_lap_time(ms) == text
+
+
+async def test_low_disk_stop_shown_in_health_and_summary(tmp_path):
+    from simtelemetry.tools.recorder import Recorder
+
+    hub = make_hub(tmp_path)
+    hub.recorder = Recorder(tmp_path / "rec", disk_free=lambda p: 100 * 1024 ** 2)  # 0.1 GB free
+    hub.recorder.start()
+    await feed(hub, [(RIG_A, motion(2025))])  # hub keeps working without the recorder
+    snap = hub.health_snapshot()
+    assert snap["recording"] is None
+    assert snap["recorder"]["state"] == "stopped"
+    assert snap["recorder"]["message"] == "recording stopped: low disk"
+    assert snap["rigs"][0]["packets_total"] == 1
+    assert hub.summary_lines(time.monotonic())[0].startswith("recording stopped: low disk (0.1 GB free")
+    hub.recorder.close()

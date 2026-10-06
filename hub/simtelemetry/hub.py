@@ -120,12 +120,18 @@ class Hub:
             "udp_port": self.config.network.udp_port,
             "format_mismatch": len(set(formats.values())) > 1,
             "formats": formats,
-            "recording": str(self.recorder.current_path) if self.recorder else None,
+            # Path of the file being written, None when not recording (disabled or stopped).
+            "recording": str(self.recorder.current_path) if self.recorder and not self.recorder.stopped else None,
+            # Recorder state incl. "recording stopped: low disk"; None when recording is disabled.
+            "recorder": self.recorder.status() if self.recorder else None,
             "rigs": rigs,
         }
 
     def summary_lines(self, now: float) -> list[str]:
         lines = []
+        recorder_line = self.recorder.summary_line() if self.recorder else None
+        if recorder_line:
+            lines.append(recorder_line)
         formats = self._active_formats(now)
         if len(set(formats.values())) > 1:
             lines.append("WARNING: rigs are sending different packet formats: "

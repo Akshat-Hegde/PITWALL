@@ -98,3 +98,16 @@ def test_cli_toml_syntax_error_exits_cleanly(tmp_path, capsys):
     err = capsys.readouterr().err
     assert f"{path} line 2, column 18: TOML syntax error: Invalid value" in err
     assert "Traceback" not in err
+
+
+def test_recordings_directory_option(tmp_path):
+    path = write(tmp_path, '[recorder]\ndirectory = "D:/telemetry/recordings"\nwarn_free_gb = 20\nstop_free_gb = 2\n')
+    config = load_config(path)
+    assert config.recordings_dir == Path("D:/telemetry/recordings")
+    assert (config.recorder.warn_free_gb, config.recorder.stop_free_gb) == (20, 2)
+    assert load_config(write(tmp_path, "")).recordings_dir == Path("data") / "recordings"
+
+
+def test_floor_above_warning_rejected(tmp_path):
+    path = write(tmp_path, "[recorder]\nwarn_free_gb = 2\nstop_free_gb = 3\n")
+    assert f"{path} [recorder]: 'stop_free_gb' Value error, must not be above warn_free_gb (2)" in error_for(path)

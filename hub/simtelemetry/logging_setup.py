@@ -8,12 +8,18 @@ _FORMAT = "%(asctime)s %(levelname)-7s %(name)s: %(message)s"
 _MARK = "_simtelemetry_handler"
 
 
-def setup_logging(log_dir: Path | None, verbose: bool = False) -> None:
-    """Console + rotating file log. Safe to call more than once."""
+def teardown_logging() -> None:
+    """Remove and close the handlers added by setup_logging (closes hub.log)."""
     root = logging.getLogger()
     for handler in [h for h in root.handlers if getattr(h, _MARK, False)]:
         root.removeHandler(handler)
         handler.close()
+
+
+def setup_logging(log_dir: Path | None, verbose: bool = False) -> None:
+    """Console + rotating file log. Safe to call more than once."""
+    teardown_logging()
+    root = logging.getLogger()
     root.setLevel(logging.DEBUG if verbose else logging.INFO)
 
     console = logging.StreamHandler()

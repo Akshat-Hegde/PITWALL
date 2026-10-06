@@ -151,3 +151,19 @@ def test_record_flags_are_mutually_exclusive():
     from simtelemetry.__main__ import build_parser
     with pytest.raises(SystemExit):
         build_parser().parse_args(["run", "--record", "--no-record"])
+
+
+def test_hub_keeps_running_when_recording_stops_for_low_disk(tmp_path, capsys):
+    """Floor set above any real free space: recording stops at start, listening carries on."""
+    config = tmp_path / "hub.toml"
+    config.write_text("[recorder]\nwarn_free_gb = 1000000\nstop_free_gb = 1000000\n", encoding="utf-8")
+    port = free_port()
+    sender = send_later(port, RIG_PACKETS, repeat=10)
+    code = main(["listen", "--config", str(config), "--port", str(port), "--data-dir", str(tmp_path),
+                 "--duration", "2"])
+    sender.join()
+    assert code == 0
+    captured = capsys.readouterr()
+    assert "recording stopped: low disk" in captured.err
+    assert any("127.0.0.1" in l and "driving" in l for l in captured.out.splitlines())
+    assert not list(tmp_path.glob("recordings/*.f1rec"))

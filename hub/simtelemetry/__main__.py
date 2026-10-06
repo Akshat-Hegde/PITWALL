@@ -18,9 +18,9 @@ from .config import AppConfig, ConfigError, load_config
 from .core.health import RigState
 from .core.rigs import RigRegistry
 from .hub import Hub
-from .logging_setup import setup_logging
+from .logging_setup import setup_logging, teardown_logging
 from .net.udp import PortInUseError, UdpListener, bind_socket
-from .tools.recorder import Recorder
+from .tools.recorder import GB, Recorder
 from .tools.replay import ReplayError, SourceSelection, replay, select_source
 
 log = logging.getLogger("simtelemetry")
@@ -64,7 +64,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--duration", type=float, help="stop after this many seconds")
 
     p = sub.add_parser("record", parents=[common], help="capture raw packets to file (health summary only)")
-    p.add_argument("--out", type=Path, help="recordings directory (default: <data_dir>/recordings)")
+    p.add_argument("--out", type=Path, help="recordings directory (default: [recorder] directory, "
+                                            "else <data_dir>/recordings)")
     p.add_argument("--duration", type=float, help="stop after this many seconds")
 
     p = sub.add_parser("replay", parents=[common], help="replay recordings through the pipeline")
@@ -206,12 +207,21 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\nERROR: {exc}\n", file=sys.stderr)
         return 2
     setup_logging(config.data_dir / "logs", args.verbose)
+    try:
+        return run_command(args, config)
+    finally:
+        teardown_logging()  # main() may be called again in-process (tests); don't leave handlers behind
 
+
+def run_command(args: argparse.Namespace, config: AppConfig) -> int:
     registry = RigRegistry(config, config.data_dir / "rigs.json")
     recorder = None
     if should_record(args, config):
-        out = getattr(args, "out", None) or config.data_dir / "recordings"
-        recorder = Recorder(out, config.recorder.max_file_mb * 1024 * 1024, config.recorder.keep_files)
+        rc = config.recorder
+        recorder = Recorder(getattr(args, "out", None) or config.recordings_dir,
+                            max_file_bytes=rc.max_file_mb * 1024 * 1024, keep_files=rc.keep_files,
+                            warn_free_bytes=int(rc.warn_free_gb * GB), stop_free_bytes=int(rc.stop_free_gb * GB),
+                            disk_check_interval_s=rc.disk_check_interval_s)
     hub = Hub(config, F1Adapter(config.track_names), registry, recorder)
 
     selection = SourceSelection()

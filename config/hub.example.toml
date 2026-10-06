@@ -20,6 +20,10 @@ enabled_in_run = false                 # production: off (10 rigs ~ 7.5 GB/hour)
 enabled_in_listen = true               # debug `listen` mode: on; `listen --no-record` to override
 max_file_mb = 256                      # rotate after this size
 keep_files = 24                        # newest files kept; 0 = keep all
+# directory = "D:/telemetry/recordings" # default: <data_dir>/recordings; may be on another drive
+warn_free_gb = 5                       # warn when free space on the recordings drive drops below this
+stop_free_gb = 1                       # stop recording (hub keeps running) below this
+disk_check_interval_s = 30
 
 [health]
 summary_interval_s = 10

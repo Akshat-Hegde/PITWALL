@@ -12,6 +12,12 @@ Setup for this milestone: 2 rig PCs running F1 25 (each on its own Steam account
 
 - [ ] Both rigs configured per [RIG_SETUP.md](RIG_SETUP.md), with the **same UDP Format** on both.
 - [ ] Hub PC has the project installed (see README: `python -m venv .venv`, `pip install -e ".[dev]"`).
+- [ ] **Check free space before capture**, on the recordings drive *and* on C: (Windows, the game and Python
+      need it too). Recording uses about 0.75 GB per rig per hour; plan for at least 10 GB free on the
+      recordings drive. In PowerShell: `Get-PSDrive -PSProvider FileSystem` (see the `Free` column).
+      Recordings go to `data\recordings\` in the project folder unless `[recorder] directory` (or `data_dir`)
+      in `config\hub.toml` points elsewhere; use that to put them on a drive with space. Below 5 GB free the
+      hub warns; below 1 GB it stops recording (`recording stopped: low disk`) but keeps running.
 - [ ] All PCs on the same LAN / subnet. Note each PC's IPv4 address (`ipconfig`):
   - Hub: `__________` Rig A: `__________` Rig B: `__________`
 
@@ -99,7 +105,8 @@ Start F1 25 on both rigs and go into Time Trial on the same track. Check, in thi
 
 ## 3. Capture for golden tests
 
-Keep `listen` running (recording on) and on **each rig**:
+Keep `listen` running (recording on). Make sure the 10 s summary shows no `low disk space` warning and no
+`recording stopped` line, then on **each rig**:
 
 - [ ] Drive at least **3 timed laps**. Write down from the HUD / Time Trial screen: lap time and S1/S2/S3
       for each lap, and which laps were **invalid**.

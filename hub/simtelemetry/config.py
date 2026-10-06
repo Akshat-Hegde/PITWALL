@@ -8,7 +8,7 @@ import tomllib
 from pathlib import Path
 from typing import Any, get_args, get_origin
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, ValidationInfo, field_validator
 
 DEFAULT_CONFIG_PATH = Path("config/hub.toml")
 
@@ -42,6 +42,19 @@ class RecorderConfig(_Section):
     enabled_in_listen: bool = True
     max_file_mb: int = Field(256, ge=1)
     keep_files: int = Field(24, ge=0)  # 0 = never delete old recordings
+    # Where recordings go; default <data_dir>/recordings. Can be on another drive.
+    directory: Path | None = None
+    warn_free_gb: float = Field(5.0, ge=0)    # warn when free space on that drive drops below this
+    stop_free_gb: float = Field(1.0, ge=0)    # stop recording (hub keeps running) below this
+    disk_check_interval_s: float = Field(30.0, gt=0)
+
+    @field_validator("stop_free_gb")
+    @classmethod
+    def _floor_not_above_warning(cls, value: float, info: ValidationInfo) -> float:
+        warn = info.data.get("warn_free_gb")
+        if warn is not None and value > warn:
+            raise ValueError(f"must not be above warn_free_gb ({warn:g})")
+        return value
 
 
 class HealthConfig(_Section):
@@ -67,6 +80,10 @@ class AppConfig(_Section):
 
     def rig_by_ip(self, ip: str) -> RigConfig | None:
         return next((r for r in self.rigs if r.ip == ip), None)
+
+    @property
+    def recordings_dir(self) -> Path:
+        return self.recorder.directory or self.data_dir / "recordings"
 
 
 def load_config(path: Path | None = None) -> AppConfig:
