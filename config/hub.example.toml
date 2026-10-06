@@ -1,0 +1,37 @@
+# Copy to config/hub.toml and edit. Every key is optional; defaults are shown.
+
+data_dir = "data"                      # SQLite, track outlines, logs, recordings
+
+[cafe]
+name = "Sim Racing Cafe"
+
+[cafe.branding]                        # CSS variables applied to the dashboard
+# "--brand-accent" = "#e10600"
+
+[network]
+udp_host = "0.0.0.0"                   # all interfaces: works with Broadcast and direct-IP mode
+udp_port = 20777                       # must match the UDP port set on every rig
+udp_receive_buffer_bytes = 4194304     # 4 MB socket buffer for bursts
+http_host = "0.0.0.0"
+http_port = 8000
+
+[recorder]
+enabled = true                         # raw packet capture for debugging
+max_file_mb = 256                      # rotate after this size
+keep_files = 24                        # newest files kept; 0 = keep all
+
+[health]
+summary_interval_s = 10
+no_motion_after_s = 2                  # packets but no Motion -> "in menu / paused"
+no_data_after_s = 5                    # nothing received -> "no data"
+
+# Rigs are auto-detected by source IP and named "Rig 1", "Rig 2", ...
+# Add entries to give them fixed names / colours.
+# [[rigs]]
+# ip = "192.168.1.21"
+# name = "Rig A"
+# colour = "#00d2be"
+
+# Track name overrides by F1 trackId (keys are strings in TOML).
+[track_names]
+# "7" = "Silverstone GP"
