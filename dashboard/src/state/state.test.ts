@@ -173,6 +173,30 @@ describe("session best", () => {
   });
 });
 
+describe("leaderboard paging", () => {
+  test("ten per page, wrapping, with the range shown", async () => {
+    const { pageCount, pageSlice, BOARD_PAGE_SIZE } = await import("../components/LeaderboardPanel");
+    expect(BOARD_PAGE_SIZE).toBe(10);
+    const fourteen = Array.from({ length: 14 }, (_, i) => i + 1);
+    expect([pageCount(0), pageCount(10), pageCount(11), pageCount(14)]).toEqual([1, 1, 2, 2]);
+    expect(pageSlice(fourteen, 0)).toMatchObject({ first: 1, last: 10, page: 0 });
+    expect(pageSlice(fourteen, 1)).toMatchObject({ items: [11, 12, 13, 14], first: 11, last: 14 });
+    expect(pageSlice(fourteen, 2).page).toBe(0); // wraps back to the top
+    expect(pageSlice([], 3)).toMatchObject({ items: [], first: 0, last: 0 });
+  });
+
+  test("mock board=N adds earlier drivers, ranked with gaps", () => {
+    const hub = new MockHub({ ...DEFAULT_MOCK_OPTIONS, pastDrivers: 12 }, () => 0);
+    const board = hub.snapshot().leaderboard!;
+    expect(board.entries).toHaveLength(12);
+    board.entries.forEach((e, i) => {
+      expect(e.rank).toBe(i + 1);
+      expect(e.gap_ms).toBe(e.lap_ms - board.entries[0]!.lap_ms);
+    });
+    expect(new MockHub(DEFAULT_MOCK_OPTIONS, () => 0).snapshot().leaderboard).toBeNull();
+  });
+});
+
 describe("path trace and map orientation override", () => {
   test("path downsamples, splits on jumps and caps its size", async () => {
     const { PathTrace, PATH_MAX_POINTS } = await import("./paths");

@@ -100,6 +100,10 @@ Mock options, combined in the URL, e.g. `http://localhost:5173/?outline=late&mis
 | `mismatch=1` | Rig 2 reports UDP format 2026: format warning. |
 | `recorder=recording\|low\|stopped` | Recorder status / low-disk warnings in the status bar. |
 | `offline=0` | Hide the configured-but-offline Rig 3. |
+| `board=N` | Add N earlier drivers to the leaderboard (e.g. `board=8` for a full board of 10, `board=12` to see paging). |
+
+The leaderboard is a full-height column with ten row slots, sized so ten entries are readable from across
+the room at 1080p and 4K. With more than ten it shows ten at a time and pages every 8 s ("11–14 of 14").
 
 Branding comes from `[cafe]` in the hub config: `name`, plus CSS variables in `[cafe.branding]` (e.g.
 `"--brand-accent" = "#0a7cff"`), applied to the page as-is.

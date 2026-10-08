@@ -9,6 +9,7 @@ import {
   type HubStatus,
   type LapRecord,
   type Leaderboard,
+  type LeaderboardEntry,
   type RigFrame,
   type RigInfo,
   type SectorRating,
@@ -19,7 +20,7 @@ import {
   type TrackOutline,
   type Tyre,
 } from "../schema";
-import { buildTrack, sampleTrack, type MockTrack } from "./track";
+import { buildTrack, referenceLapMs, sampleTrack, type MockTrack } from "./track";
 
 export interface MockOptions {
   seed: number;
@@ -31,6 +32,8 @@ export interface MockOptions {
   /** Include a configured rig that never sends data. */
   offlineRig: boolean;
   frameHz: number;
+  /** Earlier drivers already on the leaderboard (tests the layout with many entries). */
+  pastDrivers: number;
 }
 
 export const DEFAULT_MOCK_OPTIONS: MockOptions = {
@@ -39,6 +42,7 @@ export const DEFAULT_MOCK_OPTIONS: MockOptions = {
   formatMismatch: false,
   recorder: "off",
   offlineRig: true,
+  pastDrivers: 0,
   frameHz: 15,
 };
 
@@ -46,6 +50,10 @@ const TRACK_KEY = "F1:900";
 const TRACK_NAME = "Practice circuit";
 const MENU_MS = 6000; // second rig waits in the menu this long
 const TRACE_STEP_M = 20;
+const PAST_DRIVERS = [
+  "Maya R", "Kofi_GT", "J. Lindqvist", "SundayDriver", "Priya S", "Tom from Accounts", "NightShift_Nico",
+  "Hana K", "Diego M", "BoxBoxBox", "Ollie P", "Rosa V", "Arjun_92", "Leni", "Sam W",
+];
 
 interface RigSpec {
   info: RigInfo;
@@ -132,6 +140,7 @@ export class MockHub {
   private sessionBestSectors: [number, number, number] = [Infinity, Infinity, Infinity];
   private leaderboard: Leaderboard | null = null;
   private readonly recentLaps: LapRecord[] = [];
+  private readonly pastEntries: LeaderboardEntry[] = [];
 
   constructor(readonly options: MockOptions = DEFAULT_MOCK_OPTIONS, private readonly clock: () => number = Date.now) {
     this.track = buildTrack();
@@ -163,6 +172,20 @@ export class MockHub {
       });
     }
     this.rigs = specs.map((spec, i) => this.newRigSim(spec, i));
+    const reference = referenceLapMs(this.track);
+    for (let i = 0; i < options.pastDrivers; i++) {
+      const rig = specs[i % 2]!.info;
+      const lapMs = Math.round(reference / 0.99 + 400 + this.rng.next() * 4500);
+      const s1 = Math.round(lapMs * (0.32 + this.rng.next() * 0.01));
+      const s2 = Math.round(lapMs * 0.37);
+      this.pastEntries.push({
+        rank: 0, rig_id: rig.rig_id, rig_name: rig.name, driver: PAST_DRIVERS[i % PAST_DRIVERS.length]!,
+        lap_ms: lapMs, sectors_ms: [s1, s2, lapMs - s1 - s2], gap_ms: 0,
+        tyre: { compound: "soft", label: "C3", age_laps: 1 + (i % 4) }, lap_number: 2 + (i % 5),
+        set_at: this.clock() - (i + 1) * 600_000,
+      });
+    }
+    if (this.pastEntries.length > 0) this.leaderboard = this.buildLeaderboard();
   }
 
   private newRigSim(spec: RigSpec, i: number): RigSim {
@@ -333,25 +356,26 @@ export class MockHub {
   }
 
   private buildLeaderboard(): Leaderboard {
-    const bests = this.rigs
+    const live: LeaderboardEntry[] = this.rigs
       .filter((r) => r.best)
-      .sort((a, b) => a.best!.lap_ms - b.best!.lap_ms);
-    const leader = bests[0]?.best?.lap_ms ?? 0;
-    return {
-      track_key: TRACK_KEY,
-      track_name: TRACK_NAME,
-      entries: bests.map((r, i) => ({
-        rank: i + 1,
+      .map((r) => ({
+        rank: 0,
         rig_id: r.spec.info.rig_id,
         rig_name: r.spec.info.name,
         driver: r.spec.driver,
         lap_ms: r.best!.lap_ms,
         sectors_ms: r.best!.sectors_ms,
-        gap_ms: r.best!.lap_ms - leader,
+        gap_ms: 0,
         tyre: this.tyre(r),
         lap_number: r.best!.lap_number,
         set_at: r.best!.set_at,
-      })),
+      }));
+    const sorted = [...live, ...this.pastEntries].sort((a, b) => a.lap_ms - b.lap_ms);
+    const leader = sorted[0]?.lap_ms ?? 0;
+    return {
+      track_key: TRACK_KEY,
+      track_name: TRACK_NAME,
+      entries: sorted.map((e, i) => ({ ...e, rank: i + 1, gap_ms: e.lap_ms - leader })),
     };
   }
 
@@ -495,5 +519,6 @@ export function mockOptionsFromQuery(query: URLSearchParams): MockOptions {
     formatMismatch: query.get("mismatch") === "1",
     recorder: recorder === "recording" || recorder === "low" || recorder === "stopped" ? recorder : "off",
     offlineRig: query.get("offline") !== "0",
+    pastDrivers: Math.max(0, Math.min(40, Math.floor(Number(query.get("board") ?? 0) || 0))),
   };
 }
