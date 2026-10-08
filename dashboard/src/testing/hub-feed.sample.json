@@ -1,0 +1,252 @@
+[
+ {
+  "v": 1,
+  "type": "snapshot",
+  "seq": 0,
+  "ts": 1791302400000,
+  "hub": {
+   "version": "0.1.0",
+   "games": [
+    "F1"
+   ],
+   "frame_hz": 15.0
+  },
+  "cafe": {
+   "name": "Sim Racing Cafe",
+   "branding": {}
+  },
+  "status": {
+   "format_mismatch": true,
+   "formats": {
+    "192.168.1.21": "2025",
+    "192.168.1.22": "2026"
+   },
+   "recorder": null,
+   "warnings": [
+    {
+     "code": "format_mismatch",
+     "rig_id": null,
+     "message": "Rigs send different UDP formats (2025 and 2026)"
+    },
+    {
+     "code": "size_mismatch",
+     "rig_id": "192.168.1.22",
+     "message": "Rig 3 sends packets of unexpected size; check its UDP format setting"
+    }
+   ]
+  },
+  "rigs": [
+   {
+    "rig_id": "192.168.1.21",
+    "name": "Rig 2",
+    "colour": "#FF8A3D",
+    "address": "192.168.1.21",
+    "game": "F1",
+    "data_format": "2025",
+    "format_supported": true
+   },
+   {
+    "rig_id": "192.168.1.22",
+    "name": "Rig 3",
+    "colour": "#F15BB5",
+    "address": "192.168.1.22",
+    "game": "F1",
+    "data_format": "2026",
+    "format_supported": true
+   },
+   {
+    "rig_id": "192.168.1.23",
+    "name": "Window",
+    "colour": "#36C5F0",
+    "address": "192.168.1.23",
+    "game": "F1",
+    "data_format": null,
+    "format_supported": true
+   }
+  ],
+  "frame": {
+   "rigs": [
+    {
+     "rig_id": "192.168.1.21",
+     "state": "driving",
+     "last_seen_ms": 31,
+     "driver": "Akshat",
+     "session": {
+      "session_id": "0000000000000011",
+      "track_key": "F1:7",
+      "track_name": "Silverstone",
+      "track_length_m": 5891.0,
+      "session_type": "Time Trial"
+     },
+     "position": {
+      "x": -412.6,
+      "z": 188.2
+     },
+     "speed_kph": 287,
+     "gear": 7,
+     "throttle": 0.75,
+     "brake": 0.0,
+     "rpm": 11240,
+     "tyre": {
+      "compound": "soft",
+      "label": "C3",
+      "age_laps": 2
+     },
+     "lap": null,
+     "best": null
+    },
+    {
+     "rig_id": "192.168.1.22",
+     "state": "driving",
+     "last_seen_ms": 0,
+     "driver": "Guest",
+     "session": {
+      "session_id": "0000000000000022",
+      "track_key": "F1:7",
+      "track_name": "Silverstone",
+      "track_length_m": 5891.0,
+      "session_type": "Time Trial"
+     },
+     "position": {
+      "x": 10.5,
+      "z": -3.2
+     },
+     "speed_kph": 287,
+     "gear": 7,
+     "throttle": 0.75,
+     "brake": 0.0,
+     "rpm": 11240,
+     "tyre": {
+      "compound": "soft",
+      "label": "C3",
+      "age_laps": 2
+     },
+     "lap": null,
+     "best": null
+    },
+    {
+     "rig_id": "192.168.1.23",
+     "state": "no_data",
+     "last_seen_ms": null,
+     "driver": null,
+     "session": {
+      "session_id": null,
+      "track_key": null,
+      "track_name": null,
+      "track_length_m": null,
+      "session_type": null
+     },
+     "position": null,
+     "speed_kph": null,
+     "gear": null,
+     "throttle": null,
+     "brake": null,
+     "rpm": null,
+     "tyre": null,
+     "lap": null,
+     "best": null
+    }
+   ],
+   "comparison": null
+  },
+  "outlines": [],
+  "leaderboard": null,
+  "recent_laps": []
+ },
+ {
+  "v": 1,
+  "type": "session_changed",
+  "seq": 1,
+  "ts": 1791302400000,
+  "rig_id": "192.168.1.21",
+  "session": {
+   "session_id": "0000000000000033",
+   "track_key": "F1:10",
+   "track_name": "Spa",
+   "track_length_m": 5891.0,
+   "session_type": "Time Trial"
+  }
+ },
+ {
+  "v": 1,
+  "type": "frame",
+  "seq": 2,
+  "ts": 1791302400000,
+  "rigs": [
+   {
+    "rig_id": "192.168.1.21",
+    "state": "driving",
+    "last_seen_ms": 0,
+    "driver": "Akshat",
+    "session": {
+     "session_id": "0000000000000033",
+     "track_key": "F1:10",
+     "track_name": "Spa",
+     "track_length_m": 5891.0,
+     "session_type": "Time Trial"
+    },
+    "position": null,
+    "speed_kph": null,
+    "gear": null,
+    "throttle": null,
+    "brake": null,
+    "rpm": null,
+    "tyre": null,
+    "lap": null,
+    "best": null
+   },
+   {
+    "rig_id": "192.168.1.22",
+    "state": "driving",
+    "last_seen_ms": 0,
+    "driver": "Guest",
+    "session": {
+     "session_id": "0000000000000022",
+     "track_key": "F1:7",
+     "track_name": "Silverstone",
+     "track_length_m": 5891.0,
+     "session_type": "Time Trial"
+    },
+    "position": {
+     "x": 10.5,
+     "z": -3.2
+    },
+    "speed_kph": 287,
+    "gear": 7,
+    "throttle": 0.75,
+    "brake": 0.0,
+    "rpm": 11240,
+    "tyre": {
+     "compound": "soft",
+     "label": "C3",
+     "age_laps": 2
+    },
+    "lap": null,
+    "best": null
+   },
+   {
+    "rig_id": "192.168.1.23",
+    "state": "no_data",
+    "last_seen_ms": null,
+    "driver": null,
+    "session": {
+     "session_id": null,
+     "track_key": null,
+     "track_name": null,
+     "track_length_m": null,
+     "session_type": null
+    },
+    "position": null,
+    "speed_kph": null,
+    "gear": null,
+    "throttle": null,
+    "brake": null,
+    "rpm": null,
+    "tyre": null,
+    "lap": null,
+    "best": null
+   }
+  ],
+  "comparison": null
+ }
+]

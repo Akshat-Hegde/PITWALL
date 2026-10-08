@@ -25,14 +25,28 @@ class DecodeResult:
 
 @dataclass(slots=True)
 class LiveSummary:
-    """Latest per-rig values for status lines; replaced by the full model in step 4."""
+    """Latest game-agnostic values per rig, for status lines and the dashboard feed.
+
+    Units follow docs/WS_SCHEMA.md: metres, km/h, pedals 0-1. Lap timing fields here are
+    raw game values for the console only; the dashboard's lap model comes with lap tracking.
+    """
 
     driver_name: str | None = None
     track: str | None = None
+    track_key: str | None = None       # "<game>:<track id>", None while unknown
+    track_length_m: float | None = None
     session_type: str | None = None
     lap: int | None = None
     current_lap_ms: int | None = None
     speed_kph: int | None = None
+    position: tuple[float, float] | None = None  # world (x, z): the horizontal plane
+    gear: int | None = None            # -1 reverse, 0 neutral
+    throttle: float | None = None
+    brake: float | None = None
+    rpm: int | None = None
+    tyre_class: str | None = None      # soft/medium/hard/inter/wet/other/unknown
+    tyre_label: str | None = None      # what to print, e.g. "C3"
+    tyre_age_laps: int | None = None
 
 
 class GameAdapter(Protocol):

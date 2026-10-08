@@ -4,6 +4,7 @@ import { LeaderboardPanel } from "./components/LeaderboardPanel";
 import { RigPanel } from "./components/RigPanel";
 import { StatusBar } from "./components/StatusBar";
 import { TrackMap } from "./components/TrackMap";
+import type { Display } from "./map/geometry";
 import type { DashboardState } from "./state/reducer";
 import { useDashboard, type DashboardStore } from "./state/store";
 
@@ -49,7 +50,7 @@ function useBranding(branding: Record<string, string>) {
   }, [branding]);
 }
 
-export function App({ store }: { store: DashboardStore }) {
+export function App({ store, mapDisplay = null }: { store: DashboardStore; mapDisplay?: Display | null }) {
   const state = useDashboard(store);
   useBranding(state.cafe.branding);
   useEffect(() => {
@@ -76,7 +77,7 @@ export function App({ store }: { store: DashboardStore }) {
       <StatusBar state={state} />
       <main className={`board${compact ? " board--many" : ""}`}>
         <section className="board__map" aria-label="Track map">
-          <TrackMap store={store} state={state} trackKey={trackKey} />
+          <TrackMap store={store} state={state} trackKey={trackKey} displayOverride={mapDisplay} />
         </section>
         <section className="board__rigs" aria-label="Rigs">
           {state.rigs.length === 0 ? (

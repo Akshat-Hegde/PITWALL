@@ -55,7 +55,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="simtelemetry", description="Sim racing cafe telemetry hub")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p = sub.add_parser("run", parents=[common], help="hub + API (dashboard added in a later step)")
+    p = sub.add_parser("run", parents=[common], help="hub + TV dashboard and API")
     add_record_flags(p)
     p.add_argument("--duration", type=float, help="stop after this many seconds")
 
@@ -159,10 +159,12 @@ async def run_hub(args: argparse.Namespace, hub: Hub, selection: SourceSelection
         tasks.append(asyncio.create_task(print_status_lines(hub)))
     server = server_task = None
     if http_sock is not None:
-        server = uvicorn.Server(uvicorn.Config(create_app(hub), log_level="warning", lifespan="off"))
+        # Open dashboard WebSockets would otherwise hold up shutdown.
+        server = uvicorn.Server(uvicorn.Config(create_app(hub), log_level="warning", lifespan="off",
+                                               timeout_graceful_shutdown=2))
         server_task = asyncio.create_task(server.serve(sockets=[http_sock]))
-        log.info("API on http://%s:%d/api/health", "localhost" if net.http_host == "0.0.0.0" else net.http_host,
-                 net.http_port)
+        host = "localhost" if net.http_host == "0.0.0.0" else net.http_host
+        log.info("Dashboard on http://%s:%d/ (API: /api/health)", host, net.http_port)
 
     replay_task = None
     if is_replay:

@@ -3,8 +3,9 @@
 Local LAN telemetry hub and TV dashboard for sim racing cafes. Milestone 1: F1 25 (UDP formats 2025 and 2026), two rigs.
 
 Status: hub steps 1–3 are done (packet parsing, UDP listener, rig registry, health, recorder/replay, health API).
-The dashboard shell runs against a built-in mock. Lap tracking, the hub's WebSocket feed and connecting the two
-wait for the first real 2-PC capture.
+`run` serves the TV dashboard with a live WebSocket feed (positions, speed, gear, pedals, tyres, status).
+Lap timing, sectors, comparison and the leaderboard wait for lap tracking, which is built from the first
+real capture (see [docs/TEST_PLAN.md](docs/TEST_PLAN.md)).
 
 ## Setup (Windows, Python 3.11+)
 
@@ -18,7 +19,7 @@ copy config\hub.example.toml config\hub.toml   # optional: edit cafe name, rig n
 
 ```powershell
 .venv\Scripts\python -m simtelemetry listen                  # debug: one status line per rig per second (records by default)
-.venv\Scripts\python -m simtelemetry run                     # hub + API at http://localhost:8000/api/health (no recording by default)
+.venv\Scripts\python -m simtelemetry run                     # hub + dashboard at http://localhost:8000/ (no recording by default)
 .venv\Scripts\python -m simtelemetry record                  # capture raw packets only
 .venv\Scripts\python -m simtelemetry replay FILE [--speed N] # replay a capture through the pipeline (0 = max speed)
 .venv\Scripts\python -m pytest                               # tests
@@ -83,7 +84,12 @@ npm run build      # production files in dashboard/dist (fonts bundled: works of
 
 The dashboard reads only the WebSocket messages described in [docs/WS_SCHEMA.md](docs/WS_SCHEMA.md).
 Data source: `?source=mock` (default in `npm run dev`) or `?source=ws` (default when served by the hub; in dev
-it is proxied to a hub on `localhost:8000`). The hub doesn't send the WebSocket feed yet.
+it is proxied to a hub on `localhost:8000`). `run` serves `dashboard/dist` at `http://<hub>:8000/` (configurable
+with `[dashboard] directory`), and the feed rate with `[dashboard] frame_hz` (10–20, default 15). Until lap
+tracking exists, the hub sends `null` lap fields and no track outline; the map then draws the path driven so far.
+
+`?map=flipx,flipz,rotN` (any combination) overrides the map orientation, for matching the in-game minimap
+during testing; the active setting is shown on the map.
 
 Mock options, combined in the URL, e.g. `http://localhost:5173/?outline=late&mismatch=1`:
 

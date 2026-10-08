@@ -57,6 +57,12 @@ class RecorderConfig(_Section):
         return value
 
 
+class DashboardConfig(_Section):
+    frame_hz: float = Field(15.0, ge=10, le=20)  # WebSocket frame rate (docs/WS_SCHEMA.md)
+    # Built dashboard files; default <project>/dashboard/dist (run `npm run build` in dashboard/).
+    directory: Path | None = None
+
+
 class HealthConfig(_Section):
     summary_interval_s: float = 10.0
     no_motion_after_s: float = 2.0  # packets but no Motion for this long -> "in menu / paused"
@@ -75,6 +81,7 @@ class AppConfig(_Section):
     network: NetworkConfig = Field(default_factory=NetworkConfig)
     recorder: RecorderConfig = Field(default_factory=RecorderConfig)
     health: HealthConfig = Field(default_factory=HealthConfig)
+    dashboard: DashboardConfig = Field(default_factory=DashboardConfig)
     rigs: list[RigConfig] = Field(default_factory=list)
     track_names: dict[int, str] = Field(default_factory=dict)  # trackId -> display name override
 

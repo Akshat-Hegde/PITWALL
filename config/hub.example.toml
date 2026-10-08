@@ -30,6 +30,10 @@ summary_interval_s = 10
 no_motion_after_s = 2                  # packets but no Motion -> "in menu / paused"
 no_data_after_s = 5                    # nothing received -> "no data"
 
+[dashboard]
+frame_hz = 15                          # WebSocket updates per second (10-20)
+# directory = "dashboard/dist"         # built dashboard; default <project>/dashboard/dist
+
 # Rigs are auto-detected by source IP and named "Rig 1", "Rig 2", ...
 # Add entries to give them fixed names / colours.
 # [[rigs]]

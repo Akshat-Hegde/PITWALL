@@ -5,8 +5,14 @@ is specific to F1, and each game adapter fills the same fields. The dashboard is
 document (and its TypeScript twin, `dashboard/src/schema.ts`), never against hub internals.
 
 Status: **v1 draft.** Fields marked **(provisional)** depend on lap-tracking behaviour that will be
-confirmed against the first real 2-PC capture; they may still change within v1 before milestone 1 is
+confirmed against the first real capture; they may still change within v1 before milestone 1 is
 frozen. Everything else is intended to be stable.
+
+Hub implementation status: `hub/simtelemetry/core/feed.py` sends `snapshot`, `frame`, `rig_info`, `status`
+and `session_changed`. Until lap tracking exists, `lap`, `best` and `comparison` are `null`, `outlines` and
+`recent_laps` are empty, `leaderboard` is `null`, and `track_outline` / `lap_completed` / `leaderboard`
+messages are not sent. `hub/tests/test_feed.py` writes a sample of real hub output to
+`dashboard/src/testing/hub-feed.sample.json`, which the dashboard tests validate against this schema.
 
 ## 1. Transport
 

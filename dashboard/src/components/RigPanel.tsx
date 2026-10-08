@@ -47,8 +47,8 @@ export function RigPanel({ rig, number, frame, compact, sessionBestMs }: Props) 
         <>
           <div className="rig__main">
             <span
-              className={`rig__current${lap && !lap.valid ? " is-invalid" : ""}`}
-              aria-label={lap ? "Current lap time" : "Not on track"}
+              className={`rig__current${!lap ? " is-empty" : !lap.valid ? " is-invalid" : ""}`}
+              aria-label={lap ? "Current lap time" : "No lap time"}
             >
               {lap ? formatLapTime(lap.current_ms) : formatLapTime(null)}
             </span>

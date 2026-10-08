@@ -172,3 +172,29 @@ describe("session best", () => {
     expect(sessionBest(s, "F1:1")).toBeNull();
   });
 });
+
+describe("path trace and map orientation override", () => {
+  test("path downsamples, splits on jumps and caps its size", async () => {
+    const { PathTrace, PATH_MAX_POINTS } = await import("./paths");
+    const p = new PathTrace();
+    for (let i = 0; i < 100; i++) p.add("F1:7", "a", i * 2, 0); // 2 m steps: every 4th point kept
+    expect(p.segments("F1:7")[0]!.length).toBe(25);
+    p.add("F1:7", "a", 5000, 0); // flashback-sized jump: new segment
+    p.add("F1:7", "a", 5010, 0);
+    expect(p.segments("F1:7").length).toBe(2);
+    for (let i = 0; i < PATH_MAX_POINTS * 2; i++) p.add("F1:9", "b", i * 10, 0);
+    const total = p.segments("F1:9").reduce((n, s) => n + s.length, 0);
+    expect(total).toBe(PATH_MAX_POINTS);
+    expect(p.segments("F1:9")[0]![0]![0]).toBe(PATH_MAX_POINTS * 10); // oldest points dropped
+    expect(p.segments("F1:1")).toEqual([]);
+  });
+
+  test("?map= parsing", async () => {
+    const { displayFromQuery, describeDisplay } = await import("../map/geometry");
+    expect(displayFromQuery(new URLSearchParams(""))).toBeNull();
+    const d = displayFromQuery(new URLSearchParams("map=flipz,rot90"))!;
+    expect(d).toEqual({ flip_x: false, flip_z: true, rotate_deg: 90 });
+    expect(describeDisplay(d)).toBe("flip z, rotated 90°");
+    expect(displayFromQuery(new URLSearchParams("map="))).toEqual({ flip_x: false, flip_z: false, rotate_deg: 0 });
+  });
+});

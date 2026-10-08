@@ -7,8 +7,9 @@ from collections.abc import Mapping
 from ...core.adapter import Checked, DecodeResult, LiveSummary
 from .appendix import session_type_name, track_name
 from .decode import decode
-from .packets import CarTelemetry, LapData, Motion, Participant, Session
+from .packets import CarStatus, CarTelemetry, LapData, Motion, Participant, Session
 from .sizes import SUPPORTED_FORMATS, PacketId
+from .tyres import Compound, TyreCompound
 from .validate import Accepted, PacketGate
 
 PACKET_LABELS: dict[PacketId, str] = {
@@ -39,6 +40,7 @@ class F1Adapter:
         self._gate = PacketGate()
         self._track_overrides = dict(track_overrides or {})
         self._live: dict[str, LiveSummary] = {}
+        self._session_of: dict[str, str | None] = {}
 
     def check(self, data: bytes, source: str) -> Checked:
         result = self._gate.check(data, source)
@@ -52,17 +54,31 @@ class F1Adapter:
 
     def decode(self, checked: Checked, data: bytes, source: str) -> DecodeResult:
         packet = decode(checked.payload, data)
+        if self._session_of.get(source, checked.session_id) != checked.session_id:
+            self._live.pop(source, None)  # new game session: nothing from the old one carries over
+        self._session_of[source] = checked.session_id
         live = self._live.setdefault(source, LiveSummary())
         if isinstance(packet, Motion):
+            live.position = (packet.position[0], packet.position[2])
             return DecodeResult(driving=True)
         if isinstance(packet, Session):
             live.track = track_name(packet.track_id, self._track_overrides)
+            live.track_key = f"{self.game}:{packet.track_id}" if packet.track_id >= 0 else None
+            live.track_length_m = float(packet.track_length) if packet.track_length else None
             live.session_type = session_type_name(packet.session_type)
         elif isinstance(packet, LapData):
             live.lap = packet.current_lap_num
             live.current_lap_ms = packet.current_lap_time_ms
         elif isinstance(packet, CarTelemetry):
             live.speed_kph = packet.speed_kph
+            live.gear = packet.gear
+            live.throttle = packet.throttle
+            live.brake = packet.brake
+            live.rpm = packet.engine_rpm
+        elif isinstance(packet, CarStatus):
+            live.tyre_class = tyre_class(packet.visual_compound)
+            live.tyre_label = tyre_label(packet.actual_compound, packet.visual_compound)
+            live.tyre_age_laps = packet.tyres_age_laps
         elif isinstance(packet, Participant):
             live.driver_name = packet.name or None
         return DecodeResult()
@@ -72,3 +88,21 @@ class F1Adapter:
 
     def is_supported_format(self, data_format: str) -> bool:
         return data_format.isdigit() and int(data_format) in SUPPORTED_FORMATS
+
+
+_TYRE_CLASS = {
+    Compound.SOFT: "soft", Compound.SUPER_SOFT: "soft", Compound.MEDIUM: "medium", Compound.HARD: "hard",
+    Compound.INTER: "inter", Compound.WET: "wet",
+}
+
+
+def tyre_class(visual: TyreCompound) -> str:
+    """Generic class from the visual compound (what the sidewall colour shows)."""
+    if visual.compound is Compound.UNKNOWN:
+        return "unknown"
+    return _TYRE_CLASS.get(visual.compound, "other")
+
+
+def tyre_label(actual: TyreCompound, visual: TyreCompound) -> str:
+    """The actual compound (C0-C6) when known, else the visual one, e.g. "inter"."""
+    return actual.label if actual.compound is not Compound.UNKNOWN else visual.label

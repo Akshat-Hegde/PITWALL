@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import {
   IDENTITY_DISPLAY,
+  describeDisplay,
   emptyBounds,
   extend,
   fitBounds,
@@ -17,6 +18,8 @@ interface Props {
   store: DashboardStore;
   state: DashboardState;
   trackKey: string | null;
+  /** From ?map=...: overrides the outline's display transform (orientation check). */
+  displayOverride: Display | null;
 }
 
 const TRAIL_MS = 6000;
@@ -26,13 +29,15 @@ function cssVar(name: string): string {
 }
 
 /** Canvas map: track outline, fading trails and interpolated rig dots, redrawn every animation frame. */
-export function TrackMap({ store, state, trackKey }: Props) {
+export function TrackMap({ store, state, trackKey, displayOverride }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // Latest React state for the draw loop, without restarting it on every frame message.
   const stateRef = useRef(state);
   stateRef.current = state;
   const trackKeyRef = useRef(trackKey);
   trackKeyRef.current = trackKey;
+  const overrideRef = useRef(displayOverride);
+  overrideRef.current = displayOverride;
   // Without an outline the map fits everything driven so far; the bounds only ever grow.
   const seenBounds = useRef<Bounds>(emptyBounds());
   const seenTrackKey = useRef<string | null>(null);
@@ -45,7 +50,7 @@ export function TrackMap({ store, state, trackKey }: Props) {
     let raf = 0;
     let width = 0;
     let height = 0;
-    let colours = { track: "", trackEdge: "", line: "", muted: "", bg: "" };
+    let colours = { track: "", trackEdge: "", line: "", muted: "", bg: "", path: "" };
 
     const resize = () => {
       const rect = canvas.getBoundingClientRect();
@@ -61,6 +66,7 @@ export function TrackMap({ store, state, trackKey }: Props) {
         line: cssVar("--text"),
         muted: cssVar("--text-muted"),
         bg: cssVar("--surface-0"),
+        path: cssVar("--map-path"),
       };
     };
     const observer = new ResizeObserver(resize);
@@ -76,7 +82,7 @@ export function TrackMap({ store, state, trackKey }: Props) {
         seenBounds.current = emptyBounds();
       }
       const outline = key ? s.outlines[key] : undefined;
-      const display: Display = outline?.display ?? IDENTITY_DISPLAY;
+      const display: Display = overrideRef.current ?? outline?.display ?? IDENTITY_DISPLAY;
       const now = performance.now();
       const renderAt = now - 1000 / s.frameHz; // one frame behind, so there is always a sample to lerp to
 
@@ -89,6 +95,12 @@ export function TrackMap({ store, state, trackKey }: Props) {
           extend(bounds, px, py);
         }
       } else {
+        for (const segment of key ? store.paths.segments(key) : []) {
+          for (const [x, z] of segment) {
+            const [px, py] = toMapPlane(x, z, display);
+            extend(seenBounds.current, px, py);
+          }
+        }
         for (const rigId of store.trails.rigIds()) {
           for (const p of store.trails.get(rigId)) {
             const [px, py] = toMapPlane(p.x, p.z, display);
@@ -134,6 +146,23 @@ export function TrackMap({ store, state, trackKey }: Props) {
             ctx.arc(sx, sy, minSide * 0.006, 0, Math.PI * 2);
             ctx.fill();
           }
+        }
+      }
+
+      // No outline yet: the path driven so far, faintly, so the track shape shows.
+      if (!outline && key) {
+        ctx.strokeStyle = colours.path;
+        ctx.lineWidth = minSide * 0.012;
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+        for (const segment of store.paths.segments(key)) {
+          ctx.beginPath();
+          segment.forEach(([x, z], i) => {
+            const [sx, sy] = toScreen(x, z);
+            if (i === 0) ctx.moveTo(sx, sy);
+            else ctx.lineTo(sx, sy);
+          });
+          ctx.stroke();
         }
       }
 
@@ -202,6 +231,9 @@ export function TrackMap({ store, state, trackKey }: Props) {
       {!anyDriving && <p className="track-map__note">Cars appear here when a rig is on track.</p>}
       {anyDriving && !hasOutline && (
         <p className="track-map__note track-map__note--corner">Track outline appears after the first clean lap.</p>
+      )}
+      {displayOverride && (
+        <p className="track-map__note track-map__note--top">Map orientation: {describeDisplay(displayOverride)}</p>
       )}
     </div>
   );

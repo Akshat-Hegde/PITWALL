@@ -22,6 +22,7 @@
 
   --map-track: #2c3e4f;
   --map-track-edge: #3f5568;
+  --map-path: rgba(143, 163, 179, 0.28); /* driven path while there is no outline */
 
   --brand-accent: #e5484d;
   --brand-text: #ffffff;
@@ -297,6 +298,12 @@ ul {
   pointer-events: none;
 }
 
+.track-map__note--top {
+  inset: var(--pad) auto auto var(--pad);
+  font-size: 0.95rem;
+  color: var(--warning);
+}
+
 .track-map__note--corner {
   inset: auto auto var(--pad) var(--pad);
   font-size: 0.95rem;
@@ -416,6 +423,10 @@ ul {
   font-size: 3.1rem;
   line-height: 1;
   letter-spacing: 0.01em;
+}
+
+.rig__current.is-empty {
+  color: var(--rule);
 }
 
 .rig__current.is-invalid {

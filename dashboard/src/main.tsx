@@ -9,6 +9,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { chooseSource } from "./data/sources";
+import { displayFromQuery } from "./map/geometry";
 import { DashboardStore } from "./state/store";
 
 const query = new URLSearchParams(location.search);
@@ -18,6 +19,6 @@ source(store);
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <App store={store} />
+    <App store={store} mapDisplay={displayFromQuery(query)} />
   </StrictMode>,
 );
