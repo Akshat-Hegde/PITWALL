@@ -15,6 +15,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from .. import __version__
+from ..hub import tyre_dict
 from ..tools.recorder import RecorderState
 from .health import RigState
 
@@ -90,9 +91,7 @@ class FeedBuilder:
         h = hub.health.get(rig.ip)
         s = hub.adapter.live_summary(rig.ip)
         driving = state is RigState.DRIVING and s is not None
-        tyre = None
-        if s is not None and state is not RigState.NO_DATA and s.tyre_class is not None:
-            tyre = {"compound": s.tyre_class, "label": s.tyre_label or s.tyre_class, "age_laps": s.tyre_age_laps}
+        tyre = tyre_dict(s) if state is not RigState.NO_DATA else None
         return {
             "rig_id": rig.ip,
             "state": state.value,

@@ -51,6 +51,9 @@ def build_parser() -> argparse.ArgumentParser:
     common.add_argument("--port", type=int, help="UDP telemetry port (default from config, 20777)")
     common.add_argument("--http-port", type=int, help="HTTP/API port (default from config, 8000)")
     common.add_argument("-v", "--verbose", action="store_true", help="debug logging")
+    common.add_argument("--lap-debug", action="store_true",
+                        help="log every lap event (started, completed, invalidated, reset, flashback, "
+                             "session history update) to the console and data/logs/lap-debug-*.log")
 
     parser = argparse.ArgumentParser(prog="simtelemetry", description="Sim racing cafe telemetry hub")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -208,7 +211,9 @@ def main(argv: list[str] | None = None) -> int:
     except ConfigError as exc:
         print(f"\nERROR: {exc}\n", file=sys.stderr)
         return 2
-    setup_logging(config.data_dir / "logs", args.verbose)
+    lap_log = setup_logging(config.data_dir / "logs", args.verbose, args.lap_debug)
+    if lap_log is not None:
+        log.info("Lap debug log: %s", lap_log)
     try:
         return run_command(args, config)
     finally:

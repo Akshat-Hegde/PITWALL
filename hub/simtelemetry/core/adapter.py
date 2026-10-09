@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Protocol
+
+from .laps import LapEvent, LiveLap
 
 
 @dataclass(slots=True)
@@ -21,6 +23,8 @@ class Checked:
 @dataclass(slots=True)
 class DecodeResult:
     driving: bool = False           # True for packets that mean "car is on track, player in control"
+    lap_events: list[LapEvent] = field(default_factory=list)
+    lap_update: bool = False        # the live lap changed (new lap timing data)
 
 
 @dataclass(slots=True)
@@ -47,6 +51,7 @@ class LiveSummary:
     tyre_class: str | None = None      # soft/medium/hard/inter/wet/other/unknown
     tyre_label: str | None = None      # what to print, e.g. "C3"
     tyre_age_laps: int | None = None
+    sector_starts_m: tuple[float, float, float] | None = None  # lap distance where S1/S2/S3 start
 
 
 class GameAdapter(Protocol):
@@ -57,5 +62,7 @@ class GameAdapter(Protocol):
     def decode(self, checked: Checked, data: bytes, source: str) -> DecodeResult: ...
 
     def live_summary(self, source: str) -> LiveSummary | None: ...
+
+    def live_lap(self, source: str) -> LiveLap | None: ...
 
     def is_supported_format(self, data_format: str) -> bool: ...

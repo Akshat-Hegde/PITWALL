@@ -30,3 +30,6 @@ Thumbs.db
 
 # Local dashboard screenshots
 dashboard/.screens/
+
+# Test temp folder (pytest --basetemp on X:)
+.pytest-tmp/

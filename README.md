@@ -25,6 +25,10 @@ copy config\hub.example.toml config\hub.toml   # optional: edit cafe name, rig n
 .venv\Scripts\python -m pytest                               # tests
 ```
 
+Add `--lap-debug` to any of `run`, `listen` or `replay` to log every lap event (started, completed,
+invalidated, reset, flashback, session history update) with the game's session time, also to
+`data\logs\lap-debug-<date>-<time>.log`. See [docs/LAP_ASSUMPTIONS.md](docs/LAP_ASSUMPTIONS.md).
+
 Replay options:
 
 - `--from-ip IP`: only replay packets the recording received from that source IP.
@@ -121,6 +125,8 @@ launcher). Until then, use the port-based firewall rule in [docs/TEST_PLAN.md](d
 - [docs/RIG_SETUP.md](docs/RIG_SETUP.md): in-game UDP settings for each rig.
 - [docs/TEST_PLAN.md](docs/TEST_PLAN.md): firewall setup and the 2-PC test checklist.
 - [docs/WS_SCHEMA.md](docs/WS_SCHEMA.md): hub → dashboard WebSocket message format (v1 draft).
+- [docs/LAP_ASSUMPTIONS.md](docs/LAP_ASSUMPTIONS.md): what lap tracking assumes about the game, and how to
+  check each assumption with `--lap-debug`.
 - Specs (source of truth for the parser): `docs/F1_25_structures.txt`, `docs/F1_2026_SeasonPack_structures.txt`,
   `docs/F1_25_UDP_Spec.pdf`.
 

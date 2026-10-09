@@ -5,8 +5,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from ...core.adapter import Checked, DecodeResult, LiveSummary
+from ...core.laps import LiveLap
 from .appendix import session_type_name, track_name
 from .decode import decode
+from .laps import F1LapTracker
 from .packets import CarStatus, CarTelemetry, LapData, Motion, Participant, Session
 from .sizes import SUPPORTED_FORMATS, PacketId
 from .tyres import Compound, TyreCompound
@@ -41,6 +43,7 @@ class F1Adapter:
         self._track_overrides = dict(track_overrides or {})
         self._live: dict[str, LiveSummary] = {}
         self._session_of: dict[str, str | None] = {}
+        self._laps: dict[str, F1LapTracker] = {}
 
     def check(self, data: bytes, source: str) -> Checked:
         result = self._gate.check(data, source)
@@ -58,14 +61,21 @@ class F1Adapter:
             self._live.pop(source, None)  # new game session: nothing from the old one carries over
         self._session_of[source] = checked.session_id
         live = self._live.setdefault(source, LiveSummary())
+        result = DecodeResult()
+        if packet is not None and hasattr(packet, "header"):
+            tracker = self._laps.setdefault(source, F1LapTracker())
+            result.lap_events = tracker.on_packet(packet, packet.header.session_uid)
+            result.lap_update = isinstance(packet, LapData)
         if isinstance(packet, Motion):
             live.position = (packet.position[0], packet.position[2])
-            return DecodeResult(driving=True)
-        if isinstance(packet, Session):
+            result.driving = True
+        elif isinstance(packet, Session):
             live.track = track_name(packet.track_id, self._track_overrides)
             live.track_key = f"{self.game}:{packet.track_id}" if packet.track_id >= 0 else None
             live.track_length_m = float(packet.track_length) if packet.track_length else None
             live.session_type = session_type_name(packet.session_type)
+            if 0 < packet.sector2_lap_distance_start < packet.sector3_lap_distance_start:
+                live.sector_starts_m = (0.0, packet.sector2_lap_distance_start, packet.sector3_lap_distance_start)
         elif isinstance(packet, LapData):
             live.lap = packet.current_lap_num
             live.current_lap_ms = packet.current_lap_time_ms
@@ -81,10 +91,14 @@ class F1Adapter:
             live.tyre_age_laps = packet.tyres_age_laps
         elif isinstance(packet, Participant):
             live.driver_name = packet.name or None
-        return DecodeResult()
+        return result
 
     def live_summary(self, source: str) -> LiveSummary | None:
         return self._live.get(source)
+
+    def live_lap(self, source: str) -> LiveLap | None:
+        tracker = self._laps.get(source)
+        return tracker.live() if tracker else None
 
     def is_supported_format(self, data_format: str) -> bool:
         return data_format.isdigit() and int(data_format) in SUPPORTED_FORMATS
