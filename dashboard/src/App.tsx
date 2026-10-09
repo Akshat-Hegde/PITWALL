@@ -96,7 +96,7 @@ export function App({ store, mapDisplay = null }: { store: DashboardStore; mapDi
           )}
         </section>
         <ComparisonPanel comparison={state.comparison} rigs={state.rigs} />
-        <LeaderboardPanel leaderboard={state.leaderboard} rigs={state.rigs} />
+        <LeaderboardPanel leaderboard={state.leaderboards.today ?? null} rigs={state.rigs} />
       </main>
     </div>
   );

@@ -150,10 +150,17 @@ export interface LeaderboardEntry {
   set_at: number;
 }
 
+export type BoardPeriod = "today" | "week" | "all_time";
+export const BOARD_PERIODS: readonly BoardPeriod[] = ["today", "week", "all_time"];
+
 /** (provisional) */
 export interface Leaderboard {
   track_key: string;
   track_name: string | null;
+  /** Which board this is; unknown values must be ignored. */
+  period: BoardPeriod | string;
+  /** Unix ms where the period starts (hub's local time); null for all time. */
+  since: number | null;
   entries: LeaderboardEntry[];
 }
 
@@ -171,7 +178,8 @@ export interface SnapshotMessage extends Envelope<"snapshot"> {
   rigs: RigInfo[];
   frame: { rigs: RigFrame[]; comparison: Comparison | null };
   outlines: TrackOutline[];
-  leaderboard: Leaderboard | null;
+  /** One board per period for the shown track; empty while no track is known. */
+  leaderboards: Leaderboard[];
   recent_laps: LapRecord[];
 }
 

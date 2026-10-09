@@ -14,8 +14,9 @@ the lap book (`core/laps.py`; F1 rules and their assumptions in [LAP_ASSUMPTIONS
 which the dashboard tests validate against this schema.
 
 **Shown track.** The hub picks one track for the TV: the one most rigs are on, with driving rigs counting
-double. `comparison`, the snapshot's `leaderboard` and `leaderboard` messages are for that track. A
-`leaderboard` message is sent whenever that track's board may have changed, or the shown track changes.
+double. `comparison`, the snapshot's `leaderboards` and `leaderboard` messages are for that track. When
+that track's boards may have changed (a lap was recorded or retracted), the shown track changes, or a new
+day or week starts, the hub sends one `leaderboard` message per period.
 
 ## 1. Transport
 
@@ -61,7 +62,7 @@ Compatibility rules:
 | `session_changed` | A rig starts a new game session (e.g. new track, restart) | `{ "rig_id", "session": SessionInfo }` |
 | `track_outline` | An outline becomes available (generated or loaded) | `{ "outline": TrackOutline }` |
 | `lap_completed` **(provisional)** | A rig finishes a lap | `{ "lap": LapRecord }` |
-| `leaderboard` **(provisional)** | The leaderboard changes | `{ "leaderboard": Leaderboard }` (full replacement) |
+| `leaderboard` **(provisional)** | A board of the shown track changes | `{ "leaderboard": Leaderboard }`: full replacement of the board for its `period`. Boards for another track replace all boards. |
 
 ### 3.1 `snapshot`
 
@@ -74,7 +75,7 @@ Compatibility rules:
   "rigs": [ { "...": "RigInfo" } ],
   "frame": { "rigs": [ { "...": "RigFrame" } ], "comparison": { "...": "Comparison or null" } },
   "outlines": [ { "...": "TrackOutline" } ],
-  "leaderboard": { "...": "Leaderboard or null" },
+  "leaderboards": [ { "...": "Leaderboard, one per period: today, week, all_time" } ],
   "recent_laps": [ { "...": "LapRecord, newest first, at most 20" } ]
 }
 ```
@@ -236,11 +237,19 @@ live lap vs your best lap at the same distance"; with more rigs, each rig is com
 
 ### Leaderboard (provisional)
 
-Best **valid** lap per driver (per rig if the driver name is unknown) on one track since the hub's session
-started.
+Best counted lap (valid, not an out lap) per driver (per rig if the driver name is unknown) on one track
+within a period. Laps are stored in the hub's database (`<data_dir>/laps.db`), so boards survive hub
+restarts.
+
+| Field | Type | Notes |
+|---|---|---|
+| `track_key`, `track_name` | string, string \| null | |
+| `period` | string | `"today"`, `"week"` (from Monday) or `"all_time"`. Clients ignore boards with other values. |
+| `since` | int \| null | Unix ms where the period starts, in the hub PC's local time; `[leaderboard] day_start_hour` sets when a day starts. `null` for all time. |
+| `entries` | array | Fastest first, at most 100. |
 
 ```json
-{ "track_key": "F1:7", "track_name": "Silverstone",
+{ "track_key": "F1:7", "track_name": "Silverstone", "period": "today", "since": 1791237600000,
   "entries": [
     { "rank": 1, "rig_id": "r1", "rig_name": "Rig 1", "driver": "Akshat", "lap_ms": 88123,
       "sectors_ms": [28011, 33456, 26656], "gap_ms": 0, "tyre": { "compound": "soft", "label": "C3", "age_laps": 2 },

@@ -34,6 +34,9 @@ no_data_after_s = 5                    # nothing received -> "no data"
 frame_hz = 15                          # WebSocket updates per second (10-20)
 # directory = "dashboard/dist"         # built dashboard; default <project>/dashboard/dist
 
+[leaderboard]
+day_start_hour = 0                     # "today" starts at this hour (e.g. 5 for late-night sessions)
+
 [map]                                  # how game coordinates are drawn on the TV map
 flip_x = false                         # find the right values with the dashboard's ?map= option
 flip_z = false                         # (docs/TEST_PLAN.md), then set them here

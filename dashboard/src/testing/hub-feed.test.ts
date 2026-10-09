@@ -24,7 +24,8 @@ describe("hub feed sample", () => {
     // Rig A completed a lap (lap_completed, track_outline, leaderboard), then changed track.
     expect(Object.keys(state.outlines)).toEqual(["F1:7"]);
     expect(state.recentLaps.map((l) => l.lap_ms)).toEqual([88123]);
-    expect(state.leaderboard?.entries.map((e) => e.driver)).toEqual(["Akshat"]);
+    expect(state.leaderboards.today?.entries.map((e) => e.driver)).toEqual(["Akshat"]);
+    expect(state.leaderboards.all_time?.period).toBe("all_time");
     const rigA = state.frames["192.168.1.21"]!;
     expect(rigA.session.track_key).toBe("F1:10");
     expect(rigA.lap).toBeNull(); // new session: nothing carried over

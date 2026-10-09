@@ -65,6 +65,11 @@ class MapConfig(_Section):
     rotate_deg: float = 0.0
 
 
+class LeaderboardConfig(_Section):
+    # "Today" starts at this hour (local time), so a session running past midnight stays on one day.
+    day_start_hour: int = Field(0, ge=0, le=23)
+
+
 class DashboardConfig(_Section):
     frame_hz: float = Field(15.0, ge=10, le=20)  # WebSocket frame rate (docs/WS_SCHEMA.md)
     # Built dashboard files; default <project>/dashboard/dist (run `npm run build` in dashboard/).
@@ -91,6 +96,7 @@ class AppConfig(_Section):
     health: HealthConfig = Field(default_factory=HealthConfig)
     dashboard: DashboardConfig = Field(default_factory=DashboardConfig)
     map: MapConfig = Field(default_factory=MapConfig)
+    leaderboard: LeaderboardConfig = Field(default_factory=LeaderboardConfig)
     rigs: list[RigConfig] = Field(default_factory=list)
     track_names: dict[int, str] = Field(default_factory=dict)  # trackId -> display name override
 

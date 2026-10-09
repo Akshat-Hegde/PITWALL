@@ -62,7 +62,8 @@ describe("reducer", () => {
   test("applies a whole session without errors and keeps recent laps capped", () => {
     let s = initialState("mock");
     for (const m of msgs) s = applyMessage(s, m, 0);
-    expect(s.leaderboard?.entries.length).toBeGreaterThan(0);
+    expect(s.leaderboards.today?.entries.length).toBeGreaterThan(0);
+    expect(Object.keys(s.leaderboards)).toEqual(["today", "week", "all_time"]);
     expect(s.recentLaps.length).toBeLessThanOrEqual(RECENT_LAPS_MAX);
     expect(s.comparison).not.toBeNull();
   });
@@ -87,6 +88,20 @@ describe("reducer", () => {
     expect(s.rigs[0]!.name).toBe("Front window");
     s = applyMessage(s, { v: 1, type: "rig_info", seq: 2, ts: 0, rig: { ...renamed, rig_id: "rig-9" } }, 0);
     expect(s.rigs).toHaveLength(4);
+  });
+
+  test("leaderboard messages fill boards by period; another track replaces them", () => {
+    let s = applyMessage(initialState("hub"), { ...snapshot, leaderboards: [] } as HubMessage, 0);
+    const board = (track: string, period: string): HubMessage => ({
+      v: 1, type: "leaderboard", seq: 1, ts: 0,
+      leaderboard: { track_key: track, track_name: null, period, since: null, entries: [] },
+    });
+    s = applyMessage(s, board("F1:7", "today"), 0);
+    s = applyMessage(s, board("F1:7", "all_time"), 0);
+    expect(Object.keys(s.leaderboards)).toEqual(["today", "all_time"]);
+    s = applyMessage(s, board("F1:10", "week"), 0);
+    expect(Object.entries(s.leaderboards).map(([p, b]) => [p, b!.track_key])).toEqual([["week", "F1:10"]]);
+    expect(applyMessage(s, board("F1:10", "month"), 0)).toBe(s); // unknown period ignored
   });
 
   test("lap_completed puts the newest first", () => {
@@ -187,13 +202,13 @@ describe("leaderboard paging", () => {
 
   test("mock board=N adds earlier drivers, ranked with gaps", () => {
     const hub = new MockHub({ ...DEFAULT_MOCK_OPTIONS, pastDrivers: 12 }, () => 0);
-    const board = hub.snapshot().leaderboard!;
+    const board = hub.snapshot().leaderboards[0]!;
     expect(board.entries).toHaveLength(12);
     board.entries.forEach((e, i) => {
       expect(e.rank).toBe(i + 1);
       expect(e.gap_ms).toBe(e.lap_ms - board.entries[0]!.lap_ms);
     });
-    expect(new MockHub(DEFAULT_MOCK_OPTIONS, () => 0).snapshot().leaderboard).toBeNull();
+    expect(new MockHub(DEFAULT_MOCK_OPTIONS, () => 0).snapshot().leaderboards).toEqual([]);
   });
 });
 

@@ -127,6 +127,16 @@ launcher). Until then, use the port-based firewall rule in [docs/TEST_PLAN.md](d
 - [docs/WS_SCHEMA.md](docs/WS_SCHEMA.md): hub → dashboard WebSocket message format (v1 draft).
 - [docs/LAP_ASSUMPTIONS.md](docs/LAP_ASSUMPTIONS.md): what lap tracking assumes about the game, and how to
   check each assumption with `--lap-debug`.
+
+## Lap database
+
+Every recorded lap goes into SQLite at `<data_dir>/laps.db` (default `data\laps.db`), together with each
+track's outline. The TV's leaderboards (today, this week, all time) are read from it, so they survive hub
+restarts. "Today" starts at `[leaderboard] day_start_hour` (local time, default 0); the week starts on
+Monday. To start the boards from scratch, stop the hub and delete or rename `laps.db`.
+
+`replay` keeps its laps in memory, so replaying a capture never changes the real boards; add `--save-laps`
+to store them.
 - Specs (source of truth for the parser): `docs/F1_25_structures.txt`, `docs/F1_2026_SeasonPack_structures.txt`,
   `docs/F1_25_UDP_Spec.pdf`.
 

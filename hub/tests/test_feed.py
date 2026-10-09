@@ -232,7 +232,8 @@ async def test_connection_sequence(tmp_path):
     assert (snap["v"], snap["type"], snap["seq"], snap["ts"]) == (1, "snapshot", 0, 1_791_302_400_123)
     assert snap["cafe"] == {"name": "Pit Stop", "branding": {"--brand-accent": "#0a7cff"}}
     assert snap["hub"]["frame_hz"] == 15 and snap["outlines"] == []
-    assert snap["leaderboard"] == {"track_key": "F1:7", "track_name": "Silverstone", "entries": []}
+    assert [(b["period"], b["track_name"], b["entries"]) for b in snap["leaderboards"]] == \
+        [("today", "Silverstone", []), ("week", "Silverstone", []), ("all_time", "Silverstone", [])]
 
     # Nothing changed: just a frame (status only once a second).
     assert [m["type"] for m in conn.tick(t + 0.05)] == ["frame"]
@@ -352,7 +353,7 @@ async def test_lap_side_of_the_feed(tmp_path):
     await feed(hub, drive_full_lap(RIG_A, 0x11, 88123, b"Akshat"))
     msgs = conn.tick(last_seen(hub))
     types = [m["type"] for m in msgs]
-    assert types[:3] == ["lap_completed", "track_outline", "leaderboard"]
+    assert types[:5] == ["lap_completed", "track_outline", "leaderboard", "leaderboard", "leaderboard"]
     lap = msgs[0]["lap"]
     assert (lap["rig_id"], lap["lap_number"], lap["lap_ms"], lap["valid"], lap["session_best"]) == \
         (RIG_A, 1, 88123, True, True)
@@ -361,6 +362,7 @@ async def test_lap_side_of_the_feed(tmp_path):
     assert len(outline["points"]) == 301                  # one per input point (~20 m apart, > 6 m step)
     assert outline["sector_starts"] is None or outline["sector_starts"][0] == 0
     assert outline["display"] == {"flip_x": False, "flip_z": True, "rotate_deg": 0.0}
+    assert [m["leaderboard"]["period"] for m in msgs[2:5]] == ["today", "week", "all_time"]
     assert msgs[2]["leaderboard"]["entries"][0]["driver"] == "Akshat"
 
     frame = next(m for m in msgs if m["type"] == "frame")
@@ -376,7 +378,7 @@ async def test_lap_side_of_the_feed(tmp_path):
                      (RIG_B, lap_data_bytes(2025, 0x11, 300.0, 2, 2945.5, 44_500))])  # A passed here at 44062 ms
     msgs = conn.tick(last_seen(hub))
     assert [m["type"] for m in msgs if m["type"] in ("lap_completed", "track_outline", "leaderboard")] == \
-        ["lap_completed", "leaderboard"]                  # one outline per track
+        ["lap_completed"] + ["leaderboard"] * 3           # one outline per track
     comparison = next(m for m in msgs if m["type"] == "frame")["comparison"]
     by_rig = {e["rig_id"]: e for e in comparison["rigs"]}
     assert by_rig[RIG_B]["reference_rig_id"] == RIG_A and by_rig[RIG_B]["best_gap_ms"] == 1500
@@ -387,5 +389,5 @@ async def test_lap_side_of_the_feed(tmp_path):
 
     # A new connection gets all of it in the snapshot.
     snap = FeedConnection(FeedBuilder(hub)).start(last_seen(hub))
-    assert len(snap["outlines"]) == 1 and len(snap["leaderboard"]["entries"]) == 2
+    assert len(snap["outlines"]) == 1 and len(snap["leaderboards"][0]["entries"]) == 2
     assert [l["driver"] for l in snap["recent_laps"]] == ["Guest", "Akshat"]

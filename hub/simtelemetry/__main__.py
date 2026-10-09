@@ -20,6 +20,7 @@ from .core.rigs import RigRegistry
 from .hub import Hub
 from .logging_setup import setup_logging, teardown_logging
 from .net.udp import PortInUseError, UdpListener, bind_socket
+from .core.store import LapStore
 from .tools.recorder import GB, Recorder
 from .tools.replay import ReplayError, SourceSelection, replay, select_source
 
@@ -83,6 +84,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--live", action="store_true",
                    help="also listen for live UDP rigs, so the recording plays alongside them in one hub; "
                         "keeps running after the replay ends")
+    p.add_argument("--save-laps", action="store_true",
+                   help="store the replayed laps in the lap database (default: kept in memory only)")
     p.add_argument("--duration", type=float, help="stop after this many seconds")
     return parser
 
@@ -229,7 +232,10 @@ def run_command(args: argparse.Namespace, config: AppConfig) -> int:
                             max_file_bytes=rc.max_file_mb * 1024 * 1024, keep_files=rc.keep_files,
                             warn_free_bytes=int(rc.warn_free_gb * GB), stop_free_bytes=int(rc.stop_free_gb * GB),
                             disk_check_interval_s=rc.disk_check_interval_s)
-    hub = Hub(config, F1Adapter(config.track_names), registry, recorder)
+    # Replays keep their laps in memory unless asked, so old captures don't change the real boards.
+    save_laps = args.command != "replay" or args.save_laps
+    store = LapStore(config.data_dir / "laps.db" if save_laps else None)
+    hub = Hub(config, F1Adapter(config.track_names), registry, recorder, store)
 
     selection = SourceSelection()
     if args.command == "replay":
@@ -252,6 +258,7 @@ def run_command(args: argparse.Namespace, config: AppConfig) -> int:
     finally:
         if recorder is not None:
             recorder.close()
+        store.close()
         registry.save()
     return exit_code
 

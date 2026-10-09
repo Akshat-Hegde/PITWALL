@@ -46,7 +46,7 @@ export function LeaderboardPanel({ leaderboard, rigs }: Props) {
   return (
     <section className="panel board-lb" aria-label="Best laps">
       <h2 className="panel__title">
-        Best laps
+        Best laps today
         {leaderboard?.track_name && <span className="panel__sub">{leaderboard.track_name}</span>}
         {paged && (
           <span className="lb__range" aria-live="polite">

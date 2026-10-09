@@ -1,5 +1,7 @@
 import {
+  BOARD_PERIODS,
   KNOWN_TYPES,
+  type BoardPeriod,
   SCHEMA_VERSION,
   type Comparison,
   type HubMessage,
@@ -25,7 +27,8 @@ export interface DashboardState {
   frames: Record<string, RigFrame>;
   comparison: Comparison | null;
   outlines: Record<string, TrackOutline>;
-  leaderboard: Leaderboard | null;
+  /** Boards of the shown track by period ("today", "week", "all_time"). */
+  leaderboards: Partial<Record<BoardPeriod, Leaderboard>>;
   recentLaps: LapRecord[];
   lastFrameAt: number | null;
 }
@@ -44,10 +47,18 @@ export function initialState(source: DashboardState["source"]): DashboardState {
     frames: {},
     comparison: null,
     outlines: {},
-    leaderboard: null,
+    leaderboards: {},
     recentLaps: [],
     lastFrameAt: null,
   };
+}
+
+function isPeriod(period: string): period is BoardPeriod {
+  return (BOARD_PERIODS as readonly string[]).includes(period);
+}
+
+function boardsByPeriod(boards: Leaderboard[]): Partial<Record<BoardPeriod, Leaderboard>> {
+  return Object.fromEntries(boards.filter((b) => isPeriod(b.period)).map((b) => [b.period, b]));
 }
 
 function framesById(frames: RigFrame[]): Record<string, RigFrame> {
@@ -83,7 +94,7 @@ export function applyMessage(state: DashboardState, msg: HubMessage, now: number
         frames: framesById(msg.frame.rigs),
         comparison: msg.frame.comparison,
         outlines: Object.fromEntries(msg.outlines.map((o) => [o.track_key, o])),
-        leaderboard: msg.leaderboard,
+        leaderboards: boardsByPeriod(msg.leaderboards),
         recentLaps: msg.recent_laps.slice(0, RECENT_LAPS_MAX),
         lastFrameAt: now,
       };
@@ -102,7 +113,13 @@ export function applyMessage(state: DashboardState, msg: HubMessage, now: number
       return { ...state, outlines: { ...state.outlines, [msg.outline.track_key]: msg.outline } };
     case "lap_completed":
       return { ...state, recentLaps: [msg.lap, ...state.recentLaps].slice(0, RECENT_LAPS_MAX) };
-    case "leaderboard":
-      return { ...state, leaderboard: msg.leaderboard };
+    case "leaderboard": {
+      const period = msg.leaderboard.period;
+      if (!isPeriod(period)) return state;
+      // Boards of another track replace all of them (the hub sends all three when the track changes).
+      const sameTrack = Object.values(state.leaderboards).every((b) => b?.track_key === msg.leaderboard.track_key);
+      const base = sameTrack ? state.leaderboards : {};
+      return { ...state, leaderboards: { ...base, [period]: msg.leaderboard } };
+    }
   }
 }

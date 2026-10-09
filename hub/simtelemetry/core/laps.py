@@ -16,11 +16,16 @@ without changing them, because the lap may still be invalidated before the line.
 from __future__ import annotations
 
 import bisect
+import datetime as dt
 import itertools
+import json
 import logging
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .store import LapStore
 
 log = logging.getLogger(__name__)
 lap_debug = logging.getLogger("simtelemetry.lapdebug")  # enabled by --lap-debug
@@ -208,6 +213,7 @@ class LapRecord:
     completed_at: int            # Unix ms
     sector_ratings: tuple[str | None, str | None, str | None] = (None, None, None)
     trace: Trace | None = field(default=None, repr=False, compare=False)  # best laps keep theirs
+    db_id: int | None = None                                               # row in the lap store
 
     @property
     def counted(self) -> bool:
@@ -263,11 +269,18 @@ class RigLaps:
 
 
 class LapBook:
-    def __init__(self, clock=None, outline_display: dict[str, Any] | None = None) -> None:
+    def __init__(self, clock=None, outline_display: dict[str, Any] | None = None, store: LapStore | None = None,
+                 day_start_hour: int = 0) -> None:
         import time
         self._clock = clock or time.time
+        self.store = store
+        self.day_start_hour = day_start_hour
         self.outline_display = outline_display or {"flip_x": False, "flip_z": False, "rotate_deg": 0}
         self.outlines: dict[str, dict[str, Any]] = {}          # track_key -> schema TrackOutline
+        if store is not None:
+            for key, outline in store.outlines().items():
+                outline["display"] = dict(self.outline_display)  # the current config wins
+                self.outlines[key] = outline
         self.messages: deque[tuple[int, str, dict[str, Any]]] = deque(maxlen=EVENT_LOG_MAX)
         self._message_ids = itertools.count(1)
         self.board_version: dict[str, int] = {}                # track_key -> bumps when its board may change
@@ -363,6 +376,8 @@ class LapBook:
             if best is None or record.lap_ms < best.lap_ms:
                 rig.best[record.track_key] = record
         rig.last_sectors = self._sector_list(record.sectors_ms, record.sector_ratings)
+        if self.store is not None:
+            record.db_id = self.store.add(record)
         self.laps.append(record)
         self.recent.appendleft(record)
         lap_debug.info("rig=%s recorded lap=%d time=%s valid=%s out_lap=%s counted=%s personal_best=%s "
@@ -384,6 +399,8 @@ class LapBook:
         if match is None:
             return
         self.laps.remove(match)
+        if self.store is not None and match.db_id is not None:
+            self.store.delete(match.db_id)
         if match in self.recent:
             self.recent.remove(match)
         self._rebuild_bests()
@@ -434,6 +451,8 @@ class LapBook:
             "display": dict(self.outline_display),
         }
         self.outlines[record.track_key] = outline
+        if self.store is not None:
+            self.store.save_outline(outline, record.completed_at)
         self._publish("track_outline", {"outline": outline})
         lap_debug.info("rig=%s lap=%d became the outline of %s (%d points)", record.rig_id, record.lap_number,
                        record.track_key, len(points))
@@ -489,16 +508,44 @@ class LapBook:
     def recent_laps(self) -> list[dict[str, Any]]:
         return [r.to_schema() for r in self.recent]
 
-    def leaderboard_schema(self, track_key: str) -> dict[str, Any]:
-        """Schema Leaderboard for one track."""
-        rows = self.leaderboard(track_key)
-        leader = rows[0].lap_ms if rows else 0
-        track_name = next((r.track_name for r in rows if r.track_name), None)
-        return {"track_key": track_key, "track_name": track_name, "entries": [
-            {"rank": i + 1, "rig_id": r.rig_id, "rig_name": r.rig_name, "driver": r.driver, "lap_ms": r.lap_ms,
-             "sectors_ms": list(r.sectors_ms) if r.sectors_ms else None, "gap_ms": r.lap_ms - leader,
-             "tyre": r.tyre, "lap_number": r.lap_number, "set_at": r.completed_at}
-            for i, r in enumerate(rows)]}
+    def period_starts(self) -> dict[str, int | None]:
+        """Unix ms where each leaderboard period begins (local time of the hub PC)."""
+        from .store import PERIODS, period_start
+        now = dt.datetime.fromtimestamp(self._clock())
+        starts = {}
+        for period in PERIODS:
+            start = period_start(period, now, self.day_start_hour)
+            starts[period] = round(start.timestamp() * 1000) if start else None
+        return starts
+
+    def boards(self, track_key: str) -> list[dict[str, Any]]:
+        """Schema Leaderboard for each period ("today", "week", "all_time") of one track."""
+        return [self.board(track_key, period, since) for period, since in self.period_starts().items()]
+
+    def board(self, track_key: str, period: str, since_ms: int | None) -> dict[str, Any]:
+        if self.store is not None:
+            rows = self.store.board(track_key, since_ms)
+        else:  # no database (unit tests): this hub session's laps
+            rows = [{"rig_id": r.rig_id, "rig_name": r.rig_name, "driver": r.driver, "lap_ms": r.lap_ms,
+                     "s1_ms": r.sectors_ms[0] if r.sectors_ms else None,
+                     "s2_ms": r.sectors_ms[1] if r.sectors_ms else None,
+                     "s3_ms": r.sectors_ms[2] if r.sectors_ms else None, "track_name": r.track_name,
+                     "tyre": json.dumps(r.tyre) if r.tyre else None, "lap_number": r.lap_number,
+                     "completed_at": r.completed_at}
+                    for r in self.leaderboard(track_key) if since_ms is None or r.completed_at >= since_ms]
+        leader = rows[0]["lap_ms"] if rows else 0
+        entries = []
+        for i, row in enumerate(rows):
+            sectors = [row["s1_ms"], row["s2_ms"], row["s3_ms"]]
+            entries.append({
+                "rank": i + 1, "rig_id": row["rig_id"], "rig_name": row["rig_name"], "driver": row["driver"],
+                "lap_ms": row["lap_ms"], "sectors_ms": sectors if all(s is not None for s in sectors) else None,
+                "gap_ms": row["lap_ms"] - leader, "tyre": json.loads(row["tyre"]) if row["tyre"] else None,
+                "lap_number": row["lap_number"], "set_at": row["completed_at"],
+            })
+        track_name = next((row["track_name"] for row in rows if row["track_name"]), None)
+        return {"track_key": track_key, "track_name": track_name, "period": period, "since": since_ms,
+                "entries": entries}
 
     def rig_best(self, rig_id: str, track_key: str | None) -> LapRecord | None:
         rig = self.rigs.get(rig_id)

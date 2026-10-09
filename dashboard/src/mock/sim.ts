@@ -226,7 +226,7 @@ export class MockHub {
       rigs: this.rigs.map((r) => r.spec.info),
       frame: { rigs: this.rigs.map((r) => this.frame(r)), comparison: this.comparison() },
       outlines: this.outlineSent ? [this.outline()] : [],
-      leaderboard: this.leaderboard,
+      leaderboards: this.leaderboard ? this.periodBoards(this.leaderboard) : [],
       recent_laps: [...this.recentLaps],
     };
   }
@@ -333,7 +333,9 @@ export class MockHub {
     msgs.push({ ...this.envelope("lap_completed"), lap });
     if (personalBest) {
       this.leaderboard = this.buildLeaderboard();
-      msgs.push({ ...this.envelope("leaderboard"), leaderboard: this.leaderboard });
+      for (const board of this.periodBoards(this.leaderboard)) {
+        msgs.push({ ...this.envelope("leaderboard"), leaderboard: board });
+      }
     }
     if (valid && !this.outlineSent) {
       this.outlineSent = true;
@@ -356,6 +358,19 @@ export class MockHub {
     return msgs;
   }
 
+  /** The mock has one session, so every period shows the same board. */
+  private periodBoards(board: Leaderboard): Leaderboard[] {
+    const today = new Date(this.clock());
+    today.setHours(0, 0, 0, 0);
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+    return [
+      { ...board, period: "today", since: today.getTime() },
+      { ...board, period: "week", since: monday.getTime() },
+      { ...board, period: "all_time", since: null },
+    ];
+  }
+
   private buildLeaderboard(): Leaderboard {
     const live: LeaderboardEntry[] = this.rigs
       .filter((r) => r.best)
@@ -376,6 +391,8 @@ export class MockHub {
     return {
       track_key: TRACK_KEY,
       track_name: TRACK_NAME,
+      period: "today",
+      since: null,
       entries: sorted.map((e, i) => ({ ...e, rank: i + 1, gap_ms: e.lap_ms - leader })),
     };
   }

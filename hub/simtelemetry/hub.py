@@ -11,6 +11,7 @@ from .config import AppConfig
 from .core.adapter import Checked, GameAdapter
 from .core.health import HealthMonitor, RigState
 from .core.laps import LapBook, LapContext
+from .core.store import LapStore
 from .core.rigs import Rig, RigRegistry
 from .tools.recorder import Recorder
 
@@ -22,13 +23,14 @@ DROP_QUEUE_FULL = "queue_full"
 
 class Hub:
     def __init__(self, config: AppConfig, adapter: GameAdapter, registry: RigRegistry,
-                 recorder: Recorder | None = None) -> None:
+                 recorder: Recorder | None = None, store: LapStore | None = None) -> None:
         self.config = config
         self.adapter = adapter
         self.registry = registry
         self.health = HealthMonitor(config.health)
         self.recorder = recorder
-        self.laps = LapBook(outline_display=config.map.model_dump())
+        self.laps = LapBook(outline_display=config.map.model_dump(), store=store,
+                            day_start_hour=config.leaderboard.day_start_hour)
         self.started_at = time.monotonic()
         self._queue: asyncio.Queue[tuple[Checked, bytes, str, float]] = asyncio.Queue(QUEUE_MAX)
 

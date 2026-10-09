@@ -178,6 +178,8 @@ function leaderboard(c: Checker, v: unknown, p: string) {
   c.object(v, p, (o) => {
     c.field(o, "track_key", isStr, p);
     c.field(o, "track_name", orNull(isStr), p);
+    c.field(o, "period", isStr, p);
+    c.field(o, "since", orNull(isInt), p);
     c.array(o.entries, `${p}.entries`, (e, ep) =>
       c.object(e, ep, (eo) => {
         for (const k of ["rank", "lap_ms", "gap_ms", "lap_number", "set_at"]) c.field(eo, k, isInt, ep);
@@ -217,7 +219,7 @@ export function validateMessage(msg: unknown): string[] {
           comparison(c, f.comparison, `${p}.frame.comparison`);
         });
         c.array(m.outlines, `${p}.outlines`, (o, op) => outline(c, o, op));
-        leaderboard(c, m.leaderboard, `${p}.leaderboard`);
+        c.array(m.leaderboards, `${p}.leaderboards`, (b, bp) => leaderboard(c, b, bp));
         c.array(m.recent_laps, `${p}.recent_laps`, (l, lp) => lapRecord(c, l, lp));
         break;
       case "frame":

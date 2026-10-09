@@ -138,14 +138,20 @@ class FeedBuilder:
                     entry["live_delta_ms"] = None
         return result
 
-    def leaderboard(self, track_key: str | None, rigs: list[dict[str, Any]]) -> dict[str, Any] | None:
+    def leaderboards(self, track_key: str | None, rigs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Today / this week / all time boards of the shown track (none while no track is known)."""
         if track_key is None:
-            return None
-        board = self.hub.laps.leaderboard_schema(track_key)
-        if board["track_name"] is None:
-            board["track_name"] = next((r["session"]["track_name"] for r in rigs
-                                        if r["session"]["track_key"] == track_key), None)
-        return board
+            return []
+        boards = self.hub.laps.boards(track_key)
+        name = next((r["session"]["track_name"] for r in rigs if r["session"]["track_key"] == track_key), None)
+        for board in boards:
+            board["track_name"] = board["track_name"] or name
+        return boards
+
+    def board_key(self, track_key: str | None) -> tuple[Any, ...]:
+        """Changes whenever the shown boards may change: new laps, another track, a new day or week."""
+        laps = self.hub.laps
+        return (track_key, laps.board_version.get(track_key or "", 0), tuple(laps.period_starts().values()))
 
     def status(self, now: float) -> dict[str, Any]:
         hub = self.hub
@@ -198,7 +204,7 @@ class FeedBuilder:
             "rigs": self.rig_infos(),
             "frame": frame,
             "outlines": list(self.hub.laps.outlines.values()),
-            "leaderboard": self.leaderboard(self.active_track(frame["rigs"]), frame["rigs"]),
+            "leaderboards": self.leaderboards(self.active_track(frame["rigs"]), frame["rigs"]),
             "recent_laps": self.hub.laps.recent_laps(),
         }
 
@@ -215,7 +221,7 @@ class FeedConnection:
         self._status: dict[str, Any] | None = None
         self._status_at = float("-inf")
         self._message_id = 0                                  # last lap book message sent
-        self._board: tuple[str | None, int] | None = None     # (track, board version) last sent
+        self._board: tuple[Any, ...] | None = None            # board_key last sent
 
     def _message(self, type_: str, body: dict[str, Any]) -> dict[str, Any]:
         msg = {"v": SCHEMA_VERSION, "type": type_, "seq": self.seq, "ts": round(self._clock() * 1000)}
@@ -230,8 +236,7 @@ class FeedConnection:
         self._status, self._status_at = body["status"], now
         laps = self.builder.hub.laps
         self._message_id = laps.last_message_id
-        track = self.builder.active_track(body["frame"]["rigs"])
-        self._board = (track, laps.board_version.get(track or "", 0))
+        self._board = self.builder.board_key(self.builder.active_track(body["frame"]["rigs"]))
         return self._message("snapshot", body)
 
     def tick(self, now: float) -> list[dict[str, Any]]:
@@ -250,11 +255,10 @@ class FeedConnection:
             self._message_id = message_id
             out.append(self._message(type_, body))
         track = self.builder.active_track(frame["rigs"])
-        board = (track, laps.board_version.get(track or "", 0))
+        board = self.builder.board_key(track)
         if board != self._board:
             self._board = board
-            leaderboard = self.builder.leaderboard(track, frame["rigs"])
-            if leaderboard is not None:
+            for leaderboard in self.builder.leaderboards(track, frame["rigs"]):
                 out.append(self._message("leaderboard", {"leaderboard": leaderboard}))
         status = self.builder.status(now)
         if status != self._status or now - self._status_at >= STATUS_INTERVAL_S:
