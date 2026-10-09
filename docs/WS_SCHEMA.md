@@ -1,12 +1,13 @@
-# Dashboard WebSocket schema: v1 (draft)
+# Dashboard WebSocket schema: v1
 
 The hub pushes live state to dashboards over one WebSocket. The format is **game-agnostic**: nothing in it
 is specific to F1, and each game adapter fills the same fields. The dashboard is built only against this
 document (and its TypeScript twin, `dashboard/src/schema.ts`), never against hub internals.
 
-Status: **v1 draft.** Fields marked **(provisional)** depend on lap-tracking behaviour that will be
-confirmed against the first real capture; they may still change within v1 before milestone 1 is
-frozen. Everything else is intended to be stable.
+Status: **v1, frozen.** From here on v1 only changes additively (section 2): new optional fields, new
+enum values and new message types. Anything else is v2. How the F1 game actually behaves around laps is
+documented separately in [LAP_ASSUMPTIONS.md](LAP_ASSUMPTIONS.md); if the real test shows an assumption
+is wrong, the hub's rules change, not this format.
 
 Hub implementation: `hub/simtelemetry/core/feed.py` sends every message type below, with lap data from
 the lap book (`core/laps.py`; F1 rules and their assumptions in [LAP_ASSUMPTIONS.md](LAP_ASSUMPTIONS.md)).
@@ -61,8 +62,8 @@ Compatibility rules:
 | `status` | Once per second, and immediately on change | `{ "status": HubStatus }` |
 | `session_changed` | A rig starts a new game session (e.g. new track, restart) | `{ "rig_id", "session": SessionInfo }` |
 | `track_outline` | An outline becomes available (generated or loaded) | `{ "outline": TrackOutline }` |
-| `lap_completed` **(provisional)** | A rig finishes a lap | `{ "lap": LapRecord }` |
-| `leaderboard` **(provisional)** | A board of the shown track changes | `{ "leaderboard": Leaderboard }`: full replacement of the board for its `period`. Boards for another track replace all boards. |
+| `lap_completed` | A rig finishes a lap | `{ "lap": LapRecord }` |
+| `leaderboard` | A board of the shown track changes | `{ "leaderboard": Leaderboard }`: full replacement of the board for its `period`. Boards for another track replace all boards. |
 
 ### 3.1 `snapshot`
 
@@ -148,8 +149,8 @@ Conventions: times are integer **milliseconds**; distances **metres**; speed **k
 | `brake` | number \| null | 0–1 |
 | `rpm` | int \| null | |
 | `tyre` | Tyre \| null | |
-| `lap` | LiveLap \| null | **(provisional)** |
-| `best` | BestLap \| null | **(provisional)** This rig's best valid lap on the current track in this hub session. |
+| `lap` | LiveLap \| null | The lap in progress; `null` when not driving. |
+| `best` | BestLap \| null | This rig's best valid lap on the current track in this hub session. |
 
 ### Tyre
 
@@ -159,7 +160,7 @@ Conventions: times are integer **milliseconds**; distances **metres**; speed **k
 | `label` | string | What to print, e.g. `"C3"`, `"soft"`, `"unknown(42)"`. |
 | `age_laps` | int \| null | |
 
-### LiveLap (provisional)
+### LiveLap
 
 | Field | Type | Notes |
 |---|---|---|
@@ -172,18 +173,18 @@ Conventions: times are integer **milliseconds**; distances **metres**; speed **k
 | `sectors` | `[SectorTime \| null, SectorTime \| null, SectorTime \| null]` | Sectors completed on the **current** lap. |
 | `last_sectors` | same \| null | Sectors of the previous lap. |
 
-### SectorTime (provisional)
+### SectorTime
 
 | Field | Type | Notes |
 |---|---|---|
 | `ms` | int | |
 | `rating` | string \| null | `"session_best"` (purple: fastest of any rig on this track), `"personal_best"` (green: this driver's fastest), `"normal"` (yellow: slower), `null` (not rated, e.g. invalid). |
 
-### BestLap (provisional)
+### BestLap
 
 `{ "lap_ms": int, "sectors_ms": [int, int, int], "lap_number": int, "set_at": int }`; `set_at` is Unix ms.
 
-### Comparison (provisional)
+### Comparison
 
 Live and best-lap deltas between rigs on the **same track**. For two rigs this is "my best vs yours" and "my
 live lap vs your best lap at the same distance"; with more rigs, each rig is compared with the fastest
@@ -215,9 +216,9 @@ live lap vs your best lap at the same distance"; with more rigs, each rig is com
 | `points` | `[[x, z], ...]` | Closed loop in the same coordinate space as `RigFrame.position`; `points[0]` is the start/finish line, in driving direction. |
 | `source` | string | `"first_valid_lap"` (recorded by the hub) or `"bundled"`. |
 | `sector_starts` | `[int, int, int]` \| null | Indices into `points` where sectors 1–3 start. |
-| `display` | `{ "flip_x": bool, "flip_z": bool, "rotate_deg": number }` | How to draw the world: screen right = +x, screen down = +z, **after** applying these. From the hub's `[map]` config, so the map matches the in-game minimap. **(provisional for F1** until checked in the real test; the dashboard's `?map=` URL option overrides it for that check.) |
+| `display` | `{ "flip_x": bool, "flip_z": bool, "rotate_deg": number }` | How to draw the world: screen right = +x, screen down = +z, **after** applying these. From the hub's `[map]` config, so the map matches the in-game minimap. The dashboard's `?map=` URL option overrides it, for finding the right config value. |
 
-### LapRecord (provisional)
+### LapRecord
 
 | Field | Type | Notes |
 |---|---|---|
@@ -235,7 +236,7 @@ live lap vs your best lap at the same distance"; with more rigs, each rig is com
 | `session_best` | bool | New best of all rigs on this track. |
 | `completed_at` | int | Unix ms. |
 
-### Leaderboard (provisional)
+### Leaderboard
 
 Best counted lap (valid, not an out lap) per driver (per rig if the driver name is unknown) on one track
 within a period. Laps are stored in the hub's database (`<data_dir>/laps.db`), so boards survive hub

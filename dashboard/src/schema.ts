@@ -1,5 +1,4 @@
-// TypeScript twin of docs/WS_SCHEMA.md (v1 draft). Keep the two in sync.
-// Fields marked (provisional) depend on lap tracking confirmed by the real capture.
+// TypeScript twin of docs/WS_SCHEMA.md (v1, frozen: additive changes only). Keep the two in sync.
 
 export const SCHEMA_VERSION = 1;
 
@@ -58,7 +57,6 @@ export interface SectorTime {
 
 export type Sectors = [SectorTime | null, SectorTime | null, SectorTime | null];
 
-/** (provisional) */
 export interface LiveLap {
   number: number;
   distance_m: number;
@@ -70,7 +68,6 @@ export interface LiveLap {
   last_sectors: Sectors | null;
 }
 
-/** (provisional) */
 export interface BestLap {
   lap_ms: number;
   sectors_ms: [number, number, number];
@@ -95,7 +92,6 @@ export interface RigFrame {
   best: BestLap | null;
 }
 
-/** (provisional) */
 export interface ComparisonEntry {
   rig_id: string;
   reference_rig_id: string | null;
@@ -103,7 +99,6 @@ export interface ComparisonEntry {
   live_delta_ms: number | null;
 }
 
-/** (provisional) */
 export interface Comparison {
   track_key: string;
   rigs: ComparisonEntry[];
@@ -118,7 +113,6 @@ export interface TrackOutline {
   display: { flip_x: boolean; flip_z: boolean; rotate_deg: number };
 }
 
-/** (provisional) */
 export interface LapRecord {
   rig_id: string;
   driver: string | null;
@@ -136,7 +130,6 @@ export interface LapRecord {
   completed_at: number;
 }
 
-/** (provisional) */
 export interface LeaderboardEntry {
   rank: number;
   rig_id: string;
@@ -153,7 +146,6 @@ export interface LeaderboardEntry {
 export type BoardPeriod = "today" | "week" | "all_time";
 export const BOARD_PERIODS: readonly BoardPeriod[] = ["today", "week", "all_time"];
 
-/** (provisional) */
 export interface Leaderboard {
   track_key: string;
   track_name: string | null;

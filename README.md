@@ -1,11 +1,12 @@
 # Sim Telemetry Hub
 
-Local LAN telemetry hub and TV dashboard for sim racing cafes. Milestone 1: F1 25 (UDP formats 2025 and 2026), two rigs.
+Local LAN telemetry hub and TV dashboard for sim racing cafes. Milestone 1: F1 25 (UDP formats 2025 and 2026).
 
-Status: hub steps 1–3 are done (packet parsing, UDP listener, rig registry, health, recorder/replay, health API).
-`run` serves the TV dashboard with a live WebSocket feed (positions, speed, gear, pedals, tyres, status).
-Lap timing, sectors, comparison and the leaderboard wait for lap tracking, which is built from the first
-real capture (see [docs/TEST_PLAN.md](docs/TEST_PLAN.md)).
+Status: milestone 1 is feature-complete and awaiting its end-to-end test on real devices
+([docs/TEST_PLAN.md](docs/TEST_PLAN.md)). The hub receives F1 25 telemetry from every rig on the LAN, tracks
+laps, sectors and bests, stores laps in SQLite, and serves the TV dashboard (race view, leaderboard view,
+attract mode) with a live WebSocket feed. Lap tracking was built from the UDP spec; what it assumes about the
+real game is listed in [docs/LAP_ASSUMPTIONS.md](docs/LAP_ASSUMPTIONS.md), to be confirmed in that test.
 
 ## Setup (Windows, Python 3.11+)
 
@@ -123,6 +124,16 @@ repeating). On the TV PC's keyboard: `1` race view, `2` leaderboard view, `0` au
 Branding comes from `[cafe]` in the hub config: `name`, plus CSS variables in `[cafe.branding]` (e.g.
 `"--brand-accent" = "#0a7cff"`), applied to the page as-is.
 
+## Lap database
+
+Every recorded lap goes into SQLite at `<data_dir>/laps.db` (default `data\laps.db`), together with each
+track's outline. The TV's leaderboards (today, this week, all time) are read from it, so they survive hub
+restarts. "Today" starts at `[leaderboard] day_start_hour` (local time, default 0); the week starts on
+Monday. To start the boards from scratch, stop the hub and delete or rename `laps.db`.
+
+`replay` keeps its laps in memory, so replaying a capture never changes the real boards; add `--save-laps`
+to store them.
+
 ## Python on the dev machine
 
 The current dev machine uses the **Microsoft Store** build of Python 3.11. That's fine for development, but
@@ -134,20 +145,11 @@ launcher). Until then, use the port-based firewall rule in [docs/TEST_PLAN.md](d
 ## Docs
 
 - [docs/RIG_SETUP.md](docs/RIG_SETUP.md): in-game UDP settings for each rig.
-- [docs/TEST_PLAN.md](docs/TEST_PLAN.md): firewall setup and the 2-PC test checklist.
-- [docs/WS_SCHEMA.md](docs/WS_SCHEMA.md): hub → dashboard WebSocket message format (v1 draft).
+- [docs/TEST_PLAN.md](docs/TEST_PLAN.md): firewall setup and the 2-device end-to-end test checklist.
+- [docs/WS_SCHEMA.md](docs/WS_SCHEMA.md): hub → dashboard WebSocket message format (v1, frozen).
 - [docs/LAP_ASSUMPTIONS.md](docs/LAP_ASSUMPTIONS.md): what lap tracking assumes about the game, and how to
   check each assumption with `--lap-debug`.
 
-## Lap database
-
-Every recorded lap goes into SQLite at `<data_dir>/laps.db` (default `data\laps.db`), together with each
-track's outline. The TV's leaderboards (today, this week, all time) are read from it, so they survive hub
-restarts. "Today" starts at `[leaderboard] day_start_hour` (local time, default 0); the week starts on
-Monday. To start the boards from scratch, stop the hub and delete or rename `laps.db`.
-
-`replay` keeps its laps in memory, so replaying a capture never changes the real boards; add `--save-laps`
-to store them.
 - Specs (source of truth for the parser): `docs/F1_25_structures.txt`, `docs/F1_2026_SeasonPack_structures.txt`,
   `docs/F1_25_UDP_Spec.pdf`.
 
@@ -155,13 +157,13 @@ to store them.
 
 ```
 hub/simtelemetry/
-  adapters/f1/   spec layouts (f2025, f2026), validation, decoding, appendix tables, adapter
-  core/          game-agnostic adapter interface, rig registry, health
+  adapters/f1/   spec layouts (f2025, f2026), validation, decoding, appendix tables, lap tracker, adapter
+  core/          game-agnostic: adapter interface, rig registry, health, lap book, lap store, dashboard feed
   net/           asyncio UDP listener
-  api/           FastAPI app
+  api/           FastAPI app: /api/health, /ws, dashboard files
   tools/         raw packet recorder and replay
   hub.py         packet pipeline
-hub/tests/       pytest suite (spec conformance, decoding, pipeline, CLI)
+hub/tests/       pytest suite (spec conformance, decoding, lap scenarios, feed, store, pipeline, CLI)
 config/          hub.example.toml
 dashboard/src/
   schema.ts      TypeScript twin of docs/WS_SCHEMA.md
@@ -169,5 +171,6 @@ dashboard/src/
   mock/          simulated track and rigs that emit schema messages
   state/         reducer, store, position trails
   map/           map geometry (display transform, fit)
-  components/    status bar, track map, rig panel, comparison, leaderboard
+  components/    status bar, track map, timing strip, leaderboards, race and leaderboard views
+  views.ts       view selection: race / leaderboard / auto (attract mode)
 ```
