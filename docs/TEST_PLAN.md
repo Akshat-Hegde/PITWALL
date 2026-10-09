@@ -129,8 +129,8 @@ step lists the assumptions it checks. Afterwards, fill in the results table in
 While you drive, check on the TV:
 
 - [ ] **Lap clock and sectors:** the clock matches the in-game timer, and S1 and S2 turn coloured as you
-      cross the sector lines. Purple = fastest of all rigs on this track since the hub started; green =
-      your own best; yellow = slower. Grey = the lap is invalid.
+      cross the sector lines. Purple = fastest on this track today (all rigs); green = your own best this
+      session; yellow = slower. Grey = the lap is invalid.
 - [ ] **Invalid lap:** the row shows `Invalid` and the clock is struck through from the moment of the cut.
 - [ ] **Last / Best:** after each lap, `Last` shows the lap time from the HUD, and `Best` your best valid lap
       (purple when it's the fastest today, green otherwise).

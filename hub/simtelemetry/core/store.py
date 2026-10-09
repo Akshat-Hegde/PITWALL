@@ -120,6 +120,19 @@ class LapStore:
                 (track_key, since_ms if since_ms is not None else 0, limit)).fetchall()
         return [dict(row) for row in rows]
 
+    def sector_bests(self, track_key: str, since_ms: int | None, rig_id: str | None = None,
+                     session_id: str | None = None, driver_key: str | None = None) -> list[int | None]:
+        """Fastest S1/S2/S3 of counted laps on a track since a time, optionally for one driver's session."""
+        sql = ("SELECT MIN(s1_ms), MIN(s2_ms), MIN(s3_ms) FROM laps"
+               " WHERE track_key = ? AND valid = 1 AND out_lap = 0 AND completed_at >= ?")
+        args: list = [track_key, since_ms if since_ms is not None else 0]
+        if driver_key is not None:
+            sql += " AND rig_id = ? AND session_id IS ? AND driver_key = ?"
+            args += [rig_id, session_id, driver_key]
+        with self._lock:
+            row = self._db.execute(sql, args).fetchone()
+        return list(row)
+
     # --- outlines ---------------------------------------------------------------------------
 
     def save_outline(self, outline: dict[str, Any], created_at_ms: int) -> None:

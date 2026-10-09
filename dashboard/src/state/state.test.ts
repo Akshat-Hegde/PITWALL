@@ -185,6 +185,9 @@ describe("session best", () => {
     expect(bests.length).toBe(2);
     expect(sessionBest(s, "F1:900")).toBe(Math.min(...bests));
     expect(sessionBest(s, "F1:1")).toBeNull();
+    // Today's board wins (it may hold a faster lap from a rig that has since left).
+    const today = { ...s.leaderboards.today!, entries: [{ ...s.leaderboards.today!.entries[0]!, lap_ms: 80000 }] };
+    expect(sessionBest({ ...s, leaderboards: { today } }, "F1:900")).toBe(80000);
   });
 });
 

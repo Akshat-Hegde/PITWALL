@@ -178,7 +178,7 @@ Conventions: times are integer **milliseconds**; distances **metres**; speed **k
 | Field | Type | Notes |
 |---|---|---|
 | `ms` | int | |
-| `rating` | string \| null | `"session_best"` (purple: fastest of any rig on this track), `"personal_best"` (green: this driver's fastest), `"normal"` (yellow: slower), `null` (not rated, e.g. invalid). |
+| `rating` | string \| null | `"session_best"` (purple: equal to or faster than the fastest time for this sector on this track **today**, all rigs, from the lap database with the "today" board's day boundary), `"personal_best"` (green: equal to or faster than this driver's own best in their current session: same rig, game session and driver), `"normal"` (yellow: slower), `null` (not rated: invalid lap or out lap). |
 
 ### BestLap
 

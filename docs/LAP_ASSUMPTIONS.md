@@ -168,9 +168,11 @@ Write down the in-game times while driving, then compare them with the log. Tick
 ### A15. Only valid laps that aren't out laps count; ratings follow the TV convention
 
 - **Assumption (our rule, not the game's):** bests use only valid laps that aren't out laps. Sector
-  ratings: purple = equal to or faster than the fastest of all rigs on this track since the hub started,
-  green = this driver's best, yellow = slower. Live sectors are rated against the bests without changing
-  them.
+  ratings: purple = equal to or faster than the fastest time for that sector on this track **today** (all
+  rigs, from the lap database, so it survives hub restarts; the day starts at `[leaderboard]
+  day_start_hour`), green = equal to or faster than the driver's own best in their current session (same
+  rig, game session and driver), yellow = slower. Live sectors are rated against the bests without
+  changing them.
 - **Handled:** as stated. A retracted lap (A5, A6) is removed and bests are recomputed.
 - **Verify:** the purple/green/yellow colours on the TV match what you'd expect from your laps.
 

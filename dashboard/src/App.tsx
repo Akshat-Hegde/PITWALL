@@ -26,8 +26,13 @@ export function chooseTrackKey(state: DashboardState): string | null {
   return best ?? state.leaderboards.today?.track_key ?? Object.keys(state.outlines)[0] ?? null;
 }
 
-/** Fastest best lap among rigs on the given track, or null. */
+/**
+ * The lap time shown purple in the strip: today's fastest lap on the track (top of the today board, the
+ * same source as purple sectors), or the fastest rig best when no board for that track has arrived.
+ */
 export function sessionBest(state: DashboardState, trackKey: string | null): number | null {
+  const today = state.leaderboards.today;
+  if (today && today.track_key === trackKey && today.entries.length > 0) return today.entries[0]!.lap_ms;
   let best: number | null = null;
   for (const frame of Object.values(state.frames)) {
     const ms = frame.best?.lap_ms;

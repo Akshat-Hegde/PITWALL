@@ -122,3 +122,71 @@ def test_replay_keeps_laps_out_of_the_database_unless_asked(tmp_path):
     store = LapStore(tmp_path / "laps.db")
     assert store.count() == 1 and store.board("F1:7", None)[0]["lap_ms"] == 88123
     store.close()
+
+
+# --- sector colours: purple = fastest today (database), green = own best this session -----------
+
+def sectors_lap(n, s1, s2, s3, valid=True):
+    return LapCompleted(n, 0.0, s1 + s2 + s3, (s1, s2, s3), valid, False, "test")
+
+
+def test_purple_is_fastest_today_from_the_database(tmp_path):
+    db = tmp_path / "laps.db"
+    yesterday = LapBook(clock=at(NOW - dt.timedelta(days=1)), store=LapStore(db))
+    yesterday.update("A", ctx("Legend"), None, [sectors_lap(2, 25000, 30000, 25000)])  # faster, but yesterday
+    yesterday.store.close()
+    morning = LapBook(clock=at(NOW - dt.timedelta(hours=3)), store=LapStore(db))
+    morning.update("A", ctx("Early Bird", session="m"), None, [sectors_lap(2, 28000, 33000, 27000)])
+    morning.store.close()
+
+    book = LapBook(clock=at(NOW), store=LapStore(db))                  # hub restarted since the morning
+    (lap,) = book.update("B", ctx("Akshat", "Rig 2", session="e"), None, [sectors_lap(3, 27900, 33500, 26000)])
+    # S1 beats this morning's 28.000 -> purple; S2 slower than 33.000 but Akshat's first lap -> green;
+    # S3 beats 27.000 -> purple. Yesterday's faster sectors don't count.
+    assert lap.sector_ratings == ("session_best", "personal_best", "session_best")
+    assert book.today_sector_bests("F1:7") == [27900, 33000, 26000]
+    book.store.close()
+
+
+def test_green_is_own_best_in_the_current_session(tmp_path):
+    book = LapBook(clock=at(NOW), store=LapStore(tmp_path / "laps.db"))
+    book.update("A", ctx("Fast Friend", session="s1"), None, [sectors_lap(2, 28000, 33000, 27000)])
+    # Akshat's earlier game session on the same rig had quicker sectors than tonight's laps below.
+    book.update("A", ctx("Akshat", session="s0"), None, [sectors_lap(2, 28500, 33500, 27500)])
+    (first,) = book.update("A", ctx("Akshat", session="s2"), None, [sectors_lap(2, 29000, 34000, 28000)])
+    assert first.sector_ratings == ("personal_best",) * 3        # first lap of the new session: own best
+    (second,) = book.update("A", ctx("Akshat", session="s2"), None, [sectors_lap(3, 28900, 34100, 28000)])
+    assert second.sector_ratings == ("personal_best", "normal", "personal_best")  # S2 slower, S3 equal
+    # Another driver on the same rig in the same game session has their own bests.
+    (guest,) = book.update("A", ctx("Guest", session="s2"), None, [sectors_lap(4, 30000, 35000, 29000)])
+    assert guest.sector_ratings == ("personal_best",) * 3
+    # Invalid laps are unrated and don't set bests.
+    (cut,) = book.update("A", ctx("Akshat", session="s2"), None, [sectors_lap(5, 20000, 20000, 20000, valid=False)])
+    assert cut.sector_ratings == (None, None, None)
+    assert book.own_sector_bests("A", "s2", "driver:akshat", "F1:7") == [28900, 34000, 28000]
+    book.store.close()
+
+
+def test_live_sectors_and_retraction_use_the_same_bests(tmp_path):
+    from simtelemetry.core.laps import LiveLap
+    book = LapBook(clock=at(NOW), store=LapStore(tmp_path / "laps.db"))
+    book.update("A", ctx("Fast Friend", session="s1"), None, [sectors_lap(2, 28000, 33000, 27000)])
+    book.update("B", ctx("Akshat", "Rig 2", session="s2"), None, [sectors_lap(2, 29000, 34000, 28000)])
+    live = LiveLap(3, 4000.0, 62000, True, 2, 28500, 34500, 91000)
+    book.update("B", ctx("Akshat", "Rig 2", session="s2"), live, [])
+    ratings = [s["rating"] for s in book.live_view("B")["sectors"][:2]]
+    assert ratings == ["personal_best", "normal"]                 # 28.5 < own 29.0; 34.5 > own 34.0
+    # The friend's lap is withdrawn (flashback): Akshat's 28.5 is now the fastest S1 today.
+    book.update("A", ctx("Fast Friend", session="s1"), None, [LapRetracted(2, 0.0, "flashback")])
+    assert book.live_view("B")["sectors"][0]["rating"] == "session_best"
+    book.store.close()
+
+
+def test_new_day_resets_purple(tmp_path):
+    clock = {"t": NOW}
+    book = LapBook(clock=lambda: clock["t"].timestamp(), store=LapStore(tmp_path / "laps.db"))
+    book.update("A", ctx(session="s1"), None, [sectors_lap(2, 28000, 33000, 27000)])
+    assert book.today_sector_bests("F1:7") == [28000, 33000, 27000]
+    clock["t"] = NOW + dt.timedelta(days=1)
+    assert book.today_sector_bests("F1:7") == [None, None, None]
+    book.store.close()

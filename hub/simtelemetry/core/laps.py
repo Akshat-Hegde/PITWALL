@@ -7,10 +7,12 @@ docs/LAP_ASSUMPTIONS.md); LapBook keeps everything the dashboard needs:
 - per track: session bests (all rigs, since the hub started) and personal bests (per driver);
 - per rig: best lap on its current track, live lap with rated sectors, last lap's rated sectors.
 
-Only laps that are valid and not out laps ("counted" laps) set bests. Ratings follow the
-TV timing convention: purple = equal to or faster than the session best, green = this
-driver's personal best, yellow = slower. Live sectors are rated against existing bests
-without changing them, because the lap may still be invalidated before the line.
+Only laps that are valid and not out laps ("counted" laps) set bests. Sector ratings follow the
+TV timing convention: purple = equal to or faster than the fastest sector on this track today
+(all rigs; the same database and day boundary as the "today" board), green = equal to or faster
+than this driver's own best in their current session (same rig, game session and driver),
+yellow = slower. Live sectors are rated against existing bests without changing them, because
+the lap may still be invalidated before the line.
 """
 
 from __future__ import annotations
@@ -262,6 +264,7 @@ class RigLaps:
     live: LiveLap | None = None
     track_key: str | None = None
     driver: str | None = None
+    session_id: str | None = None
     last_sectors: list[dict[str, Any] | None] | None = None
     best: dict[str, LapRecord] = field(default_factory=dict)  # track_key -> this rig's best counted lap
     traces: dict[int, Trace] = field(default_factory=dict)    # lap number -> trace (current + recent)
@@ -289,6 +292,8 @@ class LapBook:
         self.recent: deque[LapRecord] = deque(maxlen=RECENT_LAPS_MAX)
         self._session: dict[str, Bests] = {}                  # track_key -> bests across all rigs
         self._personal: dict[tuple[str, str], Bests] = {}     # (track_key, driver_key) -> bests
+        self._lap_version = 0                                  # bumps on every recorded/removed lap
+        self._sector_cache: dict[tuple, list[int | None]] = {}
 
     def rig(self, rig_id: str) -> RigLaps:
         return self.rigs.setdefault(rig_id, RigLaps())
@@ -298,7 +303,7 @@ class LapBook:
     def update(self, rig_id: str, ctx: LapContext, live: LiveLap | None, events: list[LapEvent]) -> list[LapRecord]:
         """Apply one decoded packet's worth of lap information. Returns laps completed by it."""
         rig = self.rig(rig_id)
-        rig.track_key, rig.driver = ctx.track_key, ctx.driver
+        rig.track_key, rig.driver, rig.session_id = ctx.track_key, ctx.driver, ctx.session_id
         completed = []
         for event in events:
             lap_debug.info("rig=%s %s", rig_id, describe(event))
@@ -364,8 +369,10 @@ class LapBook:
         session = self._session.setdefault(record.track_key, Bests())
         personal = self._personal.setdefault((record.track_key, record.driver_key), Bests())
         if record.sectors_ms:
+            today = self.today_sector_bests(record.track_key)
+            own = self.own_sector_bests(rig_id, record.session_id, record.driver_key, record.track_key)
             record.sector_ratings = tuple(
-                self._rate(i, ms, session, personal) if record.counted else None
+                self._rate(i, ms, today, own) if record.counted else None
                 for i, ms in enumerate(record.sectors_ms))  # type: ignore[assignment]
         if record.counted:
             record.personal_best = personal.lap is None or record.lap_ms < personal.lap.lap_ms
@@ -379,6 +386,7 @@ class LapBook:
         if self.store is not None:
             record.db_id = self.store.add(record)
         self.laps.append(record)
+        self._lap_version += 1
         self.recent.appendleft(record)
         lap_debug.info("rig=%s recorded lap=%d time=%s valid=%s out_lap=%s counted=%s personal_best=%s "
                        "session_best=%s ratings=%s", rig_id, record.lap_number, fmt_ms(record.lap_ms), record.valid,
@@ -399,6 +407,7 @@ class LapBook:
         if match is None:
             return
         self.laps.remove(match)
+        self._lap_version += 1
         if self.store is not None and match.db_id is not None:
             self.store.delete(match.db_id)
         if match in self.recent:
@@ -488,14 +497,45 @@ class LapBook:
     # --- ratings ---------------------------------------------------------------------------
 
     @staticmethod
-    def _rate(i: int, ms: int, session: Bests, personal: Bests) -> str:
-        session_best = session.sectors[i]
-        if session_best is None or ms <= session_best:
-            return SESSION_BEST
-        personal_best = personal.sectors[i]
-        if personal_best is None or ms <= personal_best:
-            return PERSONAL_BEST
+    def _rate(i: int, ms: int, today: list[int | None], own: list[int | None]) -> str:
+        if today[i] is None or ms <= today[i]:
+            return SESSION_BEST       # purple: fastest on this track today
+        if own[i] is None or ms <= own[i]:
+            return PERSONAL_BEST      # green: this driver's best this session
         return NORMAL
+
+    def today_sector_bests(self, track_key: str) -> list[int | None]:
+        """Fastest S1/S2/S3 on a track today, all rigs (cached until a lap is added/removed or the day ends)."""
+        since = self.period_starts()["today"]
+        return self._sector_bests(("today", track_key, since), track_key, since)
+
+    def own_sector_bests(self, rig_id: str, session_id: str | None, driver_key_: str, track_key: str) -> list[int | None]:
+        """Fastest S1/S2/S3 of one driver in their current session (rig + game session + driver)."""
+        return self._sector_bests(("own", track_key, rig_id, session_id, driver_key_), track_key, None,
+                                  rig_id, session_id, driver_key_)
+
+    def _sector_bests(self, key: tuple, track_key: str, since_ms: int | None, rig_id: str | None = None,
+                      session_id: str | None = None, dkey: str | None = None) -> list[int | None]:
+        key = key + (self._lap_version,)
+        cached = self._sector_cache.get(key)
+        if cached is not None:
+            return cached
+        if self.store is not None:
+            result = self.store.sector_bests(track_key, since_ms, rig_id, session_id, dkey)
+        else:  # no database (unit tests): this hub session's laps
+            result = [None, None, None]
+            for r in self.laps:
+                if not (r.counted and r.sectors_ms and r.track_key == track_key):
+                    continue
+                if since_ms is not None and r.completed_at < since_ms:
+                    continue
+                if dkey is not None and (r.rig_id, r.session_id, r.driver_key) != (rig_id, session_id, dkey):
+                    continue
+                result = [ms if best is None or ms < best else best for ms, best in zip(r.sectors_ms, result)]
+        if len(self._sector_cache) > 500:
+            self._sector_cache.clear()
+        self._sector_cache[key] = result
+        return result
 
     @staticmethod
     def _sector_list(sectors_ms, ratings) -> list[dict[str, Any] | None] | None:
@@ -561,13 +601,14 @@ class LapBook:
         if rig is None or rig.live is None:
             return None
         live = rig.live
-        session = self._session.get(rig.track_key or "") or Bests()
-        personal = self._personal.get((rig.track_key or "", driver_key(rig.driver, rig_id))) or Bests()
         sectors: list[dict[str, Any] | None] = [None, None, None]
+        rated = live.valid and not live.out_lap and rig.track_key is not None
+        if rated:
+            today = self.today_sector_bests(rig.track_key)
+            own = self.own_sector_bests(rig_id, rig.session_id, driver_key(rig.driver, rig_id), rig.track_key)
         for i, ms in enumerate((live.sector1_ms, live.sector2_ms)):
             if ms is not None and live.sector > i:
-                sectors[i] = {"ms": ms, "rating": self._rate(i, ms, session, personal)
-                              if live.valid and not live.out_lap else None}
+                sectors[i] = {"ms": ms, "rating": self._rate(i, ms, today, own) if rated else None}
         return {
             "number": live.number,
             "distance_m": round(live.distance_m, 1),
