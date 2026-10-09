@@ -1,12 +1,10 @@
 import { useEffect } from "react";
-import { ComparisonPanel } from "./components/ComparisonPanel";
-import { LeaderboardPanel } from "./components/LeaderboardPanel";
-import { RigPanel } from "./components/RigPanel";
 import { StatusBar } from "./components/StatusBar";
-import { TrackMap } from "./components/TrackMap";
+import { BoardView, RaceView } from "./components/Views";
 import type { Display } from "./map/geometry";
 import type { DashboardState } from "./state/reducer";
 import { useDashboard, type DashboardStore } from "./state/store";
+import { useView, type ViewMode } from "./views";
 
 /** Track shown on the map: the one most driving rigs are on, else the first rig's track. */
 export function chooseTrackKey(state: DashboardState): string | null {
@@ -24,7 +22,8 @@ export function chooseTrackKey(state: DashboardState): string | null {
       bestCount = count;
     }
   }
-  return best;
+  // Nobody on a track (e.g. attract mode with every rig in the menu): show the boards' track.
+  return best ?? state.leaderboards.today?.track_key ?? Object.keys(state.outlines)[0] ?? null;
 }
 
 /** Fastest best lap among rigs on the given track, or null. */
@@ -50,12 +49,20 @@ function useBranding(branding: Record<string, string>) {
   }, [branding]);
 }
 
-export function App({ store, mapDisplay = null }: { store: DashboardStore; mapDisplay?: Display | null }) {
+interface Props {
+  store: DashboardStore;
+  mapDisplay?: Display | null;
+  viewMode?: ViewMode;
+}
+
+export function App({ store, mapDisplay = null, viewMode = "auto" }: Props) {
   const state = useDashboard(store);
   useBranding(state.cafe.branding);
   useEffect(() => {
     document.title = state.cafe.name ? `${state.cafe.name}: live timing` : "Live timing";
   }, [state.cafe.name]);
+  const anyDriving = Object.values(state.frames).some((f) => f.state === "driving");
+  const { view, mode, attract } = useView(viewMode, anyDriving);
 
   if (state.link === "version_mismatch") {
     return (
@@ -70,34 +77,15 @@ export function App({ store, mapDisplay = null }: { store: DashboardStore; mapDi
   }
 
   const trackKey = chooseTrackKey(state);
-  const compact = state.rigs.length > 3;
-  const sessionBestMs = sessionBest(state, trackKey);
   return (
-    <div className="app">
-      <StatusBar state={state} />
-      <main className={`board${compact ? " board--many" : ""}`}>
-        <section className="board__map" aria-label="Track map">
-          <TrackMap store={store} state={state} trackKey={trackKey} displayOverride={mapDisplay} />
-        </section>
-        <section className="board__rigs" aria-label="Rigs">
-          {state.rigs.length === 0 ? (
-            <p className="panel__empty">Waiting for rigs. Start F1 with UDP telemetry on; rigs appear automatically.</p>
-          ) : (
-            state.rigs.map((rig, i) => (
-              <RigPanel
-                key={rig.rig_id}
-                rig={rig}
-                number={i + 1}
-                frame={state.frames[rig.rig_id]}
-                compact={compact}
-                sessionBestMs={sessionBestMs}
-              />
-            ))
-          )}
-        </section>
-        <ComparisonPanel comparison={state.comparison} rigs={state.rigs} />
-        <LeaderboardPanel leaderboard={state.leaderboards.today ?? null} rigs={state.rigs} />
-      </main>
+    <div className={`app app--${view}`}>
+      <StatusBar state={state} viewNote={mode === "auto" ? (attract ? "Attract mode" : null) : `${view === "race" ? "Race" : "Leaderboard"} view (fixed)`} />
+      {view === "race" ? (
+        <RaceView store={store} state={state} trackKey={trackKey} mapDisplay={mapDisplay}
+                  sessionBestMs={sessionBest(state, trackKey)} />
+      ) : (
+        <BoardView state={state} />
+      )}
     </div>
   );
 }

@@ -105,9 +105,20 @@ Mock options, combined in the URL, e.g. `http://localhost:5173/?outline=late&mis
 | `recorder=recording\|low\|stopped` | Recorder status / low-disk warnings in the status bar. |
 | `offline=0` | Hide the configured-but-offline Rig 3. |
 | `board=N` | Add N earlier drivers to the leaderboard (e.g. `board=8` for a full board of 10, `board=12` to see paging). |
+| `rigs=N` | Number of driving rigs, 1–10 (default 2). |
+| `idle=1` | Every rig stays in the menu: shows attract mode. |
 
-The leaderboard is a full-height column with ten row slots, sized so ten entries are readable from across
-the room at 1080p and 4K. With more than ten it shows ten at a time and pages every 8 s ("11–14 of 14").
+**TV views.** Two views, sized for 1080p and 4K:
+
+- **Race view:** large track map and a timing strip, one row per rig (up to 10): driver, lap clock, sector
+  colours, last and best lap, and the live gap to the fastest other rig's best lap (Δ). With three rigs or
+  fewer, rows are larger and also show speed and gear. Today's top 3 fills the space below when there is room.
+- **Leaderboard view:** today, this week and all time side by side, ten rows each, paging every 8 s when a
+  board has more than ten drivers.
+
+`?view=race` or `?view=board` fixes the view; the default `?view=auto` shows the race view while anyone is
+driving and switches to attract mode after 10 s with nobody driving (leaderboard view 20 s, race view 10 s,
+repeating). On the TV PC's keyboard: `1` race view, `2` leaderboard view, `0` auto.
 
 Branding comes from `[cafe]` in the hub config: `name`, plus CSS variables in `[cafe.branding]` (e.g.
 `"--brand-accent" = "#0a7cff"`), applied to the page as-is.

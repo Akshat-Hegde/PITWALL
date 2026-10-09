@@ -10,11 +10,13 @@ const LINK_TEXT: Record<DashboardState["link"], string> = {
   version_mismatch: "Version mismatch",
 };
 
-export function StatusBar({ state }: { state: DashboardState }) {
+export function StatusBar({ state, viewNote = null }: { state: DashboardState; viewNote?: string | null }) {
   const warnings = state.status?.warnings ?? [];
   const mismatch = state.status?.format_mismatch ?? false;
+  // With many rigs each chip shows only its name and state; the rig rows below carry the rest.
+  const compact = state.rigs.length > 4;
   return (
-    <header className="statusbar">
+    <header className={`statusbar${compact ? " statusbar--compact" : ""}`}>
       <div className="statusbar__brand">{state.cafe.name || "Live timing"}</div>
       <ul className="statusbar__rigs" aria-label="Rigs">
         {state.rigs.map((rig) => {
@@ -31,10 +33,10 @@ export function StatusBar({ state }: { state: DashboardState }) {
               <span className="stripe" aria-hidden="true" />
               <span className="chip__name">{rig.name}</span>
               <span className="chip__state">{STATE_TEXT[rigState]}</span>
-              {rigState !== "no_data" && (
+              {rigState !== "no_data" && (!compact || formatProblem) && (
                 <span className={`chip__format${formatProblem ? " is-problem" : ""}`}>{format}</span>
               )}
-              {frame?.session.track_name && rigState !== "no_data" && (
+              {!compact && frame?.session.track_name && rigState !== "no_data" && (
                 <span className="chip__track">{frame.session.track_name}</span>
               )}
             </li>
@@ -48,6 +50,7 @@ export function StatusBar({ state }: { state: DashboardState }) {
           ))}
         </ul>
       )}
+      {viewNote && <div className="statusbar__view">{viewNote}</div>}
       <div className={`statusbar__link link--${state.link}`}>
         {state.source === "mock" && state.link === "live" ? "Mock data" : LINK_TEXT[state.link]}
       </div>

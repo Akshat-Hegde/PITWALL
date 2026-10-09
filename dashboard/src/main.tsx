@@ -11,6 +11,7 @@ import { App } from "./App";
 import { chooseSource } from "./data/sources";
 import { displayFromQuery } from "./map/geometry";
 import { DashboardStore } from "./state/store";
+import { viewModeFromQuery } from "./views";
 
 const query = new URLSearchParams(location.search);
 const { kind, source } = chooseSource(query, import.meta.env.DEV);
@@ -19,6 +20,6 @@ source(store);
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <App store={store} mapDisplay={displayFromQuery(query)} />
+    <App store={store} mapDisplay={displayFromQuery(query)} viewMode={viewModeFromQuery(query)} />
   </StrictMode>,
 );

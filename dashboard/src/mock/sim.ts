@@ -34,6 +34,10 @@ export interface MockOptions {
   frameHz: number;
   /** Earlier drivers already on the leaderboard (tests the layout with many entries). */
   pastDrivers: number;
+  /** Rigs that drive (1-10). */
+  rigs: number;
+  /** Every rig stays in the menu: nobody drives (attract mode). */
+  idle: boolean;
 }
 
 export const DEFAULT_MOCK_OPTIONS: MockOptions = {
@@ -43,8 +47,16 @@ export const DEFAULT_MOCK_OPTIONS: MockOptions = {
   recorder: "off",
   offlineRig: true,
   pastDrivers: 0,
+  rigs: 2,
+  idle: false,
   frameHz: 15,
 };
+
+const RIG_DRIVERS = ["Apex_Hunter", "LateBraker77", "Sofia_K", "TurboTom", "Mika H", "DRS_Daisy", "Kerb Crusher",
+  "Rae", "Big Ben", "Quali Queen"];
+const RIG_COLOURS = ["#36C5F0", "#FF8A3D", "#F15BB5", "#5B8CFF", "#2EC4B6", "#FF6B6B", "#C0C9D2", "#FFB3C6",
+  "#8D99AE", "#D4A373"];
+const RIG_PACES = [0.995, 0.982, 0.99, 0.986, 0.978, 0.992, 0.975, 0.984, 0.98, 0.988];
 
 const TRACK_KEY = "F1:900";
 const TRACK_NAME = "Practice circuit";
@@ -146,25 +158,24 @@ export class MockHub {
     this.track = buildTrack();
     this.rng = new Rng(options.seed);
     this.outlineSent = !options.outlineLate;
-    const specs: RigSpec[] = [
-      {
-        info: rigInfo("rig-1", "Rig 1", "#36C5F0", "192.168.1.21", "2025"),
-        driver: "Apex_Hunter",
-        pace: 0.995,
-        menuUntilMs: 0,
-        offline: false,
-      },
-      {
-        info: rigInfo("rig-2", "Rig 2", "#FF8A3D", "192.168.1.22", options.formatMismatch ? "2026" : "2025"),
-        driver: "LateBraker77",
-        pace: 0.982,
-        menuUntilMs: MENU_MS,
-        offline: false,
-      },
-    ];
-    if (options.offlineRig) {
+    const driving = Math.max(1, Math.min(10, options.rigs));
+    const specs: RigSpec[] = [];
+    for (let i = 0; i < driving; i++) {
+      const n = i + 1;
       specs.push({
-        info: rigInfo("rig-3", "Rig 3", "#F15BB5", "192.168.1.23", null),
+        info: rigInfo(`rig-${n}`, `Rig ${n}`, RIG_COLOURS[i]!, `192.168.1.${20 + n}`,
+          options.formatMismatch && n === 2 ? "2026" : "2025"),
+        driver: RIG_DRIVERS[i]!,
+        pace: RIG_PACES[i]!,
+        // Rig 2 starts in the menu for a while; the rest join a little apart.
+        menuUntilMs: options.idle ? Infinity : n === 1 ? 0 : n === 2 ? MENU_MS : i * 1500,
+        offline: false,
+      });
+    }
+    if (options.offlineRig) {
+      const n = driving + 1;
+      specs.push({
+        info: rigInfo(`rig-${n}`, `Rig ${n}`, RIG_COLOURS[driving % RIG_COLOURS.length]!, `192.168.1.${20 + n}`, null),
         driver: null,
         pace: 1,
         menuUntilMs: Infinity,
@@ -538,5 +549,7 @@ export function mockOptionsFromQuery(query: URLSearchParams): MockOptions {
     recorder: recorder === "recording" || recorder === "low" || recorder === "stopped" ? recorder : "off",
     offlineRig: query.get("offline") !== "0",
     pastDrivers: Math.max(0, Math.min(40, Math.floor(Number(query.get("board") ?? 0) || 0))),
+    rigs: Math.max(1, Math.min(10, Math.floor(Number(query.get("rigs") ?? 2) || 2))),
+    idle: query.get("idle") === "1",
   };
 }
