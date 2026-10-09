@@ -57,6 +57,14 @@ class RecorderConfig(_Section):
         return value
 
 
+class MapConfig(_Section):
+    # How the game's world coordinates are drawn on the TV map (screen right = +x, down = +z after
+    # these). Confirm against the in-game minimap during testing (?map=... in the dashboard URL).
+    flip_x: bool = False
+    flip_z: bool = False
+    rotate_deg: float = 0.0
+
+
 class DashboardConfig(_Section):
     frame_hz: float = Field(15.0, ge=10, le=20)  # WebSocket frame rate (docs/WS_SCHEMA.md)
     # Built dashboard files; default <project>/dashboard/dist (run `npm run build` in dashboard/).
@@ -82,6 +90,7 @@ class AppConfig(_Section):
     recorder: RecorderConfig = Field(default_factory=RecorderConfig)
     health: HealthConfig = Field(default_factory=HealthConfig)
     dashboard: DashboardConfig = Field(default_factory=DashboardConfig)
+    map: MapConfig = Field(default_factory=MapConfig)
     rigs: list[RigConfig] = Field(default_factory=list)
     track_names: dict[int, str] = Field(default_factory=dict)  # trackId -> display name override
 

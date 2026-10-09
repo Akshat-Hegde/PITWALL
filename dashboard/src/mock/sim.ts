@@ -322,6 +322,7 @@ export class MockHub {
       lap_ms: lapMs,
       sectors_ms: sectorsMs,
       valid,
+      out_lap: false,
       tyre: this.tyre(rig),
       personal_best: personalBest,
       session_best: sessionBest,

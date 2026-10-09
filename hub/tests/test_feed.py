@@ -231,7 +231,8 @@ async def test_connection_sequence(tmp_path):
     snap = conn.start(t)
     assert (snap["v"], snap["type"], snap["seq"], snap["ts"]) == (1, "snapshot", 0, 1_791_302_400_123)
     assert snap["cafe"] == {"name": "Pit Stop", "branding": {"--brand-accent": "#0a7cff"}}
-    assert snap["hub"]["frame_hz"] == 15 and snap["outlines"] == [] and snap["leaderboard"] is None
+    assert snap["hub"]["frame_hz"] == 15 and snap["outlines"] == []
+    assert snap["leaderboard"] == {"track_key": "F1:7", "track_name": "Silverstone", "entries": []}
 
     # Nothing changed: just a frame (status only once a second).
     assert [m["type"] for m in conn.tick(t + 0.05)] == ["frame"]
@@ -308,6 +309,8 @@ async def test_sample_feed_matches_dashboard_fixture(tmp_path):
     conn = FeedConnection(FeedBuilder(hub), clock=lambda: 1_791_302_400.0)
     t = last_seen(hub)
     messages = [conn.start(t)]
+    await feed(hub, drive_full_lap(RIG_A, 0x11, 88123, b"Akshat", steps=60))  # lap side
+    messages += conn.tick(last_seen(hub))
     await feed(hub, [(RIG_A, session(2025, 0x33, track_id=10))])
     messages += conn.tick(last_seen(hub))
     if os.environ.get("SIMTELEMETRY_UPDATE_FIXTURES"):
@@ -315,3 +318,74 @@ async def test_sample_feed_matches_dashboard_fixture(tmp_path):
     committed = json.loads(FIXTURE.read_text(encoding="utf-8"))
     assert [m["type"] for m in committed] == [m["type"] for m in messages]
     assert _shape(committed) == _shape(messages), "feed changed: regenerate the fixture (see docstring)"
+
+
+# --- lap side: live laps, bests, head-to-head, outline, leaderboard ---------------------------
+
+def drive_full_lap(ip, uid, lap_ms, name, fmt=2025, steps=300, length=5891.0):
+    """Lap 1 from the line to the end with positions on a circle, then the rollover and history."""
+    import math
+    from test_laps import history_bytes, lap_data_bytes
+    packets = [session(fmt, uid), participants(fmt, uid, name), status(fmt, uid), telemetry(fmt, uid)]
+    radius = length / (2 * math.pi)
+    for i in range(steps + 1):
+        d = length * i / steps
+        t = 100.0 + lap_ms / 1000 * i / steps
+        a = 2 * math.pi * i / steps
+        sector = 0 if d < 1900 else 1 if d < 3900 else 2
+        packets.append(motion(fmt, uid, radius * math.cos(a), radius * math.sin(a)))
+        packets.append(lap_data_bytes(fmt, uid, t, 1, d, round(lap_ms * i / steps), sector=sector,
+                                      s1=28011 if sector >= 1 else 0, s2=33456 if sector >= 2 else 0))
+    s3 = lap_ms - 28011 - 33456
+    packets.append(lap_data_bytes(fmt, uid, 100.0 + lap_ms / 1000 + 0.05, 2, 1.0, 50, last_ms=lap_ms))
+    packets.append(history_bytes(fmt, uid, 100.0 + lap_ms / 1000 + 0.1,
+                                 [(lap_ms, 28011, 33456, s3, True), (0, 0, 0, 0, True)]))
+    return [(ip, p) for p in packets]
+
+
+async def test_lap_side_of_the_feed(tmp_path):
+    hub = make_hub(tmp_path, map={"flip_z": True})
+    conn = FeedConnection(FeedBuilder(hub), clock=lambda: 1_791_302_400.0)
+    await feed(hub, driving_rig(RIG_A) + driving_rig(RIG_B))
+    conn.start(last_seen(hub))
+
+    await feed(hub, drive_full_lap(RIG_A, 0x11, 88123, b"Akshat"))
+    msgs = conn.tick(last_seen(hub))
+    types = [m["type"] for m in msgs]
+    assert types[:3] == ["lap_completed", "track_outline", "leaderboard"]
+    lap = msgs[0]["lap"]
+    assert (lap["rig_id"], lap["lap_number"], lap["lap_ms"], lap["valid"], lap["session_best"]) == \
+        (RIG_A, 1, 88123, True, True)
+    outline = msgs[1]["outline"]
+    assert outline["track_key"] == "F1:7" and outline["source"] == "first_valid_lap"
+    assert len(outline["points"]) == 301                  # one per input point (~20 m apart, > 6 m step)
+    assert outline["sector_starts"] is None or outline["sector_starts"][0] == 0
+    assert outline["display"] == {"flip_x": False, "flip_z": True, "rotate_deg": 0.0}
+    assert msgs[2]["leaderboard"]["entries"][0]["driver"] == "Akshat"
+
+    frame = next(m for m in msgs if m["type"] == "frame")
+    rig_a = next(r for r in frame["rigs"] if r["rig_id"] == RIG_A)
+    assert rig_a["best"] == {"lap_ms": 88123, "sectors_ms": [28011, 33456, 26656], "lap_number": 1,
+                             "set_at": rig_a["best"]["set_at"]}
+    assert rig_a["lap"]["number"] == 2 and rig_a["lap"]["last_sectors"][0] == {"ms": 28011, "rating": "session_best"}
+
+    # Rig B drives 1.5 s slower: head-to-head and live delta against rig A's best lap.
+    await feed(hub, drive_full_lap(RIG_B, 0x11, 89623, b"Guest"))
+    from test_laps import lap_data_bytes
+    await feed(hub, [(RIG_B, motion(2025, 0x11, 0.0, 0.0)),
+                     (RIG_B, lap_data_bytes(2025, 0x11, 300.0, 2, 2945.5, 44_500))])  # A passed here at 44062 ms
+    msgs = conn.tick(last_seen(hub))
+    assert [m["type"] for m in msgs if m["type"] in ("lap_completed", "track_outline", "leaderboard")] == \
+        ["lap_completed", "leaderboard"]                  # one outline per track
+    comparison = next(m for m in msgs if m["type"] == "frame")["comparison"]
+    by_rig = {e["rig_id"]: e for e in comparison["rigs"]}
+    assert by_rig[RIG_B]["reference_rig_id"] == RIG_A and by_rig[RIG_B]["best_gap_ms"] == 1500
+    assert by_rig[RIG_B]["live_delta_ms"] == 438          # 44500 - 44062 (A's trace holds whole ms)
+    assert by_rig[RIG_A]["best_gap_ms"] == -1500
+    board = next(m for m in msgs if m["type"] == "leaderboard")["leaderboard"]
+    assert [(e["rank"], e["driver"], e["gap_ms"]) for e in board["entries"]] == [(1, "Akshat", 0), (2, "Guest", 1500)]
+
+    # A new connection gets all of it in the snapshot.
+    snap = FeedConnection(FeedBuilder(hub)).start(last_seen(hub))
+    assert len(snap["outlines"]) == 1 and len(snap["leaderboard"]["entries"]) == 2
+    assert [l["driver"] for l in snap["recent_laps"]] == ["Guest", "Akshat"]

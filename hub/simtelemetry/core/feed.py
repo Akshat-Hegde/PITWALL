@@ -1,8 +1,9 @@
 """Dashboard feed: hub state -> WebSocket messages following docs/WS_SCHEMA.md (v1).
 
-Game-agnostic: everything comes from the registry, health monitor, recorder and the
-adapter's LiveSummary. Lap tracking doesn't exist yet, so lap/best/comparison/leaderboard
-are null and no track outlines are sent; the schema allows all of that.
+Game-agnostic: everything comes from the registry, health monitor, recorder, the
+adapter's LiveSummary and the hub's lap book. Laps, bests, comparison and leaderboard
+come from the LapBook (core/laps.py): live and best laps, head-to-head, track outlines,
+lap_completed messages and the leaderboard of the track shown on the TV.
 
 FeedBuilder holds what is shared between connections; each WebSocket gets a FeedConnection
 with its own seq counter and its own "what did this client already see" state.
@@ -92,6 +93,8 @@ class FeedBuilder:
         s = hub.adapter.live_summary(rig.ip)
         driving = state is RigState.DRIVING and s is not None
         tyre = tyre_dict(s) if state is not RigState.NO_DATA else None
+        track_key = s.track_key if s is not None and state is not RigState.NO_DATA else None
+        best = hub.laps.rig_best(rig.ip, track_key)
         return {
             "rig_id": rig.ip,
             "state": state.value,
@@ -106,12 +109,43 @@ class FeedBuilder:
             "brake": _round(s.brake, 3) if driving else None,
             "rpm": s.rpm if driving else None,
             "tyre": tyre,
-            "lap": None,   # (provisional) waits for lap tracking
-            "best": None,  # (provisional) waits for lap tracking
+            "lap": hub.laps.live_view(rig.ip) if driving else None,
+            "best": best.best_schema() if best else None,
         }
 
     def frame_body(self, now: float) -> dict[str, Any]:
-        return {"rigs": [self.rig_frame(rig, now) for rig in self.hub.registry.all()], "comparison": None}
+        rigs = [self.rig_frame(rig, now) for rig in self.hub.registry.all()]
+        return {"rigs": rigs, "comparison": self.comparison(rigs)}
+
+    @staticmethod
+    def active_track(rigs: list[dict[str, Any]]) -> str | None:
+        """The track the TV shows: the one most rigs are on, driving rigs counting double."""
+        counts: dict[str, int] = {}
+        for r in rigs:
+            key = r["session"]["track_key"]
+            if key:
+                counts[key] = counts.get(key, 0) + (2 if r["state"] == "driving" else 1)
+        return max(counts, key=lambda k: (counts[k], k)) if counts else None
+
+    def comparison(self, rigs: list[dict[str, Any]]) -> dict[str, Any] | None:
+        track = self.active_track(rigs)
+        on_track = [r for r in rigs if track and r["session"]["track_key"] == track]
+        result = self.hub.laps.comparison(track, [r["rig_id"] for r in on_track]) if track else None
+        if result is not None:
+            driving = {r["rig_id"] for r in on_track if r["state"] == "driving"}
+            for entry in result["rigs"]:
+                if entry["rig_id"] not in driving:
+                    entry["live_delta_ms"] = None
+        return result
+
+    def leaderboard(self, track_key: str | None, rigs: list[dict[str, Any]]) -> dict[str, Any] | None:
+        if track_key is None:
+            return None
+        board = self.hub.laps.leaderboard_schema(track_key)
+        if board["track_name"] is None:
+            board["track_name"] = next((r["session"]["track_name"] for r in rigs
+                                        if r["session"]["track_key"] == track_key), None)
+        return board
 
     def status(self, now: float) -> dict[str, Any]:
         hub = self.hub
@@ -156,15 +190,16 @@ class FeedBuilder:
 
     def snapshot_body(self, now: float) -> dict[str, Any]:
         cafe = self.hub.config.cafe
+        frame = self.frame_body(now)
         return {
             "hub": {"version": __version__, "games": [self.hub.adapter.game], "frame_hz": self.frame_hz},
             "cafe": {"name": cafe.name, "branding": dict(cafe.branding)},
             "status": self.status(now),
             "rigs": self.rig_infos(),
-            "frame": self.frame_body(now),
-            "outlines": [],      # outlines are generated from the first valid lap (lap tracking)
-            "leaderboard": None,
-            "recent_laps": [],
+            "frame": frame,
+            "outlines": list(self.hub.laps.outlines.values()),
+            "leaderboard": self.leaderboard(self.active_track(frame["rigs"]), frame["rigs"]),
+            "recent_laps": self.hub.laps.recent_laps(),
         }
 
 
@@ -179,6 +214,8 @@ class FeedConnection:
         self._sessions: dict[str, dict[str, Any]] = {}
         self._status: dict[str, Any] | None = None
         self._status_at = float("-inf")
+        self._message_id = 0                                  # last lap book message sent
+        self._board: tuple[str | None, int] | None = None     # (track, board version) last sent
 
     def _message(self, type_: str, body: dict[str, Any]) -> dict[str, Any]:
         msg = {"v": SCHEMA_VERSION, "type": type_, "seq": self.seq, "ts": round(self._clock() * 1000)}
@@ -191,6 +228,10 @@ class FeedConnection:
         self._rig_infos = {r["rig_id"]: r for r in body["rigs"]}
         self._sessions = {f["rig_id"]: f["session"] for f in body["frame"]["rigs"]}
         self._status, self._status_at = body["status"], now
+        laps = self.builder.hub.laps
+        self._message_id = laps.last_message_id
+        track = self.builder.active_track(body["frame"]["rigs"])
+        self._board = (track, laps.board_version.get(track or "", 0))
         return self._message("snapshot", body)
 
     def tick(self, now: float) -> list[dict[str, Any]]:
@@ -204,6 +245,17 @@ class FeedConnection:
             if rig["rig_id"] in self._sessions and self._sessions[rig["rig_id"]] != rig["session"]:
                 out.append(self._message("session_changed", {"rig_id": rig["rig_id"], "session": rig["session"]}))
             self._sessions[rig["rig_id"]] = rig["session"]
+        laps = self.builder.hub.laps
+        for message_id, type_, body in laps.messages_after(self._message_id):
+            self._message_id = message_id
+            out.append(self._message(type_, body))
+        track = self.builder.active_track(frame["rigs"])
+        board = (track, laps.board_version.get(track or "", 0))
+        if board != self._board:
+            self._board = board
+            leaderboard = self.builder.leaderboard(track, frame["rigs"])
+            if leaderboard is not None:
+                out.append(self._message("leaderboard", {"leaderboard": leaderboard}))
         status = self.builder.status(now)
         if status != self._status or now - self._status_at >= STATUS_INTERVAL_S:
             self._status, self._status_at = status, now

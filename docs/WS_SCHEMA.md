@@ -8,11 +8,14 @@ Status: **v1 draft.** Fields marked **(provisional)** depend on lap-tracking beh
 confirmed against the first real capture; they may still change within v1 before milestone 1 is
 frozen. Everything else is intended to be stable.
 
-Hub implementation status: `hub/simtelemetry/core/feed.py` sends `snapshot`, `frame`, `rig_info`, `status`
-and `session_changed`. Until lap tracking exists, `lap`, `best` and `comparison` are `null`, `outlines` and
-`recent_laps` are empty, `leaderboard` is `null`, and `track_outline` / `lap_completed` / `leaderboard`
-messages are not sent. `hub/tests/test_feed.py` writes a sample of real hub output to
-`dashboard/src/testing/hub-feed.sample.json`, which the dashboard tests validate against this schema.
+Hub implementation: `hub/simtelemetry/core/feed.py` sends every message type below, with lap data from
+the lap book (`core/laps.py`; F1 rules and their assumptions in [LAP_ASSUMPTIONS.md](LAP_ASSUMPTIONS.md)).
+`hub/tests/test_feed.py` writes a sample of real hub output to `dashboard/src/testing/hub-feed.sample.json`,
+which the dashboard tests validate against this schema.
+
+**Shown track.** The hub picks one track for the TV: the one most rigs are on, with driving rigs counting
+double. `comparison`, the snapshot's `leaderboard` and `leaderboard` messages are for that track. A
+`leaderboard` message is sent whenever that track's board may have changed, or the shown track changes.
 
 ## 1. Transport
 
@@ -78,7 +81,7 @@ Compatibility rules:
 
 - `cafe.branding`: CSS custom properties from `[cafe.branding]` in the hub config. The dashboard applies
   them to `:root` as-is (keys must start with `--`; others are ignored).
-- `outlines`: outlines for every track any known rig is currently on.
+- `outlines`: every outline the hub has (one per track that has had a complete valid lap).
 
 ### 3.2 `frame`
 
@@ -211,7 +214,7 @@ live lap vs your best lap at the same distance"; with more rigs, each rig is com
 | `points` | `[[x, z], ...]` | Closed loop in the same coordinate space as `RigFrame.position`; `points[0]` is the start/finish line, in driving direction. |
 | `source` | string | `"first_valid_lap"` (recorded by the hub) or `"bundled"`. |
 | `sector_starts` | `[int, int, int]` \| null | Indices into `points` where sectors 1–3 start. |
-| `display` | `{ "flip_x": bool, "flip_z": bool, "rotate_deg": number }` | How to draw the world: screen right = +x, screen down = +z, **after** applying these. Supplied by the adapter (per game, overridable per track) so the map matches the in-game minimap. **(provisional for F1** until checked against the capture.) |
+| `display` | `{ "flip_x": bool, "flip_z": bool, "rotate_deg": number }` | How to draw the world: screen right = +x, screen down = +z, **after** applying these. From the hub's `[map]` config, so the map matches the in-game minimap. **(provisional for F1** until checked in the real test; the dashboard's `?map=` URL option overrides it for that check.) |
 
 ### LapRecord (provisional)
 
@@ -225,6 +228,7 @@ live lap vs your best lap at the same distance"; with more rigs, each rig is com
 | `lap_ms` | int | |
 | `sectors_ms` | `[int, int, int]` \| null | |
 | `valid` | bool | The game's own validity verdict. |
+| `out_lap` | bool | The lap started from the pit/garage. Out laps never set bests or appear on the leaderboard, whatever `valid` says. |
 | `tyre` | Tyre \| null | |
 | `personal_best` | bool | New best for this driver on this track. |
 | `session_best` | bool | New best of all rigs on this track. |

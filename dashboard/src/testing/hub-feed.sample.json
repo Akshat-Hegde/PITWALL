@@ -147,16 +147,500 @@
      "best": null
     }
    ],
-   "comparison": null
+   "comparison": {
+    "track_key": "F1:7",
+    "rigs": [
+     {
+      "rig_id": "192.168.1.21",
+      "reference_rig_id": null,
+      "best_gap_ms": null,
+      "live_delta_ms": null
+     },
+     {
+      "rig_id": "192.168.1.22",
+      "reference_rig_id": null,
+      "best_gap_ms": null,
+      "live_delta_ms": null
+     }
+    ]
+   }
   },
   "outlines": [],
-  "leaderboard": null,
+  "leaderboard": {
+   "track_key": "F1:7",
+   "track_name": "Silverstone",
+   "entries": []
+  },
   "recent_laps": []
  },
  {
   "v": 1,
-  "type": "session_changed",
+  "type": "lap_completed",
   "seq": 1,
+  "ts": 1791302400000,
+  "lap": {
+   "rig_id": "192.168.1.21",
+   "driver": "Akshat",
+   "track_key": "F1:7",
+   "session_id": "0000000000000011",
+   "lap_number": 1,
+   "lap_ms": 88123,
+   "sectors_ms": [
+    28011,
+    33456,
+    26656
+   ],
+   "valid": true,
+   "out_lap": false,
+   "tyre": {
+    "compound": "soft",
+    "label": "C3",
+    "age_laps": 2
+   },
+   "personal_best": true,
+   "session_best": true,
+   "completed_at": 1791555348155
+  }
+ },
+ {
+  "v": 1,
+  "type": "track_outline",
+  "seq": 2,
+  "ts": 1791302400000,
+  "outline": {
+   "track_key": "F1:7",
+   "track_name": "Silverstone",
+   "points": [
+    [
+     937.6,
+     0.0
+    ],
+    [
+     932.4,
+     98.0
+    ],
+    [
+     917.1,
+     194.9
+    ],
+    [
+     891.7,
+     289.7
+    ],
+    [
+     856.5,
+     381.3
+    ],
+    [
+     812.0,
+     468.8
+    ],
+    [
+     758.5,
+     551.1
+    ],
+    [
+     696.8,
+     627.4
+    ],
+    [
+     627.4,
+     696.8
+    ],
+    [
+     551.1,
+     758.5
+    ],
+    [
+     468.8,
+     812.0
+    ],
+    [
+     381.3,
+     856.5
+    ],
+    [
+     289.7,
+     891.7
+    ],
+    [
+     194.9,
+     917.1
+    ],
+    [
+     98.0,
+     932.4
+    ],
+    [
+     0.0,
+     937.6
+    ],
+    [
+     -98.0,
+     932.4
+    ],
+    [
+     -194.9,
+     917.1
+    ],
+    [
+     -289.7,
+     891.7
+    ],
+    [
+     -381.3,
+     856.5
+    ],
+    [
+     -468.8,
+     812.0
+    ],
+    [
+     -551.1,
+     758.5
+    ],
+    [
+     -627.4,
+     696.8
+    ],
+    [
+     -696.8,
+     627.4
+    ],
+    [
+     -758.5,
+     551.1
+    ],
+    [
+     -812.0,
+     468.8
+    ],
+    [
+     -856.5,
+     381.3
+    ],
+    [
+     -891.7,
+     289.7
+    ],
+    [
+     -917.1,
+     194.9
+    ],
+    [
+     -932.4,
+     98.0
+    ],
+    [
+     -937.6,
+     0.0
+    ],
+    [
+     -932.4,
+     -98.0
+    ],
+    [
+     -917.1,
+     -194.9
+    ],
+    [
+     -891.7,
+     -289.7
+    ],
+    [
+     -856.5,
+     -381.3
+    ],
+    [
+     -812.0,
+     -468.8
+    ],
+    [
+     -758.5,
+     -551.1
+    ],
+    [
+     -696.8,
+     -627.4
+    ],
+    [
+     -627.4,
+     -696.8
+    ],
+    [
+     -551.1,
+     -758.5
+    ],
+    [
+     -468.8,
+     -812.0
+    ],
+    [
+     -381.3,
+     -856.5
+    ],
+    [
+     -289.7,
+     -891.7
+    ],
+    [
+     -194.9,
+     -917.1
+    ],
+    [
+     -98.0,
+     -932.4
+    ],
+    [
+     -0.0,
+     -937.6
+    ],
+    [
+     98.0,
+     -932.4
+    ],
+    [
+     194.9,
+     -917.1
+    ],
+    [
+     289.7,
+     -891.7
+    ],
+    [
+     381.3,
+     -856.5
+    ],
+    [
+     468.8,
+     -812.0
+    ],
+    [
+     551.1,
+     -758.5
+    ],
+    [
+     627.4,
+     -696.8
+    ],
+    [
+     696.8,
+     -627.4
+    ],
+    [
+     758.5,
+     -551.1
+    ],
+    [
+     812.0,
+     -468.8
+    ],
+    [
+     856.5,
+     -381.3
+    ],
+    [
+     891.7,
+     -289.7
+    ],
+    [
+     917.1,
+     -194.9
+    ],
+    [
+     932.4,
+     -98.0
+    ],
+    [
+     937.6,
+     -0.0
+    ]
+   ],
+   "source": "first_valid_lap",
+   "sector_starts": null,
+   "display": {
+    "flip_x": false,
+    "flip_z": false,
+    "rotate_deg": 0.0
+   }
+  }
+ },
+ {
+  "v": 1,
+  "type": "leaderboard",
+  "seq": 3,
+  "ts": 1791302400000,
+  "leaderboard": {
+   "track_key": "F1:7",
+   "track_name": "Silverstone",
+   "entries": [
+    {
+     "rank": 1,
+     "rig_id": "192.168.1.21",
+     "rig_name": "Rig 2",
+     "driver": "Akshat",
+     "lap_ms": 88123,
+     "sectors_ms": [
+      28011,
+      33456,
+      26656
+     ],
+     "gap_ms": 0,
+     "tyre": {
+      "compound": "soft",
+      "label": "C3",
+      "age_laps": 2
+     },
+     "lap_number": 1,
+     "set_at": 1791555348155
+    }
+   ]
+  }
+ },
+ {
+  "v": 1,
+  "type": "frame",
+  "seq": 4,
+  "ts": 1791302400000,
+  "rigs": [
+   {
+    "rig_id": "192.168.1.21",
+    "state": "driving",
+    "last_seen_ms": 0,
+    "driver": "Akshat",
+    "session": {
+     "session_id": "0000000000000011",
+     "track_key": "F1:7",
+     "track_name": "Silverstone",
+     "track_length_m": 5891.0,
+     "session_type": "Time Trial"
+    },
+    "position": {
+     "x": 937.6,
+     "z": -0.0
+    },
+    "speed_kph": 287,
+    "gear": 7,
+    "throttle": 0.75,
+    "brake": 0.0,
+    "rpm": 11240,
+    "tyre": {
+     "compound": "soft",
+     "label": "C3",
+     "age_laps": 2
+    },
+    "lap": {
+     "number": 2,
+     "distance_m": 1.0,
+     "current_ms": 50,
+     "last_ms": 88123,
+     "valid": true,
+     "sector": 0,
+     "sectors": [
+      null,
+      null,
+      null
+     ],
+     "last_sectors": [
+      {
+       "ms": 28011,
+       "rating": "session_best"
+      },
+      {
+       "ms": 33456,
+       "rating": "session_best"
+      },
+      {
+       "ms": 26656,
+       "rating": "session_best"
+      }
+     ]
+    },
+    "best": {
+     "lap_ms": 88123,
+     "sectors_ms": [
+      28011,
+      33456,
+      26656
+     ],
+     "lap_number": 1,
+     "set_at": 1791555348155
+    }
+   },
+   {
+    "rig_id": "192.168.1.22",
+    "state": "driving",
+    "last_seen_ms": 16,
+    "driver": "Guest",
+    "session": {
+     "session_id": "0000000000000022",
+     "track_key": "F1:7",
+     "track_name": "Silverstone",
+     "track_length_m": 5891.0,
+     "session_type": "Time Trial"
+    },
+    "position": {
+     "x": 10.5,
+     "z": -3.2
+    },
+    "speed_kph": 287,
+    "gear": 7,
+    "throttle": 0.75,
+    "brake": 0.0,
+    "rpm": 11240,
+    "tyre": {
+     "compound": "soft",
+     "label": "C3",
+     "age_laps": 2
+    },
+    "lap": null,
+    "best": null
+   },
+   {
+    "rig_id": "192.168.1.23",
+    "state": "no_data",
+    "last_seen_ms": null,
+    "driver": null,
+    "session": {
+     "session_id": null,
+     "track_key": null,
+     "track_name": null,
+     "track_length_m": null,
+     "session_type": null
+    },
+    "position": null,
+    "speed_kph": null,
+    "gear": null,
+    "throttle": null,
+    "brake": null,
+    "rpm": null,
+    "tyre": null,
+    "lap": null,
+    "best": null
+   }
+  ],
+  "comparison": {
+   "track_key": "F1:7",
+   "rigs": [
+    {
+     "rig_id": "192.168.1.21",
+     "reference_rig_id": null,
+     "best_gap_ms": null,
+     "live_delta_ms": null
+    },
+    {
+     "rig_id": "192.168.1.22",
+     "reference_rig_id": "192.168.1.21",
+     "best_gap_ms": null,
+     "live_delta_ms": null
+    }
+   ]
+  }
+ },
+ {
+  "v": 1,
+  "type": "session_changed",
+  "seq": 5,
   "ts": 1791302400000,
   "rig_id": "192.168.1.21",
   "session": {
@@ -170,7 +654,7 @@
  {
   "v": 1,
   "type": "frame",
-  "seq": 2,
+  "seq": 6,
   "ts": 1791302400000,
   "rigs": [
    {
@@ -198,7 +682,7 @@
    {
     "rig_id": "192.168.1.22",
     "state": "driving",
-    "last_seen_ms": 0,
+    "last_seen_ms": 32,
     "driver": "Guest",
     "session": {
      "session_id": "0000000000000022",

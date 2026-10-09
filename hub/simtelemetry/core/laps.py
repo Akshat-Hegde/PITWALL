@@ -15,6 +15,8 @@ without changing them, because the lap may still be invalidated before the line.
 
 from __future__ import annotations
 
+import bisect
+import itertools
 import logging
 from collections import deque
 from dataclasses import dataclass, field
@@ -24,6 +26,14 @@ log = logging.getLogger(__name__)
 lap_debug = logging.getLogger("simtelemetry.lapdebug")  # enabled by --lap-debug
 
 RECENT_LAPS_MAX = 20
+EVENT_LOG_MAX = 200           # lap_completed / track_outline messages kept for dashboard connections
+
+# A lap trace becomes the track outline only if it covers the whole lap without gaps.
+OUTLINE_START_MAX_M = 40      # first point within this distance of the line
+OUTLINE_END_MARGIN_M = 80     # last point within this distance of the track length
+OUTLINE_MAX_GAP_M = 120       # no bigger gap between consecutive points
+OUTLINE_MIN_POINTS = 50
+OUTLINE_STEP_M = 6            # outline point spacing
 
 SESSION_BEST = "session_best"
 PERSONAL_BEST = "personal_best"
@@ -133,6 +143,50 @@ class LapContext:
     track_name: str | None
     session_id: str | None
     tyre: dict[str, Any] | None = None
+    position: tuple[float, float] | None = None       # world (x, z) of the latest Motion packet
+    track_length_m: float | None = None
+    sector_starts_m: tuple[float, float, float] | None = None
+
+
+@dataclass(slots=True)
+class Trace:
+    """One lap as driven: lap distance -> lap time and position, distance increasing."""
+
+    lap: int
+    d: list[float] = field(default_factory=list)
+    t: list[int] = field(default_factory=list)
+    x: list[float] = field(default_factory=list)
+    z: list[float] = field(default_factory=list)
+
+    def add(self, d: float, t: int, x: float, z: float) -> None:
+        if self.d and d <= self.d[-1]:
+            return  # standing still or noise: keep distance strictly increasing
+        self.d.append(d)
+        self.t.append(t)
+        self.x.append(x)
+        self.z.append(z)
+
+    def cut_to(self, d: float) -> None:
+        """Flashback: forget everything driven after distance d."""
+        keep = bisect.bisect_right(self.d, d)
+        del self.d[keep:], self.t[keep:], self.x[keep:], self.z[keep:]
+
+    def time_at(self, d: float) -> float | None:
+        """Lap time at a distance, interpolated; None outside the trace."""
+        if len(self.d) < 2 or d < self.d[0] or d > self.d[-1]:
+            return None
+        i = bisect.bisect_right(self.d, d)
+        if i >= len(self.d):
+            return float(self.t[-1])
+        d0, d1, t0, t1 = self.d[i - 1], self.d[i], self.t[i - 1], self.t[i]
+        return t0 + (t1 - t0) * (d - d0) / (d1 - d0)
+
+    def complete(self, track_length: float | None) -> bool:
+        if len(self.d) < OUTLINE_MIN_POINTS or self.d[0] > OUTLINE_START_MAX_M:
+            return False
+        if track_length and self.d[-1] < track_length - OUTLINE_END_MARGIN_M:
+            return False
+        return all(b - a <= OUTLINE_MAX_GAP_M for a, b in zip(self.d, self.d[1:]))
 
 
 @dataclass(slots=True)
@@ -153,6 +207,7 @@ class LapRecord:
     session_best: bool
     completed_at: int            # Unix ms
     sector_ratings: tuple[str | None, str | None, str | None] = (None, None, None)
+    trace: Trace | None = field(default=None, repr=False, compare=False)  # best laps keep theirs
 
     @property
     def counted(self) -> bool:
@@ -161,6 +216,11 @@ class LapRecord:
     @property
     def driver_key(self) -> str:
         return driver_key(self.driver, self.rig_id)
+
+    def best_schema(self) -> dict[str, Any]:
+        """Schema BestLap."""
+        return {"lap_ms": self.lap_ms, "sectors_ms": list(self.sectors_ms) if self.sectors_ms else None,
+                "lap_number": self.lap_number, "set_at": self.completed_at}
 
     def to_schema(self) -> dict[str, Any]:
         return {
@@ -198,12 +258,19 @@ class RigLaps:
     driver: str | None = None
     last_sectors: list[dict[str, Any] | None] | None = None
     best: dict[str, LapRecord] = field(default_factory=dict)  # track_key -> this rig's best counted lap
+    traces: dict[int, Trace] = field(default_factory=dict)    # lap number -> trace (current + recent)
+    cut_pending: bool = False                                  # flashback: cut the trace at the next update
 
 
 class LapBook:
-    def __init__(self, clock=None) -> None:
+    def __init__(self, clock=None, outline_display: dict[str, Any] | None = None) -> None:
         import time
         self._clock = clock or time.time
+        self.outline_display = outline_display or {"flip_x": False, "flip_z": False, "rotate_deg": 0}
+        self.outlines: dict[str, dict[str, Any]] = {}          # track_key -> schema TrackOutline
+        self.messages: deque[tuple[int, str, dict[str, Any]]] = deque(maxlen=EVENT_LOG_MAX)
+        self._message_ids = itertools.count(1)
+        self.board_version: dict[str, int] = {}                # track_key -> bumps when its board may change
         self.rigs: dict[str, RigLaps] = {}
         self.laps: list[LapRecord] = []                       # every lap this hub session, oldest first
         self.recent: deque[LapRecord] = deque(maxlen=RECENT_LAPS_MAX)
@@ -228,11 +295,47 @@ class LapBook:
                     completed.append(record)
             elif isinstance(event, LapRetracted):
                 self._retract(rig_id, rig, ctx, event)
-            elif isinstance(event, LapReset) and event.reason == "session_changed":
-                rig.last_sectors = None
+            elif isinstance(event, LapReset):
+                if event.reason == "flashback":
+                    rig.cut_pending = True
+                else:
+                    rig.traces.clear()
+                    rig.cut_pending = False
+                if event.reason == "session_changed":
+                    rig.last_sectors = None
+                    rig.live = None
         if live is not None:
             rig.live = live
+            self._trace(rig, ctx, live)
         return completed
+
+    def _trace(self, rig: RigLaps, ctx: LapContext, live: LiveLap) -> None:
+        if rig.cut_pending:
+            rig.cut_pending = False
+            trace = rig.traces.get(live.number)
+            if trace is not None:
+                trace.cut_to(live.distance_m)
+        if ctx.position is None or live.distance_m < 0:
+            return  # before the line: not part of any lap [A13]
+        trace = rig.traces.get(live.number)
+        if trace is None:
+            trace = rig.traces[live.number] = Trace(live.number)
+            for old in sorted(rig.traces)[:-3]:  # keep the lap in progress and a few before it
+                del rig.traces[old]
+        trace.add(live.distance_m, live.current_ms, ctx.position[0], ctx.position[1])
+
+    def _publish(self, type_: str, body: dict[str, Any]) -> None:
+        self.messages.append((next(self._message_ids), type_, body))
+
+    def messages_after(self, message_id: int) -> list[tuple[int, str, dict[str, Any]]]:
+        return [m for m in self.messages if m[0] > message_id]
+
+    @property
+    def last_message_id(self) -> int:
+        return self.messages[-1][0] if self.messages else 0
+
+    def _bump_board(self, track_key: str) -> None:
+        self.board_version[track_key] = self.board_version.get(track_key, 0) + 1
 
     def _complete(self, rig_id: str, rig: RigLaps, ctx: LapContext, event: LapCompleted) -> LapRecord | None:
         if ctx.track_key is None:
@@ -243,6 +346,7 @@ class LapBook:
             track_name=ctx.track_name, session_id=ctx.session_id, lap_number=event.lap, lap_ms=event.lap_ms,
             sectors_ms=event.sectors_ms, valid=event.valid, out_lap=event.out_lap, tyre=ctx.tyre,
             personal_best=False, session_best=False, completed_at=round(self._clock() * 1000),
+            trace=rig.traces.get(event.lap),
         )
         session = self._session.setdefault(record.track_key, Bests())
         personal = self._personal.setdefault((record.track_key, record.driver_key), Bests())
@@ -265,6 +369,13 @@ class LapBook:
                        "session_best=%s ratings=%s", rig_id, record.lap_number, fmt_ms(record.lap_ms), record.valid,
                        record.out_lap, record.counted, record.personal_best, record.session_best,
                        list(record.sector_ratings))
+        self._publish("lap_completed", {"lap": record.to_schema()})
+        if record.counted:
+            self._bump_board(record.track_key)
+            if record.track_key not in self.outlines:
+                self._make_outline(record, ctx)
+        if rig.best.get(record.track_key) is not record:
+            record.trace = None  # only a rig's best lap keeps its trace (live deltas)
         return record
 
     def _retract(self, rig_id: str, rig: RigLaps, ctx: LapContext, event: LapRetracted) -> None:
@@ -276,6 +387,7 @@ class LapBook:
         if match in self.recent:
             self.recent.remove(match)
         self._rebuild_bests()
+        self._bump_board(match.track_key)
         lap_debug.info("rig=%s removed lap=%d time=%s; bests recomputed", rig_id, match.lap_number,
                        fmt_ms(match.lap_ms))
 
@@ -293,6 +405,66 @@ class LapBook:
             best = rig.best.get(record.track_key)
             if best is None or record.lap_ms < best.lap_ms:
                 rig.best[record.track_key] = record
+
+    # --- track outline -----------------------------------------------------------------------
+
+    def _make_outline(self, record: LapRecord, ctx: LapContext) -> None:
+        trace = record.trace
+        if trace is None or not trace.complete(ctx.track_length_m):
+            span = f"{len(trace.d)} points, {trace.d[0]:.0f}-{trace.d[-1]:.0f} m" if trace and trace.d else "empty"
+            lap_debug.info("rig=%s lap=%d not used for the track outline (trace %s)", record.rig_id,
+                           record.lap_number, span)
+            return
+        points: list[list[float]] = []
+        dists: list[float] = []
+        for d, x, z in zip(trace.d, trace.x, trace.z):
+            if not dists or d - dists[-1] >= OUTLINE_STEP_M:
+                points.append([round(x, 1), round(z, 1)])
+                dists.append(d)
+        sector_starts = None
+        if ctx.sector_starts_m:
+            sector_starts = [0] + [bisect.bisect_left(dists, start) for start in ctx.sector_starts_m[1:]]
+            sector_starts = [min(i, len(points) - 1) for i in sector_starts]
+        outline = {
+            "track_key": record.track_key,
+            "track_name": record.track_name,
+            "points": points,
+            "source": "first_valid_lap",
+            "sector_starts": sector_starts,
+            "display": dict(self.outline_display),
+        }
+        self.outlines[record.track_key] = outline
+        self._publish("track_outline", {"outline": outline})
+        lap_debug.info("rig=%s lap=%d became the outline of %s (%d points)", record.rig_id, record.lap_number,
+                       record.track_key, len(points))
+
+    # --- comparison --------------------------------------------------------------------------
+
+    def comparison(self, track_key: str, rig_ids: list[str]) -> dict[str, Any] | None:
+        """Schema Comparison for rigs on one track: each against the fastest other rig's best lap."""
+        if len(rig_ids) < 2:
+            return None
+        entries = []
+        for rig_id in rig_ids:
+            others = [(best, other) for other in rig_ids if other != rig_id
+                      if (best := self.rig_best(other, track_key)) is not None]
+            ref, ref_id = min(others, key=lambda pair: pair[0].lap_ms) if others else (None, None)
+            mine = self.rig_best(rig_id, track_key)
+            entries.append({
+                "rig_id": rig_id,
+                "reference_rig_id": ref_id,
+                "best_gap_ms": mine.lap_ms - ref.lap_ms if mine and ref else None,
+                "live_delta_ms": self._live_delta(rig_id, ref),
+            })
+        return {"track_key": track_key, "rigs": entries}
+
+    def _live_delta(self, rig_id: str, ref: LapRecord | None) -> int | None:
+        rig = self.rigs.get(rig_id)
+        live = rig.live if rig else None
+        if ref is None or ref.trace is None or live is None or not live.valid or live.out_lap:
+            return None
+        ref_t = ref.trace.time_at(live.distance_m)
+        return None if ref_t is None else round(live.current_ms - ref_t)
 
     # --- ratings ---------------------------------------------------------------------------
 
@@ -313,6 +485,20 @@ class LapBook:
         return [{"ms": ms, "rating": ratings[i]} for i, ms in enumerate(sectors_ms)]
 
     # --- views -----------------------------------------------------------------------------
+
+    def recent_laps(self) -> list[dict[str, Any]]:
+        return [r.to_schema() for r in self.recent]
+
+    def leaderboard_schema(self, track_key: str) -> dict[str, Any]:
+        """Schema Leaderboard for one track."""
+        rows = self.leaderboard(track_key)
+        leader = rows[0].lap_ms if rows else 0
+        track_name = next((r.track_name for r in rows if r.track_name), None)
+        return {"track_key": track_key, "track_name": track_name, "entries": [
+            {"rank": i + 1, "rig_id": r.rig_id, "rig_name": r.rig_name, "driver": r.driver, "lap_ms": r.lap_ms,
+             "sectors_ms": list(r.sectors_ms) if r.sectors_ms else None, "gap_ms": r.lap_ms - leader,
+             "tyre": r.tyre, "lap_number": r.lap_number, "set_at": r.completed_at}
+            for i, r in enumerate(rows)]}
 
     def rig_best(self, rig_id: str, track_key: str | None) -> LapRecord | None:
         rig = self.rigs.get(rig_id)

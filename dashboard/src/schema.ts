@@ -128,6 +128,8 @@ export interface LapRecord {
   lap_ms: number;
   sectors_ms: [number, number, number] | null;
   valid: boolean;
+  /** Started from the pit/garage: never counts for bests, whatever `valid` says. */
+  out_lap: boolean;
   tyre: Tyre | null;
   personal_best: boolean;
   session_best: boolean;

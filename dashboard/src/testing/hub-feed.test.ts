@@ -21,8 +21,13 @@ describe("hub feed sample", () => {
     expect(state.rigs.length).toBe(3);
     const driving = Object.values(state.frames).filter((f) => f.state === "driving");
     expect(driving.length).toBe(2);
-    expect(driving.every((f) => f.lap === null && f.best === null)).toBe(true); // no lap tracking yet
-    // Rig A just started a new session in the sample, so only Rig B has a position yet.
-    expect(driving.filter((f) => f.position !== null).length).toBe(1);
+    // Rig A completed a lap (lap_completed, track_outline, leaderboard), then changed track.
+    expect(Object.keys(state.outlines)).toEqual(["F1:7"]);
+    expect(state.recentLaps.map((l) => l.lap_ms)).toEqual([88123]);
+    expect(state.leaderboard?.entries.map((e) => e.driver)).toEqual(["Akshat"]);
+    const rigA = state.frames["192.168.1.21"]!;
+    expect(rigA.session.track_key).toBe("F1:10");
+    expect(rigA.lap).toBeNull(); // new session: nothing carried over
+    expect(rigA.best).toBeNull(); // no best on the new track yet
   });
 });

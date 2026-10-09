@@ -28,7 +28,7 @@ class Hub:
         self.registry = registry
         self.health = HealthMonitor(config.health)
         self.recorder = recorder
-        self.laps = LapBook()
+        self.laps = LapBook(outline_display=config.map.model_dump())
         self.started_at = time.monotonic()
         self._queue: asyncio.Queue[tuple[Checked, bytes, str, float]] = asyncio.Queue(QUEUE_MAX)
 
@@ -76,6 +76,9 @@ class Hub:
             track_name=s.track if s else None,
             session_id=rig.session_id if rig else None,
             tyre=tyre_dict(s),
+            position=s.position if s else None,
+            track_length_m=s.track_length_m if s else None,
+            sector_starts_m=s.sector_starts_m if s else None,
         )
 
     async def drain(self) -> None:

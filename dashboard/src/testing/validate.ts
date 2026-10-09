@@ -168,7 +168,7 @@ function lapRecord(c: Checker, v: unknown, p: string) {
     c.field(o, "session_id", orNull(isStr), p);
     for (const k of ["lap_number", "lap_ms", "completed_at"]) c.field(o, k, isInt, p);
     c.field(o, "sectors_ms", (x) => x === null || triple(x), p);
-    for (const k of ["valid", "personal_best", "session_best"]) c.field(o, k, isBool, p);
+    for (const k of ["valid", "out_lap", "personal_best", "session_best"]) c.field(o, k, isBool, p);
     tyre(c, o.tyre, `${p}.tyre`);
   });
 }
