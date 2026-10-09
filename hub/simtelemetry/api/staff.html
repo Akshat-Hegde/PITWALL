@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Driver names</title>
+<style>
+  :root {
+    --surface-0: #18232d;
+    --surface-1: #202e3a;
+    --surface-2: #283a49;
+    --rule: #33475a;
+    --text: #eef3f6;
+    --text-muted: #8fa3b3;
+    --accent: #36c5f0;
+    --ok: #3ddc84;
+    --error: #ff6b6b;
+    --radius: 8px;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--surface-0);
+    color: var(--text);
+    font: 16px/1.4 "Segoe UI", system-ui, sans-serif;
+  }
+  main { max-width: 640px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 1.5rem; margin: 8px 0 4px; }
+  .intro { color: var(--text-muted); margin: 0 0 16px; }
+  .rig {
+    background: var(--surface-1);
+    border-radius: var(--radius);
+    border-left: 6px solid var(--rig-colour, var(--rule));
+    padding: 14px 16px;
+    margin-bottom: 14px;
+  }
+  .rig__head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .rig__name { font-size: 1.2rem; font-weight: 600; }
+  .rig__state { color: var(--text-muted); font-size: 0.9rem; }
+  .rig__now { margin: 6px 0 12px; }
+  .rig__now strong { font-size: 1.1rem; }
+  .rig__source { color: var(--text-muted); font-size: 0.9rem; }
+  label { display: block; font-size: 0.9rem; color: var(--text-muted); margin: 10px 0 4px; }
+  input {
+    min-width: 0;
+    width: 100%;
+    font: inherit;
+    color: var(--text);
+    background: var(--surface-2);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 10px 12px;
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .optional { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 12px; }
+  .actions { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+  button {
+    font: inherit;
+    font-weight: 600;
+    border-radius: 6px;
+    padding: 10px 16px;
+    border: 0;
+    cursor: pointer;
+  }
+  button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+  .primary { background: var(--accent); color: #0b1a24; }
+  .secondary { background: transparent; color: var(--text); border: 1px solid var(--rule); }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .msg { margin: 10px 0 0; font-size: 0.95rem; min-height: 1.4em; }
+  .msg.ok { color: var(--ok); }
+  .msg.error { color: var(--error); }
+  .pin { background: var(--surface-1); border-radius: var(--radius); padding: 16px; }
+  .empty { color: var(--text-muted); }
+  @media (max-width: 420px) { .optional { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Driver names</h1>
+  <p class="intro" id="intro">Set who is driving each rig. Laps are saved under this name and shown on the TV.</p>
+
+  <form class="pin" id="pin-form" hidden>
+    <label for="pin">Staff PIN</label>
+    <input id="pin" type="password" inputmode="numeric" autocomplete="off">
+    <div class="actions"><button class="primary" type="submit">Unlock</button></div>
+    <p class="msg error" id="pin-msg" role="alert"></p>
+  </form>
+
+  <div id="rigs"></div>
+  <p class="msg error" id="page-msg" role="alert"></p>
+</main>
+
+<template id="rig-template">
+  <section class="rig">
+    <div class="rig__head">
+      <span class="rig__name"></span>
+      <span class="rig__state"></span>
+    </div>
+    <p class="rig__now">Laps saved as <strong class="rig__driver"></strong> <span class="rig__source"></span></p>
+    <form class="rig__form" novalidate>
+      <label>Driver's name</label>
+      <input name="name" maxlength="32" autocomplete="off" required>
+      <div class="optional">
+        <div><label>Phone (optional)</label><input name="phone" type="tel" maxlength="20" autocomplete="off"></div>
+        <div><label>Email (optional)</label><input name="email" type="email" maxlength="100" autocomplete="off"></div>
+      </div>
+      <div class="actions">
+        <button class="primary" type="submit">Save driver</button>
+        <button class="secondary end" type="button">End session</button>
+      </div>
+      <p class="msg" role="status"></p>
+    </form>
+  </section>
+</template>
+
+<script>
+(() => {
+  const PIN_KEY = "simtelemetry-staff-pin";
+  const rigsEl = document.getElementById("rigs");
+  const pinForm = document.getElementById("pin-form");
+  const pageMsg = document.getElementById("page-msg");
+  const cards = new Map();
+  let refreshTimer = null;
+
+  function storedPin() {
+    try { return sessionStorage.getItem(PIN_KEY) || ""; } catch { return ""; }
+  }
+  function storePin(pin) {
+    try { sessionStorage.setItem(PIN_KEY, pin); } catch { /* private mode: ask again next time */ }
+  }
+
+  async function api(method, path, body) {
+    const headers = { "X-Staff-Pin": storedPin() };
+    if (body) headers["Content-Type"] = "application/json";
+    const res = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+    let data = null;
+    try { data = await res.json(); } catch { /* empty body */ }
+    if (res.status === 401 || res.status === 429) {
+      showPin(data && data.detail);
+      throw new Error("locked");
+    }
+    if (!res.ok) throw new Error((data && data.detail) || `The hub answered ${res.status}.`);
+    return data;
+  }
+
+  function showPin(message) {
+    pinForm.hidden = false;
+    rigsEl.hidden = true;
+    document.getElementById("pin-msg").textContent = message || "";
+    document.getElementById("pin").focus();
+  }
+
+  pinForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    storePin(document.getElementById("pin").value);
+    load();
+  });
+
+  function sourceText(rig) {
+    if (rig.assigned) return "(set here)";
+    if (rig.game_driver) return "(name from the game)";
+    return "(no name yet: rig name)";
+  }
+
+  function render(rig) {
+    let card = cards.get(rig.rig_id);
+    if (!card) {
+      card = document.getElementById("rig-template").content.firstElementChild.cloneNode(true);
+      const form = card.querySelector("form");
+      form.addEventListener("submit", (e) => { e.preventDefault(); save(rig.rig_id, card); });
+      card.querySelector(".end").addEventListener("click", () => endSession(rig.rig_id, card));
+      for (const input of form.querySelectorAll("input")) {
+        input.addEventListener("input", () => { input.dataset.dirty = "1"; });
+        input.id = `${rig.rig_id}-${input.name}`;
+        input.previousElementSibling.htmlFor = input.id;
+      }
+      cards.set(rig.rig_id, card);
+      rigsEl.append(card);
+    }
+    card.style.setProperty("--rig-colour", rig.colour);
+    card.querySelector(".rig__name").textContent = rig.rig_name;
+    card.querySelector(".rig__state").textContent =
+      rig.track_name ? `${rig.state_text}, ${rig.track_name}` : rig.state_text;
+    card.querySelector(".rig__driver").textContent = rig.laps_stored_as;
+    card.querySelector(".rig__source").textContent = sourceText(rig);
+    card.querySelector(".end").disabled = !rig.assigned;
+    // Fill the form from the hub, unless staff are typing in it.
+    for (const input of card.querySelectorAll("input")) {
+      if (input.dataset.dirty || document.activeElement === input) continue;
+      input.value = (rig.assigned && rig.assigned[input.name]) || "";
+    }
+  }
+
+  function message(card, text, kind) {
+    const el = card.querySelector(".msg");
+    el.textContent = text;
+    el.className = `msg ${kind}`;
+  }
+
+  function clearDirty(card) {
+    for (const input of card.querySelectorAll("input")) delete input.dataset.dirty;
+  }
+
+  async function save(rigId, card) {
+    const form = card.querySelector("form");
+    const body = Object.fromEntries(new FormData(form).entries());
+    if (!String(body.name || "").trim()) {
+      message(card, "Enter the driver's name.", "error");
+      form.elements.name.focus();
+      return;
+    }
+    try {
+      const rig = await api("PUT", `/api/staff/rigs/${encodeURIComponent(rigId)}/driver`, body);
+      clearDirty(card);
+      render(rig);
+      message(card, `Saved. New laps on ${rig.rig_name} are saved as ${rig.laps_stored_as}.`, "ok");
+    } catch (err) {
+      if (err.message !== "locked") message(card, err.message, "error");
+    }
+  }
+
+  async function endSession(rigId, card) {
+    try {
+      const rig = await api("DELETE", `/api/staff/rigs/${encodeURIComponent(rigId)}/driver`);
+      clearDirty(card);
+      render(rig);
+      message(card, `Session ended. New laps on ${rig.rig_name} are saved as ${rig.laps_stored_as}.`, "ok");
+    } catch (err) {
+      if (err.message !== "locked") message(card, err.message, "error");
+    }
+  }
+
+  async function load() {
+    try {
+      const data = await api("GET", "/api/staff/rigs");
+      pinForm.hidden = true;
+      rigsEl.hidden = false;
+      pageMsg.textContent = "";
+      if (data.cafe) document.title = `Driver names: ${data.cafe}`;
+      if (data.rigs.length === 0) {
+        rigsEl.innerHTML = '<p class="empty">No rigs yet. Rigs appear here once they send telemetry.</p>';
+      } else {
+        rigsEl.querySelector(".empty")?.remove();
+        data.rigs.forEach(render);
+      }
+      clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(load, 5000);
+    } catch (err) {
+      if (err.message === "locked") return;
+      pageMsg.textContent = "Can't reach the hub. Retrying…";
+      clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(load, 5000);
+    }
+  }
+
+  load();
+})();
+</script>
+</body>
+</html>

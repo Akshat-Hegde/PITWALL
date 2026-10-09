@@ -65,6 +65,11 @@ class MapConfig(_Section):
     rotate_deg: float = 0.0
 
 
+class StaffConfig(_Section):
+    # PIN for the /staff page (setting driver names). Empty = no PIN; anyone on the LAN can change names.
+    pin: str = ""
+
+
 class LeaderboardConfig(_Section):
     # "Today" starts at this hour (local time), so a session running past midnight stays on one day.
     day_start_hour: int = Field(0, ge=0, le=23)
@@ -97,6 +102,7 @@ class AppConfig(_Section):
     dashboard: DashboardConfig = Field(default_factory=DashboardConfig)
     map: MapConfig = Field(default_factory=MapConfig)
     leaderboard: LeaderboardConfig = Field(default_factory=LeaderboardConfig)
+    staff: StaffConfig = Field(default_factory=StaffConfig)
     rigs: list[RigConfig] = Field(default_factory=list)
     track_names: dict[int, str] = Field(default_factory=dict)  # trackId -> display name override
 

@@ -124,6 +124,18 @@ repeating). On the TV PC's keyboard: `1` race view, `2` leaderboard view, `0` au
 Branding comes from `[cafe]` in the hub config: `name`, plus CSS variables in `[cafe.branding]` (e.g.
 `"--brand-accent" = "#0a7cff"`), applied to the page as-is.
 
+## Driver names (staff page)
+
+Open `http://<hub>:8000/staff` on a phone or tablet to set who is driving each rig: the driver's name and,
+optionally, a phone number and email (stored with the driver session for later reports; not used yet).
+**End session** clears the name when the customer leaves. Laps are saved under the name that applies when
+they complete: the staff-set name, else the game's player name, else the rig name; changing the name later
+doesn't rename earlier laps. The TV shows the name and that driver's best lap on the track ("PB").
+
+Set `[staff] pin` in `config\hub.toml` so customers can't change names: the page then asks for the PIN, and
+five wrong PINs in a minute lock that device out for a minute. Without a PIN anyone on the LAN can use the
+page.
+
 ## Lap database
 
 Every recorded lap goes into SQLite at `<data_dir>/laps.db` (default `data\laps.db`), together with each

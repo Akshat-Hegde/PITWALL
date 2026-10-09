@@ -141,13 +141,27 @@ While you drive, check on the TV:
 - [ ] **Hub window:** with `--lap-debug`, each line crossing logs `lap_started`, `session_history_update`
       and `lap_completed ... source=session_history`. Note any `lap_data_fallback` or `lap_retracted` lines.
 
+## 5b. Driver names (staff page), hub still running
+
+Use a phone or tablet on the same network (or the hub PC): open `http://<hub IP>:8000/staff`.
+
+- [ ] The page lists Rig 1 with its state and "Laps saved as <game name> (name from the game)".
+- [ ] Enter a driver name (and optionally a phone/email) and **Save driver**: within a second the TV shows
+      that name in the timing strip.
+- [ ] Drive one clean lap: it appears on the leaderboards under the new name; the laps from section 5 keep
+      the game name. The strip row shows `PB` with that driver's best on this track.
+- [ ] **End session**: the TV goes back to the game's name; the next lap is saved under it.
+- [ ] Optional PIN: stop the hub, set `[staff] pin = "1234"` in `config\hub.toml`, start it again (this can
+      be combined with section 6). The page now asks for the PIN; a wrong PIN shows `Wrong PIN.`; the
+      right one opens the page. Note: five wrong PINs in a minute lock that device out for a minute.
+
 ## 6. Restart: leaderboard persistence and a hub restart mid-session
 
 - [ ] Stay on track, mid-lap. In the hub window press **Ctrl+C**. The hub stops; the recording is closed.
 - [ ] Start it again the same way (`run --record --lap-debug`); it starts a new recording and a new lap
       debug log (note the names: `______________________`).
-- [ ] The TV reconnects by itself. The **leaderboard view still shows the laps from section 5** (today,
-      this week, all time). The map uses the `[map]` value you set in section 4, and the outline is there
+- [ ] The TV reconnects by itself. The **leaderboard view still shows the laps from sections 5 and 5b**
+      (today, this week, all time), with the same names. A driver name set on `/staff` is still set. The map uses the `[map]` value you set in section 4, and the outline is there
       straight away.
 - [ ] Finish the lap you were on: it's recorded normally, and no burst of old laps appears (A9).
 - [ ] Change to **another track** (new Time Trial session): the hub logs one `reset reason=session_changed`

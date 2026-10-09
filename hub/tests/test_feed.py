@@ -113,7 +113,7 @@ async def test_driving_rig_frame(tmp_path):
                     "track_length_m": 5891.0, "session_type": "Time Trial"},
         "position": {"x": -412.6, "z": 188.2}, "speed_kph": 287, "gear": 7, "throttle": 0.75, "brake": 0.0,
         "rpm": 11240, "tyre": {"compound": "soft", "label": "C3", "age_laps": 2},
-        "lap": None, "best": None,
+        "lap": None, "best": None, "personal_best": None,
     }
 
 

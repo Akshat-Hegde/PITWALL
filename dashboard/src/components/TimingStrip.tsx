@@ -82,6 +82,9 @@ function TimingRow({ rig, number, frame, delta, sessionBestMs, roomy }: RowProps
           {frame?.tyre && state !== "no_data" && (
             <span className={`trow__tyre tyre--${frame.tyre.compound}`}>{frame.tyre.label}</span>
           )}
+          {frame?.personal_best && state !== "no_data" && (
+            <span className="trow__pb">PB {formatLapTime(frame.personal_best.lap_ms)}</span>
+          )}
           {state !== "driving" && <span className="trow__state">{STATE_TEXT[state]}</span>}
           {lap && !lap.valid && <span className="trow__invalid">Invalid</span>}
         </span>

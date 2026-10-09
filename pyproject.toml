@@ -27,6 +27,9 @@ simtelemetry = "simtelemetry.__main__:main"
 [tool.setuptools.packages.find]
 where = ["hub"]
 
+[tool.setuptools.package-data]
+simtelemetry = ["api/*.html"]
+
 [tool.pytest.ini_options]
 testpaths = ["hub/tests"]
 asyncio_mode = "auto"

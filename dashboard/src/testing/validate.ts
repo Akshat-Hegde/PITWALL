@@ -122,6 +122,13 @@ function rigFrame(c: Checker, v: unknown, p: string) {
         if (l.last_sectors !== null) sectors(c, l.last_sectors, `${p}.lap.last_sectors`);
       });
     }
+    if (o.personal_best !== null && o.personal_best !== undefined) {
+      c.object(o.personal_best, `${p}.personal_best`, (b) => {
+        c.field(b, "lap_ms", isInt, `${p}.personal_best`);
+        c.field(b, "lap_number", isInt, `${p}.personal_best`);
+        c.field(b, "set_at", isInt, `${p}.personal_best`);
+      });
+    }
     if (!("best" in o)) c.errors.push(`${p}.best: missing`);
     if (o.best !== null && o.best !== undefined) {
       c.object(o.best, `${p}.best`, (b) => {

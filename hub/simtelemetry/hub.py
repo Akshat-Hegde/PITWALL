@@ -10,7 +10,8 @@ from typing import Any
 from .config import AppConfig
 from .core.adapter import Checked, GameAdapter
 from .core.health import HealthMonitor, RigState
-from .core.laps import LapBook, LapContext
+from .core.drivers import DriverRegistry
+from .core.laps import LapBook, LapContext, driver_key
 from .core.store import LapStore
 from .core.rigs import Rig, RigRegistry
 from .tools.recorder import Recorder
@@ -31,6 +32,7 @@ class Hub:
         self.recorder = recorder
         self.laps = LapBook(outline_display=config.map.model_dump(), store=store,
                             day_start_hour=config.leaderboard.day_start_hour)
+        self.drivers = DriverRegistry(store)
         self.started_at = time.monotonic()
         self._queue: asyncio.Queue[tuple[Checked, bytes, str, float]] = asyncio.Queue(QUEUE_MAX)
 
@@ -71,9 +73,10 @@ class Hub:
     def lap_context(self, ip: str) -> LapContext:
         rig = self.registry.get(ip)
         s = self.adapter.live_summary(ip)
+        rig_name = rig.name if rig else ip
         return LapContext(
-            rig_name=rig.name if rig else ip,
-            driver=rig.driver_name if rig else None,
+            rig_name=rig_name,
+            driver=self.drivers.lap_name(ip, rig.driver_name if rig else None, rig_name),
             track_key=s.track_key if s else None,
             track_name=s.track if s else None,
             session_id=rig.session_id if rig else None,
@@ -178,6 +181,11 @@ class Hub:
         track = (s.track if s and s.track else "track ?")
         return (f"{rig.name:<8} {rig.ip:<15} fmt={rig.data_format or '?':<5} {track:<22} "
                 f"{lap:<7} {lap_time} {speed} {state}")
+
+
+def personal_best_key(hub: Hub, rig: Rig) -> str:
+    """Driver key under which this rig's current laps are stored (see DriverRegistry.lap_name)."""
+    return driver_key(hub.drivers.lap_name(rig.ip, rig.driver_name, rig.name), rig.ip)
 
 
 def tyre_dict(s) -> dict[str, Any] | None:

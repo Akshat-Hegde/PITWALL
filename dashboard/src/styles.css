@@ -468,6 +468,11 @@ ul {
   --tyre-colour: var(--tyre-wet);
 }
 
+.trow__pb {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
 .trow__state {
   color: var(--text);
 }

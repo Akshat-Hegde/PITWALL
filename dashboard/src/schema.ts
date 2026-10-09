@@ -90,6 +90,8 @@ export interface RigFrame {
   tyre: Tyre | null;
   lap: LiveLap | null;
   best: BestLap | null;
+  /** The driver's fastest valid lap on this track ever (added in v1; older hubs don't send it). */
+  personal_best?: BestLap | null;
 }
 
 export interface ComparisonEntry {

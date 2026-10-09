@@ -13,9 +13,12 @@ import logging
 import sqlite3
 import threading
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .laps import LapRecord
+
+if TYPE_CHECKING:
+    from .drivers import Assignment
 
 log = logging.getLogger(__name__)
 
@@ -43,6 +46,16 @@ CREATE TABLE IF NOT EXISTS laps (
     completed_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS laps_board ON laps (track_key, completed_at);
+CREATE TABLE IF NOT EXISTS driver_sessions (
+    id         INTEGER PRIMARY KEY,
+    rig_id     TEXT NOT NULL,
+    name       TEXT NOT NULL,
+    phone      TEXT,
+    email      TEXT,
+    started_at INTEGER NOT NULL,
+    ended_at   INTEGER
+);
+CREATE INDEX IF NOT EXISTS driver_sessions_open ON driver_sessions (rig_id, ended_at);
 CREATE TABLE IF NOT EXISTS outlines (
     track_key  TEXT PRIMARY KEY,
     outline    TEXT NOT NULL,
@@ -132,6 +145,38 @@ class LapStore:
         with self._lock:
             row = self._db.execute(sql, args).fetchone()
         return list(row)
+
+    def driver_best(self, track_key: str, driver_key: str) -> dict[str, Any] | None:
+        """A driver's fastest counted lap on a track, ever."""
+        with self._lock:
+            row = self._db.execute(
+                "SELECT * FROM laps WHERE track_key = ? AND driver_key = ? AND valid = 1 AND out_lap = 0"
+                " ORDER BY lap_ms, completed_at LIMIT 1", (track_key, driver_key)).fetchone()
+        return dict(row) if row else None
+
+    # --- driver sessions (names assigned on the staff page) --------------------------------
+
+    def start_driver_session(self, rig_id: str, a: Assignment) -> None:
+        with self._lock, self._db:
+            self._db.execute("UPDATE driver_sessions SET ended_at = ? WHERE rig_id = ? AND ended_at IS NULL",
+                             (a.started_at, rig_id))
+            self._db.execute("INSERT INTO driver_sessions (rig_id, name, phone, email, started_at)"
+                             " VALUES (?,?,?,?,?)", (rig_id, a.name, a.phone, a.email, a.started_at))
+
+    def end_driver_session(self, rig_id: str, ended_at: int) -> None:
+        with self._lock, self._db:
+            self._db.execute("UPDATE driver_sessions SET ended_at = ? WHERE rig_id = ? AND ended_at IS NULL",
+                             (ended_at, rig_id))
+
+    def current_driver_sessions(self) -> dict[str, Assignment]:
+        from .drivers import Assignment
+        with self._lock:
+            rows = self._db.execute("SELECT * FROM driver_sessions WHERE ended_at IS NULL ORDER BY id").fetchall()
+        return {r["rig_id"]: Assignment(r["name"], r["phone"], r["email"], r["started_at"]) for r in rows}
+
+    def driver_sessions(self) -> list[dict[str, Any]]:
+        with self._lock:
+            return [dict(r) for r in self._db.execute("SELECT * FROM driver_sessions ORDER BY id").fetchall()]
 
     # --- outlines ---------------------------------------------------------------------------
 

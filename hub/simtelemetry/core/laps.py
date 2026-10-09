@@ -587,6 +587,27 @@ class LapBook:
         return {"track_key": track_key, "track_name": track_name, "period": period, "since": since_ms,
                 "entries": entries}
 
+    def driver_best(self, track_key: str | None, dkey: str) -> dict[str, Any] | None:
+        """Schema BestLap: a driver's fastest counted lap on a track ever (lap database), or None."""
+        if track_key is None:
+            return None
+        cache_key = ("driver_best", track_key, dkey, self._lap_version)
+        if cache_key in self._sector_cache:
+            return self._sector_cache[cache_key]  # type: ignore[return-value]
+        best = None
+        if self.store is not None:
+            row = self.store.driver_best(track_key, dkey)
+            if row:
+                sectors = [row["s1_ms"], row["s2_ms"], row["s3_ms"]]
+                best = {"lap_ms": row["lap_ms"], "sectors_ms": sectors if None not in sectors else None,
+                        "lap_number": row["lap_number"], "set_at": row["completed_at"]}
+        else:
+            mine = [r for r in self.laps if r.counted and r.track_key == track_key and r.driver_key == dkey]
+            if mine:
+                best = min(mine, key=lambda r: (r.lap_ms, r.completed_at)).best_schema()
+        self._sector_cache[cache_key] = best  # type: ignore[assignment]
+        return best
+
     def rig_best(self, rig_id: str, track_key: str | None) -> LapRecord | None:
         rig = self.rigs.get(rig_id)
         return rig.best.get(track_key) if rig and track_key else None

@@ -160,10 +160,11 @@ Write down the in-game times while driving, then compare them with the log. Tick
 - **Assumption:** the Participants name for the player car is the player's profile/gamertag, the same on
   every session, and different players have different names. Offline it may be a generic name (e.g. the
   driver's surname or "Player").
-- **Handled:** personal bests and leaderboard entries are per driver name (case-insensitive). A rig with
-  no name yet counts as its own driver.
-- **Verify:** note the name shown on the TV for each player. If two people share a generic name, their
-  laps merge into one leaderboard entry: report this.
+- **Handled:** staff can set the driver's name per rig on the hub's `/staff` page; that name wins. Without
+  one, laps use the game's player name, then the rig name. Personal bests and leaderboard entries are per
+  name (case-insensitive). A lap takes the name in effect when it completes.
+- **Verify:** note the game's name shown on the TV before setting one on `/staff`. If two people share a
+  generic game name, their laps merge into one leaderboard entry unless staff set names: report this.
 
 ### A15. Only valid laps that aren't out laps count; ratings follow the TV convention
 

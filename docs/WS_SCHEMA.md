@@ -140,7 +140,7 @@ Conventions: times are integer **milliseconds**; distances **metres**; speed **k
 | `rig_id` | string | |
 | `state` | string | `"driving"`, `"in_menu_paused"` (packets arriving, car not on track), `"no_data"`. |
 | `last_seen_ms` | int \| null | Milliseconds since the last packet from this rig. |
-| `driver` | string \| null | Player name from the game. |
+| `driver` | string \| null | The driver's name: set by staff on the hub's `/staff` page, else the player name from the game; `null` if neither is known. |
 | `session` | SessionInfo | |
 | `position` | `{ "x": number, "z": number }` \| null | World position in the track's coordinate space (metres). `null` when not driving. |
 | `speed_kph` | number \| null | |
@@ -151,6 +151,7 @@ Conventions: times are integer **milliseconds**; distances **metres**; speed **k
 | `tyre` | Tyre \| null | |
 | `lap` | LiveLap \| null | The lap in progress; `null` when not driving. |
 | `best` | BestLap \| null | This rig's best valid lap on the current track in this hub session. |
+| `personal_best` | BestLap \| null | *(Added in v1, optional.)* The current driver's fastest valid lap on this track ever, from the lap database. Laps are stored under the staff-assigned name, else the game's player name, else the rig name. |
 
 ### Tyre
 

@@ -16,7 +16,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from .. import __version__
-from ..hub import tyre_dict
+from ..hub import personal_best_key, tyre_dict
 from ..tools.recorder import RecorderState
 from .health import RigState
 
@@ -99,7 +99,7 @@ class FeedBuilder:
             "rig_id": rig.ip,
             "state": state.value,
             "last_seen_ms": round((now - h.last_seen) * 1000) if h and h.last_seen is not None else None,
-            "driver": rig.driver_name if state is not RigState.NO_DATA else None,
+            "driver": hub.drivers.display_name(rig.ip, rig.driver_name) if state is not RigState.NO_DATA else None,
             "session": self.session(rig, now),
             "position": ({"x": round(s.position[0], 1), "z": round(s.position[1], 1)}
                          if driving and s.position is not None else None),
@@ -111,6 +111,7 @@ class FeedBuilder:
             "tyre": tyre,
             "lap": hub.laps.live_view(rig.ip) if driving else None,
             "best": best.best_schema() if best else None,
+            "personal_best": hub.laps.driver_best(track_key, personal_best_key(hub, rig)) if track_key else None,
         }
 
     def frame_body(self, now: float) -> dict[str, Any]:

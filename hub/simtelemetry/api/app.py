@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 
 from ..core.feed import FeedBuilder, FeedConnection
 from ..hub import Hub
+from .staff import staff_router
 
 log = logging.getLogger(__name__)
 
@@ -44,6 +45,8 @@ def create_app(hub: Hub, dashboard_dir: Path | None = None) -> FastAPI:
     @app.get("/api/health")
     def health() -> dict[str, Any]:
         return hub.health_snapshot()
+
+    app.include_router(staff_router(hub))
 
     @app.websocket("/ws")
     async def feed(websocket: WebSocket) -> None:
