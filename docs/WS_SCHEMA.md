@@ -83,6 +83,8 @@ Compatibility rules:
 
 - `hub.udp_port`, `hub.lan_address` *(added in v1, optional)*: where games should send telemetry (this PC's
   network address, `null` if unknown); shown on the dashboard's waiting screen.
+- `hub.steering_rotation_deg` *(added in v1, optional, default 360)*: lock-to-lock wheel rotation for the
+  steering wheel graphic, from `[dashboard] steering_wheel_rotation_deg`.
 - `cafe.branding`: CSS custom properties from `[cafe.branding]` in the hub config. The dashboard applies
   them to `:root` as-is (keys must start with `--`; others are ignored).
 - `outlines`: every outline the hub has (one per track that has had a complete valid lap).
@@ -155,6 +157,33 @@ Conventions: times are integer **milliseconds**; distances **metres**; speed **k
 | `lap` | LiveLap \| null | The lap in progress; `null` when not driving. |
 | `best` | BestLap \| null | This rig's best valid lap on the current track in this hub session. |
 | `personal_best` | BestLap \| null | *(Added in v1, optional.)* The current driver's fastest valid lap on this track ever, from the lap database. Laps are stored under the staff-assigned name, else the game's player name, else the rig name. |
+| `car` | CarDetail \| null | *(Added in v1, optional.)* Car systems, tyres, brakes, damage, g-forces and slides; see below. |
+
+### CarDetail *(added in v1, optional)*
+
+Per-wheel values (`PerWheel`) are four numbers in the order **front-left, front-right, rear-left, rear-right**.
+Fields marked *live* are `null` when the car is not driving. Any field may be `null` when the game has not sent it.
+
+| Field | Type | Notes |
+|---|---|---|
+| `drs_open`, `drs_allowed` | bool \| null | *Live.* |
+| `rev_lights_pct` | number \| null | *Live.* 0–100. |
+| `ers_pct` | number \| null | ERS store, 0–100. |
+| `ers_mode` | string \| null | `"none"`, `"medium"`, `"hotlap"`, `"overtake"`. |
+| `fuel_kg`, `fuel_laps` | number \| null | Fuel in the tank, and laps of fuel left over the race distance (the game's figure). |
+| `pit_limiter` | bool \| null | *Live.* |
+| `steer` | number \| null | *Live.* −1 (full left) to 1 (full right). The wheel graphic turns `steer × hub.steering_rotation_deg / 2` degrees. |
+| `g_lat`, `g_long` | number \| null | *Live.* Lateral and longitudinal g. |
+| `tyre_surface_c`, `tyre_inner_c` | PerWheel \| null | Tyre temperatures, °C. |
+| `tyre_pressure_psi` | PerWheel \| null | |
+| `tyre_wear_pct` | PerWheel \| null | 0–100. |
+| `brake_c` | PerWheel \| null | Brake temperatures, °C. |
+| `damage` | object \| null | Percent per part: `front_wing_left`, `front_wing_right`, `rear_wing`, `floor`, `diffuser`, `sidepod`, `gearbox`, `engine`. |
+| `top_speed_lap_kph`, `top_speed_kph` | number \| null | Top speed this lap and this session. |
+| `slide_deg` | number \| null | *Live.* Degrees the car points away from its direction of travel (positive = nose right). |
+| `saves` | int | Big slides caught this session (peak 15–70°, caught within 3 s, still above 40 km/h). |
+| `last_save_at` | int \| null | Hub clock (Unix ms) of the latest save; the TV flashes "SAVE!" for a couple of seconds after it. |
+| `last_save_peak_deg` | number \| null | Peak angle of the latest save. |
 
 ### Tyre
 

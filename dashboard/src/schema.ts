@@ -72,6 +72,12 @@ export interface CarDetail {
   damage: Record<string, number> | null;
   top_speed_lap_kph: number | null;
   top_speed_kph: number | null;
+  /** Degrees the car points away from its direction of travel (how sideways it is). */
+  slide_deg?: number | null;
+  /** Slides caught this session, and the latest one ("SAVE!"). */
+  saves?: number;
+  last_save_at?: number | null;
+  last_save_peak_deg?: number | null;
 }
 
 export interface Tyre {
@@ -206,6 +212,8 @@ export interface SnapshotMessage extends Envelope<"snapshot"> {
     /** Added in v1 (optional): where games should send telemetry. */
     udp_port?: number;
     lan_address?: string | null;
+    /** Lock-to-lock rotation of the steering wheel graphic. */
+    steering_rotation_deg?: number;
   };
   cafe: { name: string; branding: Record<string, string> };
   status: HubStatus;

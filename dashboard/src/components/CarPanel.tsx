@@ -2,7 +2,8 @@ import { formatDelta, formatGear, formatLapTime, formatSector } from "../format"
 import type { ComparisonEntry, RigFrame, RigInfo, SectorTime } from "../schema";
 import type { LapShare } from "../state/lapshare";
 import type { DashboardStore } from "../state/store";
-import { GForce, LapShareBars, Pedals, RevLights, SpeedDial, Systems, Tyres } from "./Gauges";
+import { CarTopDown, SteeringWheel } from "./CarGraphics";
+import { GForce, LapShareBars, Pedals, RevLights, SpeedDial, Systems } from "./Gauges";
 
 const STATE_TEXT: Record<RigFrame["state"], string> = {
   driving: "Live",
@@ -38,6 +39,8 @@ export function CarPanels({ store, rigs, frames, comparison, sessionBestMs }: Pr
           compact={compact}
           share={store.lapShare.thisLap(rig.rig_id)}
           lastShare={store.lapShare.lastLap(rig.rig_id)}
+          gTrail={store.gTrail.get(rig.rig_id) ?? []}
+          steeringRotationDeg={store.getState().steeringRotationDeg}
         />
       ))}
     </section>
@@ -53,9 +56,12 @@ interface PanelProps {
   compact: boolean;
   share: LapShare | null;
   lastShare: LapShare | null;
+  gTrail: [number, number][];
+  steeringRotationDeg: number;
 }
 
-function CarPanel({ rig, number, frame, delta, sessionBestMs, compact, share, lastShare }: PanelProps) {
+function CarPanel({ rig, number, frame, delta, sessionBestMs, compact, share, lastShare, gTrail,
+                    steeringRotationDeg }: PanelProps) {
   const state = frame?.state ?? "no_data";
   const driving = state === "driving";
   const lap = frame?.lap ?? null;
@@ -121,10 +127,13 @@ function CarPanel({ rig, number, frame, delta, sessionBestMs, compact, share, la
                 {compact && <Systems car={car} />}
               </div>
             </div>
-            <Tyres car={car} compound={tyre ? `${tyre.label} tyres` : null} />
+            {!compact && <CarTopDown car={car} />}
             {!compact && (
               <div className="panel2__right">
-                <GForce lat={car?.g_lat ?? null} long={car?.g_long ?? null} />
+                <div className="panel2__instruments">
+                  <GForce lat={car?.g_lat ?? null} long={car?.g_long ?? null} trail={driving ? gTrail : []} />
+                  <SteeringWheel steer={driving ? car?.steer ?? null : null} rotationDeg={steeringRotationDeg} />
+                </div>
                 <LapShareBars share={driving ? share : null} last={lastShare} />
               </div>
             )}

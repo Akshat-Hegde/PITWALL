@@ -2472,6 +2472,425 @@ body {
   }
 }
 
+/* ==== Official F1 look: #15151E base, F1 red accents, corner brackets, angled cuts ============== */
+
+:root {
+  --surface-0: #15151e;
+  --surface-1: #1c1c26;
+  --surface-2: #24242e;
+  --surface-3: #33333e;
+  --rule: #2d2d38;
+  --text: #ffffff;
+  --text-muted: #9c9ca6;
+  --brand-accent: #e10600;
+  --map-track: #2a2a35;
+  --map-track-edge: #3a3a47;
+  --corner: linear-gradient(var(--brand-accent), var(--brand-accent));
+}
+
+body {
+  background-color: var(--surface-0);
+}
+
+/* Top bar: dark, with the cafe name in an F1-red block cut at an angle */
+.statusbar {
+  background: #101017;
+  border-bottom: 1px solid var(--rule);
+}
+
+.statusbar__brand {
+  padding-right: 2.2rem;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 1.1rem) 100%, 0 100%);
+}
+
+/* Cards: F1 card colours with a red corner bracket (top right) */
+.mapcard,
+.panel,
+.side-empty {
+  background-color: var(--surface-1);
+  background-image: var(--corner), var(--corner);
+  background-size: 2.6rem 2px, 2px 2.6rem;
+  background-position: top right, top right;
+  background-repeat: no-repeat;
+}
+
+.mapcard .track-map {
+  background: radial-gradient(ellipse at 55% 52%, rgba(36, 36, 46, 0.85), rgba(21, 21, 30, 0.2) 70%);
+}
+
+.pod {
+  background: linear-gradient(100deg, color-mix(in srgb, var(--rig-colour) 32%, var(--surface-1)) 0%,
+    var(--surface-1) 60%);
+}
+
+.pod--empty,
+.pod--weather {
+  background: var(--surface-1);
+}
+
+.pod--p1 {
+  box-shadow: inset 0 2px 0 var(--brand-accent);
+}
+
+.panel2 {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--rig-colour) 10%, var(--surface-1)) 0%,
+    var(--surface-1) 40%);
+}
+
+.panel2__head {
+  background:
+    repeating-linear-gradient(120deg, color-mix(in srgb, var(--rig-colour) 16%, transparent) 0 1px,
+      transparent 1px 7px),
+    linear-gradient(100deg, color-mix(in srgb, var(--rig-colour) 38%, var(--surface-1)) 0%, transparent 70%);
+}
+
+.sec {
+  background: var(--surface-2);
+}
+
+.share__track,
+.dial__track {
+  background: var(--surface-3);
+  stroke: var(--surface-3);
+}
+
+.waiting__settings {
+  background: var(--surface-1);
+}
+
+/* Section titles with a short F1-red bar */
+.panel__title::before,
+.mapcard__track::before,
+.boards__track::before {
+  content: "";
+  display: inline-block;
+  width: 0.3rem;
+  height: 0.9em;
+  margin-right: 0.6rem;
+  background: var(--brand-accent);
+  transform: skewX(-12deg);
+  vertical-align: -0.05em;
+}
+
+/* ---- Top-down car: tyres, brakes, damage, slide meter, SAVE! ---------------------------------- */
+
+.topcar {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.topcar svg {
+  height: 10.6rem;
+  width: auto;
+  overflow: visible;
+  transition: filter 150ms;
+}
+
+.topcar__body {
+  fill: #3b3b48;
+  stroke: var(--rig-colour);
+  stroke-width: 1.2;
+}
+
+.topcar__cockpit {
+  fill: var(--surface-0);
+}
+
+.topcar__floor {
+  fill: #2a2a34;
+}
+
+.topcar__wing {
+  fill: #55555f;
+}
+
+.topcar__floor.dmg--ok {
+  fill: #2a2a34;
+}
+
+.dmg--light {
+  fill: #ffcc33 !important;
+}
+
+.dmg--heavy {
+  fill: #ff8a3d !important;
+}
+
+.dmg--severe {
+  fill: #ff4b55 !important;
+}
+
+.topcar__tyre {
+  fill: var(--band, var(--surface-3));
+}
+
+.topcar__tyre.band--none {
+  fill: var(--surface-3);
+}
+
+.topcar__temp,
+.topcar__wear {
+  fill: #101017;
+  text-anchor: middle;
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
+.topcar__temp {
+  font-size: 15px;
+}
+
+.topcar__wear {
+  font-size: 11px;
+  opacity: 0.85;
+}
+
+.topcar__brake {
+  fill: var(--text-muted);
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.topcar.is-sliding svg {
+  filter: drop-shadow(0 0 0.5rem color-mix(in srgb, var(--warning) 70%, transparent));
+}
+
+.topcar__slide {
+  display: flex;
+  gap: 0.8rem;
+}
+
+.topcar__save {
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 0.15rem 0.7rem;
+  background: var(--brand-accent);
+  color: #fff;
+  font-family: var(--font-head);
+  font-style: italic;
+  font-weight: 700;
+  font-size: 1.6rem;
+  letter-spacing: 0.04em;
+  transform: translate(-50%, -50%) skewX(-10deg);
+  animation: save-pop 300ms ease-out;
+  white-space: nowrap;
+}
+
+.topcar__save span {
+  font-size: 0.9rem;
+  opacity: 0.85;
+}
+
+@keyframes save-pop {
+  from {
+    transform: translate(-50%, -50%) skewX(-10deg) scale(1.6);
+    opacity: 0;
+  }
+}
+
+/* ---- Steering wheel + friction circle ---------------------------------------------------------- */
+
+.panel2__instruments {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.panel2__right .gforce {
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.panel2__right .gforce svg {
+  width: 5.2rem;
+  height: 5.2rem;
+}
+
+.gforce__trail {
+  stroke: var(--rig-colour);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+.wheel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.wheel svg {
+  width: 6rem;
+  height: auto;
+  overflow: visible;
+}
+
+.wheel__grip {
+  fill: #2c2c37;
+  stroke: #474754;
+  stroke-width: 1;
+}
+
+.wheel__face {
+  fill: #1d1d26;
+  stroke: var(--rig-colour);
+  stroke-width: 1.5;
+}
+
+.wheel__screen {
+  fill: #0d0d12;
+  stroke: #3a3a47;
+}
+
+.wheel__marker {
+  fill: var(--brand-accent);
+}
+
+.wheel__button {
+  fill: var(--rig-colour);
+}
+
+.wheel__knob {
+  fill: #4a4a57;
+}
+
+.wheel__angle {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+/* ---- Battle card (on the map) ------------------------------------------------------------------ */
+
+.battle {
+  position: absolute;
+  top: 1.4rem;
+  right: 1.4rem;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: 23rem;
+  padding: 0.7rem 0.9rem 0.75rem;
+  border: 1px solid var(--rule);
+  border-top: 2px solid var(--brand-accent);
+  background: rgba(21, 21, 30, 0.92);
+}
+
+.battle__row {
+  display: grid;
+  grid-template-columns: 1.3rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+  padding-left: 0.5rem;
+  border-left: 3px solid var(--rig-colour);
+}
+
+.battle__pos {
+  font-family: var(--font-head);
+  font-style: italic;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.battle__name {
+  overflow: hidden;
+  font-family: var(--font-head);
+  font-style: italic;
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: 0.02em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.battle__time {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+
+.battle__gap {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-top: 0.15rem;
+}
+
+.battle__gap-value {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.6rem;
+}
+
+.battle__arrow {
+  font-size: 0.9rem;
+}
+
+.battle__trend {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.battle__gap--closing .battle__arrow,
+.battle__gap--closing .battle__trend {
+  color: var(--sector-green);
+}
+
+.battle__gap--opening .battle__arrow,
+.battle__gap--opening .battle__trend {
+  color: var(--brake);
+}
+
+.battle__gap--holding .battle__arrow,
+.battle__gap--holding .battle__trend,
+.battle__gap--none .battle__trend,
+.battle__gap--none .battle__arrow {
+  color: var(--text-muted);
+}
+
+.battle__live {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.battle__live strong {
+  color: var(--text);
+  font-family: var(--font-display);
+}
+
+/* With a battle on screen the map starts below the title and the battle card, so nothing covers it */
+.mapcard--battle .track-map {
+  position: absolute;
+  inset: 11.2rem 0 0;
+  height: auto;
+}
+
+/* Wide panels: column widths with the car graphic and the instruments */
+.panel2:not(.panel2--compact) .panel2__body {
+  grid-template-columns: 9.2rem minmax(8.6rem, 1fr) auto 12.4rem;
+}
+
+.panel2:not(.panel2--compact) .dial {
+  width: 9.2rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .topcar__save {
+    animation: none;
+  }
+}
+
 /* ---- Small screens: stack and scroll (a phone or a laptop window, not the TV) ------------- */
 
 @media (max-width: 900px) {

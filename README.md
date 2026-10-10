@@ -90,7 +90,8 @@ npm run build      # production files in dashboard/dist (fonts bundled: works of
 The dashboard reads only the WebSocket messages described in [docs/WS_SCHEMA.md](docs/WS_SCHEMA.md).
 Data source: `?source=mock` (default in `npm run dev`) or `?source=ws` (default when served by the hub; in dev
 it is proxied to a hub on `localhost:8000`). `run` serves `dashboard/dist` at `http://<hub>:8000/` (configurable
-with `[dashboard] directory`), and the feed rate with `[dashboard] frame_hz` (10–20, default 15). Until lap
+with `[dashboard] directory`), and the feed rate with `[dashboard] frame_hz` (10–20, default 15). The steering
+wheel graphic turns with `[dashboard] steering_wheel_rotation_deg` (lock-to-lock, default 360). Until lap
 tracking exists, the hub sends `null` lap fields and no track outline; the map then draws the path driven so far.
 
 `?map=flipx,flipz,rotN` (any combination) overrides the map orientation, for matching the in-game minimap

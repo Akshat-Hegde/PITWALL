@@ -1,4 +1,4 @@
-import type { CarDetail, PerWheel } from "../schema";
+import type { CarDetail } from "../schema";
 import type { LapShare } from "../state/lapshare";
 
 // ---- Speed dial --------------------------------------------------------------------------------
@@ -95,43 +95,24 @@ export function tyreTempBand(c: number | null): string {
   return "hot";
 }
 
-const CORNERS = ["Front left", "Front right", "Rear left", "Rear right"];
-
-export function Tyres({ car, compound }: { car: CarDetail | null; compound: string | null }) {
-  const surface = car?.tyre_surface_c ?? null;
-  const wear = car?.tyre_wear_pct ?? null;
-  const brakes = car?.brake_c ?? null;
-  const at = (v: PerWheel | null, i: number) => (v ? v[i]! : null);
-  return (
-    <div className="tyres" aria-label="Tyres">
-      <div className="tyres__car" aria-hidden="true">
-        <span className="tyres__body" />
-      </div>
-      {CORNERS.map((name, i) => {
-        const temp = at(surface, i);
-        const w = at(wear, i);
-        return (
-          <div key={name} className={`tyre2 tyre2--${i} band--${tyreTempBand(temp)}`} aria-label={name}>
-            <span className="tyre2__temp">{temp ? `${temp}°` : "–"}</span>
-            <span className="tyre2__wear">{w == null ? "" : `${Math.round(w)}%`}</span>
-            {brakes && <span className="tyre2__brake">{at(brakes, i)}°</span>}
-          </div>
-        );
-      })}
-      <span className="tyres__compound micro">{compound ?? ""}</span>
-    </div>
-  );
-}
-
 // ---- G-force circle --------------------------------------------------------------------------
 
 const G_MAX = 5;
 
-export function GForce({ lat, long }: { lat: number | null; long: number | null }) {
+function gPoint(lat: number, long: number): [number, number] {
+  return [
+    60 + (Math.max(-G_MAX, Math.min(G_MAX, lat)) / G_MAX) * 50,
+    60 - (Math.max(-G_MAX, Math.min(G_MAX, long)) / G_MAX) * 50,
+  ];
+}
+
+/** Friction circle: the current g as a dot, with a fading trail of the last couple of seconds. */
+export function GForce({ lat, long, trail = [] }: { lat: number | null; long: number | null;
+                                                   trail?: [number, number][] }) {
   const has = lat != null && long != null;
-  const x = has ? 60 + (Math.max(-G_MAX, Math.min(G_MAX, lat!)) / G_MAX) * 50 : 60;
-  const y = has ? 60 - (Math.max(-G_MAX, Math.min(G_MAX, long!)) / G_MAX) * 50 : 60;
+  const [x, y] = has ? gPoint(lat!, long!) : [60, 60];
   const total = has ? Math.hypot(lat!, long!) : null;
+  const points = trail.map(([a, b]) => gPoint(a, b));
   return (
     <div className="gforce">
       <svg viewBox="0 0 120 120" role="img" aria-label={total == null ? "g-force unknown" : `${total.toFixed(1)} g`}>
@@ -140,6 +121,13 @@ export function GForce({ lat, long }: { lat: number | null; long: number | null 
         ))}
         <line x1="10" y1="60" x2="110" y2="60" className="gforce__axis" />
         <line x1="60" y1="10" x2="60" y2="110" className="gforce__axis" />
+        {points.slice(1).map(([px, py], i) => {
+          const [qx, qy] = points[i]!;
+          return (
+            <line key={i} x1={qx} y1={qy} x2={px} y2={py} className="gforce__trail"
+                  style={{ opacity: ((i + 1) / points.length) * 0.85 }} />
+          );
+        })}
         {has && <circle cx={x} cy={y} r="6" className="gforce__dot" />}
       </svg>
       <span className="gforce__value">{total == null ? "–" : `${total.toFixed(1)} g`}</span>

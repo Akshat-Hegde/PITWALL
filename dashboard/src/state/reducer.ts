@@ -24,6 +24,8 @@ export interface DashboardState {
   frameHz: number;
   /** Where games send telemetry, from the hub (for the waiting screen). */
   telemetryTarget: { address: string | null; port: number };
+  /** Lock-to-lock rotation of the steering wheel graphic, degrees. */
+  steeringRotationDeg: number;
   status: HubStatus | null;
   rigs: RigInfo[];
   frames: Record<string, RigFrame>;
@@ -45,6 +47,7 @@ export function initialState(source: DashboardState["source"]): DashboardState {
     cafe: { name: "", branding: {} },
     frameHz: 15,
     telemetryTarget: { address: null, port: 20777 },
+    steeringRotationDeg: 360,
     status: null,
     rigs: [],
     frames: {},
@@ -93,6 +96,7 @@ export function applyMessage(state: DashboardState, msg: HubMessage, now: number
         cafe: msg.cafe,
         frameHz: msg.hub.frame_hz,
         telemetryTarget: { address: msg.hub.lan_address ?? null, port: msg.hub.udp_port ?? 20777 },
+        steeringRotationDeg: msg.hub.steering_rotation_deg ?? 360,
         status: msg.status,
         rigs: msg.rigs,
         frames: framesById(msg.frame.rigs),

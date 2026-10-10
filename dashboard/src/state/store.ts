@@ -5,6 +5,9 @@ import { LapShareTracker } from "./lapshare";
 import { PathTrace } from "./paths";
 import { TrailBuffer } from "./trails";
 
+/** Friction-circle trail length: about 2 s at 15 frames per second. */
+export const G_TRAIL_SAMPLES = 30;
+
 /** Holds dashboard state for React and the position trails for the map canvas. */
 export class DashboardStore {
   private state: DashboardState;
@@ -12,6 +15,8 @@ export class DashboardStore {
   readonly trails = new TrailBuffer();
   readonly paths = new PathTrace();
   readonly lapShare = new LapShareTracker();
+  /** Recent (lateral, longitudinal) g per rig, newest last: the friction-circle trail. */
+  readonly gTrail = new Map<string, [number, number][]>();
 
   constructor(source: DashboardState["source"]) {
     this.state = initialState(source);
@@ -29,6 +34,7 @@ export class DashboardStore {
       this.trails.clear();
       this.paths.clear();
       this.lapShare.clear();
+      this.gTrail.clear();
     }
     if (msg.type === "session_changed") this.trails.clear(msg.rig_id);
     this.state = applyMessage(this.state, msg, now);
@@ -40,6 +46,7 @@ export class DashboardStore {
       const frames = msg.type === "snapshot" ? msg.frame.rigs : msg.rigs;
       for (const frame of frames) {
         this.lapShare.add(frame);
+        this.addG(frame.rig_id, frame.state === "driving" ? frame.car ?? null : null);
         if (!frame.position) continue;
         this.trails.add(frame.rig_id, now, frame.position.x, frame.position.z);
         if (frame.session.track_key) {
@@ -48,6 +55,17 @@ export class DashboardStore {
       }
     }
     this.emit();
+  }
+
+  private addG(rigId: string, car: { g_lat: number | null; g_long: number | null } | null): void {
+    const trail = this.gTrail.get(rigId) ?? [];
+    if (car?.g_lat == null || car.g_long == null) {
+      if (trail.length) this.gTrail.set(rigId, []);
+      return;
+    }
+    trail.push([car.g_lat, car.g_long]);
+    if (trail.length > G_TRAIL_SAMPLES) trail.splice(0, trail.length - G_TRAIL_SAMPLES);
+    this.gTrail.set(rigId, trail);
   }
 
   setLink(link: LinkState): void {

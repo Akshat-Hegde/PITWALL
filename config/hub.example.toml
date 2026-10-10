@@ -32,6 +32,7 @@ no_data_after_s = 5                    # nothing received -> "no data"
 
 [dashboard]
 frame_hz = 15                          # WebSocket updates per second (10-20)
+steering_wheel_rotation_deg = 360       # lock-to-lock rotation of the TV's wheel graphic
 # directory = "dashboard/dist"         # built dashboard; default <project>/dashboard/dist
 
 [staff]

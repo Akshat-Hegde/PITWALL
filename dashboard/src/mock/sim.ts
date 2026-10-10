@@ -100,6 +100,9 @@ interface RigSim {
   tyreAge: number;
   speed: number; // m/s, smoothed
   prevSpeed: number;
+  saves: number;
+  savedLap: number;
+  lastSaveAt: number | null;
 }
 
 class Rng {
@@ -220,6 +223,9 @@ export class MockHub {
       tyreAge: 0,
       speed: 30,
       prevSpeed: 30,
+      saves: 0,
+      savedLap: 0,
+      lastSaveAt: null,
     };
   }
 
@@ -232,7 +238,7 @@ export class MockHub {
     return {
       ...this.envelope("snapshot"),
       hub: { version: "mock", games: ["F1"], frame_hz: this.options.frameHz, udp_port: 20777,
-             lan_address: "192.168.1.10" },
+             lan_address: "192.168.1.10", steering_rotation_deg: 360 },
       cafe: { name: "Sim Racing Cafe", branding: {} },
       status: this.status(),
       rigs: this.rigs.map((r) => r.spec.info),
@@ -528,10 +534,32 @@ export class MockHub {
         number, number, number, number],
       brake_c: [braking ? 780 : 420, braking ? 790 : 430, braking ? 610 : 360, braking ? 620 : 370] as [
         number, number, number, number],
-      damage: { front_wing_left: 0, front_wing_right: 0, rear_wing: 0, floor: 0, diffuser: 0, sidepod: 0,
-        gearbox: 0, engine: 0 },
+      damage: { front_wing_left: rig.lapNumber >= 3 ? 18 : 0, front_wing_right: 0, rear_wing: 0,
+        floor: rig.lapNumber >= 3 ? 6 : 0, diffuser: 0, sidepod: 0, gearbox: 0, engine: 0 },
+      ...this.slide(rig, lapFraction),
       top_speed_lap_kph: Math.round(Math.max(kph, 300 * rig.lapPace)),
       top_speed_kph: Math.round(318 * rig.spec.pace),
+    };
+  }
+
+  /** A slide through 30-36% of every lap: peak ~24 degrees, caught (a "save"). */
+  private slide(rig: RigSim, lapFraction: number) {
+    const from = 0.3;
+    const to = 0.36;
+    let slide = Math.sin(rig.distance / 90) * 2;
+    if (lapFraction > from && lapFraction < to) {
+      slide = Math.sin(((lapFraction - from) / (to - from)) * Math.PI) * 24;
+    }
+    if (lapFraction >= to && rig.savedLap !== rig.lapNumber) {
+      rig.savedLap = rig.lapNumber;
+      rig.saves += 1;
+      rig.lastSaveAt = this.clock();
+    }
+    return {
+      slide_deg: Math.round(slide * 10) / 10,
+      saves: rig.saves,
+      last_save_at: rig.lastSaveAt,
+      last_save_peak_deg: rig.saves > 0 ? 24 : null,
     };
   }
 

@@ -1,6 +1,7 @@
 import type { Display } from "../map/geometry";
 import type { DashboardState } from "../state/reducer";
 import type { DashboardStore } from "../state/store";
+import { BattleCard, findBattle } from "./BattleCard";
 import { CarPanels } from "./CarPanel";
 import { LeaderboardPanel } from "./LeaderboardPanel";
 import { PodiumRow } from "./PodiumRow";
@@ -52,8 +53,9 @@ function MapCard({ store, state, trackKey, mapDisplay }: Omit<RaceProps, "sessio
   const name = session?.track_name ?? state.leaderboards.today?.track_name ?? null;
   const length = session?.track_length_m ? `${(session.track_length_m / 1000).toFixed(3)} km` : null;
   const hasOutline = trackKey ? Boolean(state.outlines[trackKey]) : false;
+  const battle = findBattle(state, trackKey);
   return (
-    <section className="mapcard" aria-label="Track map">
+    <section className={`mapcard${battle ? " mapcard--battle" : ""}`} aria-label="Track map">
       <TrackMap store={store} state={state} trackKey={trackKey} displayOverride={mapDisplay} />
       {name && (
         <header className="mapcard__head">
@@ -64,6 +66,7 @@ function MapCard({ store, state, trackKey, mapDisplay }: Omit<RaceProps, "sessio
           </span>
         </header>
       )}
+      {battle && <BattleCard battle={battle} />}
       {hasOutline && (
         <ul className="mapcard__legend" aria-label="Sectors">
           <li className="legend legend--s1">Sector 1</li>
