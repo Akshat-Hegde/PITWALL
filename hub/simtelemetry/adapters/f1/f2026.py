@@ -193,6 +193,9 @@ PacketCarStatusData = Layout("PacketCarStatusData", [
     (CarStatusData, "m_carStatusData", MAX_CARS),
 ])
 
+# --- Motion Ex (13): unchanged (player car only, no per-car array) ------------
+PacketMotionExData = f2025.PacketMotionExData
+
 # --- Car Damage (10): per-car struct unchanged, array is 24 --------------------
 CarDamageData = f2025.CarDamageData
 

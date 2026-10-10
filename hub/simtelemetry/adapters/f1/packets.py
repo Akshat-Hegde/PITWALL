@@ -144,6 +144,20 @@ class CarStatus:
 
 
 @dataclass(frozen=True, slots=True)
+class MotionEx:
+    """Extra motion data, player car only. Per-wheel tuples are RL, RR, FL, FR."""
+
+    header: PacketHeader
+    chassis_yaw: float                                   # radians, chassis vs direction of travel
+    chassis_pitch: float
+    front_wheels_angle: float                            # radians
+    wheel_slip_ratio: tuple[float, float, float, float]
+    wheel_slip_angle: tuple[float, float, float, float]
+    local_velocity: tuple[float, float, float]           # m/s, car frame
+    angular_velocity: tuple[float, float, float]         # rad/s
+
+
+@dataclass(frozen=True, slots=True)
 class CarDamage:
     header: PacketHeader
     tyres_wear: tuple[float, float, float, float]       # RL, RR, FL, FR (percentage)
@@ -233,4 +247,4 @@ class NoPlayerCar:
 
 
 Decoded = (Motion | Session | LapData | Event | Participant | CarTelemetry | CarStatus | CarDamage | SessionHistory
-           | TimeTrial)
+           | TimeTrial | MotionEx)

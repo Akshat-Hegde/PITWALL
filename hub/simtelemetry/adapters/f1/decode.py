@@ -15,6 +15,7 @@ from .header import PacketHeader
 from .layout import Layout
 from .packets import (
     CarDamage,
+    MotionEx,
     CarStatus,
     CarTelemetry,
     Decoded,
@@ -252,6 +253,20 @@ def _decode_car_status(header: PacketHeader, data: Buffer, layouts: FormatLayout
     )
 
 
+def _decode_motion_ex(header: PacketHeader, data: Buffer, layouts: FormatLayouts) -> MotionEx:
+    m = layouts.packets[PacketId.MOTION_EX].unpack_from(data)
+    return MotionEx(
+        header=header,
+        chassis_yaw=m["m_chassisYaw"],
+        chassis_pitch=m["m_chassisPitch"],
+        front_wheels_angle=m["m_frontWheelsAngle"],
+        wheel_slip_ratio=m["m_wheelSlipRatio"],
+        wheel_slip_angle=m["m_wheelSlipAngle"],
+        local_velocity=(m["m_localVelocityX"], m["m_localVelocityY"], m["m_localVelocityZ"]),
+        angular_velocity=(m["m_angularVelocityX"], m["m_angularVelocityY"], m["m_angularVelocityZ"]),
+    )
+
+
 def _decode_car_damage(header: PacketHeader, data: Buffer, layouts: FormatLayouts) -> CarDamage | NoPlayerCar:
     idx = player_index(header, layouts)
     if idx is None:
@@ -356,6 +371,7 @@ _HANDLERS: dict[PacketId, Callable[[PacketHeader, Buffer, FormatLayouts], Any]] 
     PacketId.CAR_TELEMETRY: _decode_car_telemetry,
     PacketId.CAR_STATUS: _decode_car_status,
     PacketId.CAR_DAMAGE: _decode_car_damage,
+    PacketId.MOTION_EX: _decode_motion_ex,
     PacketId.SESSION_HISTORY: _decode_session_history,
     PacketId.TIME_TRIAL: _decode_time_trial,
 }

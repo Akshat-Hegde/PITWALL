@@ -77,6 +77,8 @@ class LeaderboardConfig(_Section):
 
 class DashboardConfig(_Section):
     frame_hz: float = Field(15.0, ge=10, le=20)  # WebSocket frame rate (docs/WS_SCHEMA.md)
+    # Total lock-to-lock rotation of the steering wheel graphic (game steer -1..1 maps to +-half of this).
+    steering_wheel_rotation_deg: float = Field(360.0, gt=0, le=1080)
     # Built dashboard files; default <project>/dashboard/dist (run `npm run build` in dashboard/).
     directory: Path | None = None
 

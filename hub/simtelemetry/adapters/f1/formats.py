@@ -42,6 +42,7 @@ def _build(module: ModuleType, packet_format: int, gforce_divisor: float | None)
             PacketId.CAR_TELEMETRY: module.PacketCarTelemetryData,
             PacketId.CAR_STATUS: module.PacketCarStatusData,
             PacketId.CAR_DAMAGE: module.PacketCarDamageData,
+            PacketId.MOTION_EX: module.PacketMotionExData,
             PacketId.SESSION_HISTORY: module.PacketSessionHistoryData,
             PacketId.TIME_TRIAL: module.PacketTimeTrialData,
         },

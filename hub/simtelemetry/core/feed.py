@@ -76,6 +76,10 @@ def car_detail(s, driving: bool) -> dict[str, Any]:
         "damage": s.damage,
         "top_speed_lap_kph": s.top_speed_lap_kph,
         "top_speed_kph": s.top_speed_kph,
+        "slide_deg": live(s.slide_deg),
+        "saves": s.saves,
+        "last_save_at": s.last_save_at_ms,
+        "last_save_peak_deg": s.last_save_peak_deg,
     }
 
 
@@ -250,7 +254,8 @@ class FeedBuilder:
         frame = self.frame_body(now)
         return {
             "hub": {"version": __version__, "games": [self.hub.adapter.game], "frame_hz": self.frame_hz,
-                    "udp_port": self.hub.config.network.udp_port, "lan_address": lan_address()},
+                    "udp_port": self.hub.config.network.udp_port, "lan_address": lan_address(),
+                    "steering_rotation_deg": self.hub.config.dashboard.steering_wheel_rotation_deg},
             "cafe": {"name": cafe.name, "branding": dict(cafe.branding)},
             "status": self.status(now),
             "rigs": self.rig_infos(),

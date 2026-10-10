@@ -402,6 +402,39 @@ PacketSessionHistoryData = Layout("PacketSessionHistoryData", [
     (TyreStintHistoryData, "m_tyreStintsHistoryData", MAX_TYRE_STINTS),
 ])
 
+# --- Motion Ex (13): player car only --------------------------------------------
+PacketMotionExData = Layout("PacketMotionExData", [
+    (PacketHeader, "m_header"),
+    ("float", "m_suspensionPosition", 4),
+    ("float", "m_suspensionVelocity", 4),
+    ("float", "m_suspensionAcceleration", 4),
+    ("float", "m_wheelSpeed", 4),
+    ("float", "m_wheelSlipRatio", 4),
+    ("float", "m_wheelSlipAngle", 4),
+    ("float", "m_wheelLatForce", 4),
+    ("float", "m_wheelLongForce", 4),
+    ("float", "m_heightOfCOGAboveGround"),
+    ("float", "m_localVelocityX"),
+    ("float", "m_localVelocityY"),
+    ("float", "m_localVelocityZ"),
+    ("float", "m_angularVelocityX"),
+    ("float", "m_angularVelocityY"),
+    ("float", "m_angularVelocityZ"),
+    ("float", "m_angularAccelerationX"),
+    ("float", "m_angularAccelerationY"),
+    ("float", "m_angularAccelerationZ"),
+    ("float", "m_frontWheelsAngle"),
+    ("float", "m_wheelVertForce", 4),
+    ("float", "m_frontAeroHeight"),
+    ("float", "m_rearAeroHeight"),
+    ("float", "m_frontRollAngle"),
+    ("float", "m_rearRollAngle"),
+    ("float", "m_chassisYaw"),
+    ("float", "m_chassisPitch"),
+    ("float", "m_wheelCamber", 4),
+    ("float", "m_wheelCamberGain", 4),
+])
+
 # --- Time Trial (14) ----------------------------------------------------------
 TimeTrialDataSet = Layout("TimeTrialDataSet", [
     ("uint8", "m_carIdx"),

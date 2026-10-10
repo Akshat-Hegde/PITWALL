@@ -9,7 +9,11 @@ from ...core.laps import LiveLap
 from .appendix import session_type_name, track_name
 from .decode import decode
 from .laps import F1LapTracker
-from .packets import CarDamage, CarStatus, CarTelemetry, LapData, Motion, Participant, Session
+import math
+import time
+
+from ...core.slides import SlideDetector
+from .packets import CarDamage, CarStatus, CarTelemetry, LapData, Motion, MotionEx, Participant, Session
 from .sizes import SUPPORTED_FORMATS, PacketId
 from .tyres import Compound, TyreCompound
 from .validate import Accepted, PacketGate
@@ -44,6 +48,7 @@ class F1Adapter:
         self._live: dict[str, LiveSummary] = {}
         self._session_of: dict[str, str | None] = {}
         self._laps: dict[str, F1LapTracker] = {}
+        self._slides: dict[str, SlideDetector] = {}
 
     def check(self, data: bytes, source: str) -> Checked:
         result = self._gate.check(data, source)
@@ -59,6 +64,7 @@ class F1Adapter:
         packet = decode(checked.payload, data)
         if self._session_of.get(source, checked.session_id) != checked.session_id:
             self._live.pop(source, None)  # new game session: nothing from the old one carries over
+            self._slides.pop(source, None)
         self._session_of[source] = checked.session_id
         live = self._live.setdefault(source, LiveSummary())
         result = DecodeResult()
@@ -114,6 +120,14 @@ class F1Adapter:
             live.fuel_kg = round(packet.fuel_in_tank, 2)
             live.fuel_laps = round(packet.fuel_remaining_laps, 2)
             live.pit_limiter = packet.pit_limiter
+        elif isinstance(packet, MotionEx):
+            live.slide_deg = round(math.degrees(packet.chassis_yaw), 1)
+            save = self._slides.setdefault(source, SlideDetector()).update(
+                packet.header.session_time, live.slide_deg, live.speed_kph)
+            if save is not None:
+                live.saves += 1
+                live.last_save_at_ms = round(time.time() * 1000)
+                live.last_save_peak_deg = save.peak_deg
         elif isinstance(packet, CarDamage):
             live.tyre_wear_pct = wheels(tuple(round(w, 1) for w in packet.tyres_wear))
             live.damage = {

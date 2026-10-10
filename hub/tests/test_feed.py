@@ -129,6 +129,7 @@ async def test_driving_rig_frame(tmp_path):
             "tyre_surface_c": [97, 98, 91, 92], "tyre_inner_c": [103, 104, 101, 102],   # FL, FR, RL, RR
             "tyre_pressure_psi": [23.1, 23.2, 21.5, 21.6], "tyre_wear_pct": None, "brake_c": [610, 620, 510, 520],
             "damage": None, "top_speed_lap_kph": 287, "top_speed_kph": 287,
+            "slide_deg": None, "saves": 0, "last_save_at": None, "last_save_peak_deg": None,
         },
     }
 

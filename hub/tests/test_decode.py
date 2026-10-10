@@ -398,9 +398,31 @@ def test_time_trial(fmt):
 
 # --- Ignored packets ---------------------------------------------------------------
 
-@pytest.mark.parametrize("fmt,pid", [(2025, 5), (2025, 15), (2026, 13), (2026, 16)])
+@pytest.mark.parametrize("fmt,pid", [(2025, 5), (2025, 15), (2026, 12), (2026, 16)])
 def test_ignored_packets_decode_to_none(fmt, pid):
     assert decode_packet(blank_packet(fmt, pid)) is None
+
+
+# --- Motion Ex (13) ---------------------------------------------------------------
+
+@BOTH
+def test_motion_ex(fmt):
+    pkt = blank_packet(fmt, 13, player=3)
+    # 8 x float[4] = 128 bytes, then COG height, local velocity x/y/z, angular velocity x/y/z,
+    # angular acceleration x/y/z, front wheels angle, float[4] vertical forces, front/rear aero height,
+    # front/rear roll angle, chassis yaw, chassis pitch ...
+    base = HDR
+    struct.pack_into("<4f", pkt, base + 4 * 16, 0.05, 0.06, 0.01, 0.02)      # wheel slip ratio
+    struct.pack_into("<4f", pkt, base + 5 * 16, 0.10, 0.11, 0.12, 0.13)      # wheel slip angle
+    struct.pack_into("<f3f3f", pkt, base + 128, 0.3, 1.0, 2.0, 70.0, 0.1, 0.2, 0.3)
+    struct.pack_into("<f", pkt, base + 128 + 40, 0.15)                        # front wheels angle
+    struct.pack_into("<2f", pkt, base + 128 + 44 + 16 + 16, -0.2, 0.01)       # chassis yaw, pitch
+    m = decode_packet(pkt)
+    assert m.chassis_yaw == pytest.approx(-0.2) and m.chassis_pitch == pytest.approx(0.01)
+    assert m.front_wheels_angle == pytest.approx(0.15)
+    assert m.wheel_slip_ratio == pytest.approx((0.05, 0.06, 0.01, 0.02))
+    assert m.local_velocity == pytest.approx((1.0, 2.0, 70.0))
+    assert m.angular_velocity == pytest.approx((0.1, 0.2, 0.3))
 
 
 # --- Car Damage (10) ---------------------------------------------------------------

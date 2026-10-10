@@ -79,6 +79,10 @@ class LiveSummary:
     top_speed_lap_kph: int | None = None
     top_speed_kph: int | None = None   # this session
     top_speed_lap_number: int | None = None
+    slide_deg: float | None = None     # how sideways the car is: chassis vs direction of travel
+    saves: int = 0                     # slides caught this session ("SAVE!")
+    last_save_at_ms: int | None = None # Unix ms
+    last_save_peak_deg: float | None = None
 
 
 class GameAdapter(Protocol):
