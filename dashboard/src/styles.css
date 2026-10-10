@@ -2383,6 +2383,95 @@ ul {
   font-size: 1.4rem;
 }
 
+/* ==== Racing textures: subtle, CSS only ======================================================== */
+
+/* Carbon-fibre weave on the page */
+body {
+  background-color: #000;
+  background-image:
+    linear-gradient(45deg, rgba(255, 255, 255, 0.018) 25%, transparent 25%, transparent 75%,
+      rgba(255, 255, 255, 0.018) 75%),
+    linear-gradient(45deg, rgba(255, 255, 255, 0.018) 25%, transparent 25%, transparent 75%,
+      rgba(255, 255, 255, 0.018) 75%),
+    linear-gradient(-45deg, rgba(255, 255, 255, 0.012) 25%, transparent 25%, transparent 75%,
+      rgba(255, 255, 255, 0.012) 75%);
+  background-size: 6px 6px, 6px 6px, 6px 6px;
+  background-position: 0 0, 3px 3px, 0 0;
+}
+
+/* Map card: chequered flag fading out of the top-right corner, faint speed lines */
+.mapcard::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    repeating-conic-gradient(rgba(255, 255, 255, 0.07) 0 25%, transparent 0 50%) 0 0 / 2.2rem 2.2rem,
+    repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 22px);
+  -webkit-mask-image: radial-gradient(ellipse 38% 45% at 100% 0%, #000 0%, transparent 100%),
+    linear-gradient(200deg, rgba(0, 0, 0, 0.55) 0%, transparent 45%);
+  mask-image: radial-gradient(ellipse 38% 45% at 100% 0%, #000 0%, transparent 100%),
+    linear-gradient(200deg, rgba(0, 0, 0, 0.55) 0%, transparent 45%);
+}
+
+.mapcard .track-map,
+.mapcard__head,
+.mapcard__legend {
+  z-index: 1;
+}
+
+.mapcard .track-map {
+  background: radial-gradient(ellipse at 55% 52%, rgba(13, 13, 18, 0.9), rgba(0, 0, 0, 0.35) 70%);
+}
+
+/* Podium cards: angled speed stripes fading in on the right */
+.pod::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.05) 0 2px, transparent 2px 9px);
+  -webkit-mask-image: linear-gradient(90deg, transparent 45%, #000 100%);
+  mask-image: linear-gradient(90deg, transparent 45%, #000 100%);
+}
+
+.pod > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Car panel header: livery-style hatching in the rig colour */
+.panel2__head {
+  background:
+    repeating-linear-gradient(120deg, color-mix(in srgb, var(--rig-colour) 18%, transparent) 0 1px,
+      transparent 1px 7px),
+    linear-gradient(90deg, color-mix(in srgb, var(--rig-colour) 32%, #000) 0%, transparent 72%);
+  background-blend-mode: normal;
+}
+
+/* Brand block: a thin chequered strip along its bottom edge */
+.statusbar__brand {
+  position: relative;
+}
+
+.statusbar__brand::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 0.3rem;
+  background: repeating-conic-gradient(#fff 0 25%, #000 0 50%) 0 0 / 0.3rem 0.3rem;
+  opacity: 0.85;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .mapcard::after,
+  .pod::after {
+    display: none;
+  }
+}
+
 /* ---- Small screens: stack and scroll (a phone or a laptop window, not the TV) ------------- */
 
 @media (max-width: 900px) {
