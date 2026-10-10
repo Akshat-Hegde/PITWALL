@@ -1,121 +1,130 @@
-# Test plan: end-to-end test on 2 devices
+# Test plan: end-to-end test with 2 PCs, 2 copies of F1 25
 
-Goal: run the whole system against the real game once, end to end. That means telemetry in, laps and
-sectors, the TV dashboard, leaderboards that survive a restart, and the lap-tracking assumptions in
-[LAP_ASSUMPTIONS.md](LAP_ASSUMPTIONS.md). Work through the sections in order and tick each box. Note anything
-unexpected next to the box; that note matters more than the tick.
+Goal: run the whole system against the real game once, end to end, with two real rigs: telemetry in from
+both, laps and sectors, head-to-head, the TV dashboard, driver names, leaderboards that survive a restart,
+and the lap-tracking assumptions in [LAP_ASSUMPTIONS.md](LAP_ASSUMPTIONS.md). Work through the parts in
+order and tick each box. Note anything unexpected next to the box; that note matters more than the tick.
 
-**The two devices**
+**Setup**
 
-- **Rig PC:** F1 25 (the one licensed copy).
-- **Hub PC:** runs the hub, with the TV connected to it (or a browser on another screen showing the
-  dashboard).
+| Device | Role |
+|---|---|
+| **Hub PC** | Runs the hub **and** F1 25 as **Rig 1** (sends telemetry to `127.0.0.1`). |
+| **Second PC** | F1 25 as **Rig 2** (sends telemetry to the hub PC over the LAN). |
+| **Dashboard screen** | A phone, tablet or laptop browser, or a TV / second monitor. Both games run full screen, so a separate device is easiest. |
 
-A second rig is simulated in section 7 by replaying your own recording as "Rig 2".
+Two people drive: **Driver 1** on the hub PC, **Driver 2** on the second PC.
 
-**What you send back afterwards:** the recording(s) from `data\recordings\`, the lap debug log(s) from
-`data\logs\lap-debug-*.log`, this checklist with notes, and the filled-in results table at the end of
-[LAP_ASSUMPTIONS.md](LAP_ASSUMPTIONS.md).
+**What you send back afterwards:** the recording(s) from `data\recordings\`, the logs from `data\logs\`
+(`lap-debug-*.log` and `hub.log`), this checklist with notes, both drivers' in-game lap times, and (if you
+can) the filled-in results table at the end of [LAP_ASSUMPTIONS.md](LAP_ASSUMPTIONS.md).
 
 ---
 
-## 0. Before you start (hub PC)
+## Part A: Prepare the hub PC (once)
 
-- [ ] Project installed: `python -m venv .venv`, then `.venv\Scripts\python -m pip install -e ".[dev]"`.
-- [ ] Tests pass: `.venv\Scripts\python -m pytest`.
-- [ ] Dashboard built (needs Node.js 20+), once:
+Open PowerShell in the project folder (`cd "X:\SIM TELEMETRY APP"`).
+
+- [ ] Install and test:
+      ```powershell
+      .venv\Scripts\python -m pip install -e ".[dev]"
+      .venv\Scripts\python -m pytest
+      ```
+      The last line says about `408 passed`. If anything fails, stop and send the output.
+- [ ] Build the dashboard (needs Node.js 20+):
       ```powershell
       cd dashboard
       npm install
       npm run build
       cd ..
       ```
-- [ ] Config: copy `config\hub.example.toml` to `config\hub.toml`. Set `[cafe] name` if you like; leave
-      `[map]` as it is for now (section 4 finds the right values).
-- [ ] **Free space:** at least 10 GB free on the drive with `data\` (recordings use ~0.75 GB per rig per hour),
-      and some free on C:. PowerShell: `Get-PSDrive -PSProvider FileSystem` (`Free` column). To put
-      recordings on another drive, set `[recorder] directory` in `config\hub.toml`. The hub warns below 5 GB
-      and stops recording below 1 GB (`recording stopped: low disk`) but keeps running.
-- [ ] **Fresh start:** if a `data\` folder exists from earlier experiments, rename it (e.g. `data-old`) so
-      the leaderboards and rig names start empty.
-- [ ] IP addresses (`ipconfig`): Hub PC `__________` Rig PC `__________`
+- [ ] Config: `Copy-Item config\hub.example.toml config\hub.toml`, then `notepad config\hub.toml`. Set
+      `[cafe] name` if you like. Leave `[map]` and `[staff] pin` as they are for now.
+- [ ] Free space: `Get-PSDrive -PSProvider FileSystem`. At least 10 GB free on the drive with `data\`
+      (recording uses about 0.75 GB per rig per hour), and some free on C:.
+- [ ] Fresh start: if a `data\` folder exists from earlier experiments, rename it (e.g. `data-old`).
+- [ ] Hub PC IP address: `ipconfig` → **IPv4 Address** of the Ethernet/Wi-Fi adapter: `__________`
+- [ ] Second PC IP address (`ipconfig` on that PC): `__________`
 
-## 1. Network and firewall (hub PC)
+**Network and firewall.** Right-click Start → **Terminal (Admin)**:
 
-- [ ] Network profile is **Private**: Settings → Network & internet → (Ethernet / Wi-Fi) → Network profile
-      type. Or PowerShell: `Get-NetConnectionProfile` (NetworkCategory). To change it (Administrator):
-      `Set-NetConnectionProfile -InterfaceAlias "Ethernet" -NetworkCategory Private`.
-- [ ] Inbound rules (Administrator Command Prompt or PowerShell):
-      ```bat
+- [ ] `Get-NetConnectionProfile`. If `NetworkCategory` is **Public**:
+      `Set-NetConnectionProfile -InterfaceAlias "<InterfaceAlias shown>" -NetworkCategory Private`
+- [ ] Allow telemetry from the second PC and the dashboard from other devices:
+      ```powershell
       netsh advfirewall firewall add rule name="Sim Telemetry UDP 20777" dir=in action=allow protocol=UDP localport=20777 profile=private
       netsh advfirewall firewall add rule name="Sim Telemetry HTTP 8000" dir=in action=allow protocol=TCP localport=8000 profile=private
       ```
-      (TCP 8000 is only needed if the dashboard is opened from another device.)
-- [ ] If Windows asks *"Windows Defender Firewall has blocked some features of Python"* on the first run:
-      tick **Private networks** only and allow. The port rules above work either way. (The hub PC's Python
-      is the Microsoft Store build, whose program rules are unreliable; that's why the plan uses port rules.)
+- [ ] If Windows asks *"Windows Defender Firewall has blocked some features of Python"* on the first hub
+      start: tick **Private networks** only and allow. (The hub PC's Python is the Microsoft Store build,
+      whose program rules are unreliable; the port rules above are what matters.)
+- [ ] Both PCs on the same router/network (not a guest Wi-Fi), no VPN running on either.
 
-## 2. Rig PC: game settings
+## Part B: Game settings on both PCs
 
-- [ ] F1 25 → Settings → Telemetry Settings, per [RIG_SETUP.md](RIG_SETUP.md): UDP Telemetry **On**, UDP IP
-      Address = **hub PC's IP**, Port **20777**, Send Rate **60 Hz** (or 30), UDP Format noted: `____`.
-- [ ] Time Trial, one track you know well. Track: `______________`
+F1 25 → Settings → **Telemetry Settings**:
 
-## 3. First contact: `listen`
+| Setting | Hub PC (Rig 1) | Second PC (Rig 2) |
+|---|---|---|
+| UDP Telemetry | On | On |
+| UDP Broadcast Mode | Off | Off |
+| UDP IP Address | **127.0.0.1** | **hub PC's IP** |
+| UDP Port | 20777 | 20777 |
+| UDP Send Rate | 60Hz | 60Hz |
+| UDP Format | **2025** | **2025** (must match) |
 
-On the hub PC: `.venv\Scripts\python -m simtelemetry listen --no-record`
+- [ ] Both settings done. Both go into **Time Trial on the same track**: `______________`
 
-- [ ] `New rig detected: <rig PC IP> -> Rig 1`, and `fmt=` matches the UDP Format above.
-- [ ] 10 s summary: `drops: none`. (`size_mismatch`, `unsupported_format` or `unknown_packet_id` is a
-      blocker: stop and record it.)
-- [ ] While driving: `Motion`, `LapData`, `CarTelemetry` close to the send rate; `Session` about 2/s.
-- [ ] State follows the game: `driving` on track, `in_menu_paused` in menus/paused, `no_data` 5 s after
-      quitting.
-- [ ] Driver name and track name are right; lap number, lap time and speed match the HUD.
+## Part C: Connection check
 
-Stop with **Ctrl+C**.
+On the hub PC: `.venv\Scripts\python -m simtelemetry listen --no-record`. Both drivers drive.
 
-## 4. The TV: views, map orientation, smoothness
+- [ ] `New rig detected: 127.0.0.1 (this PC) -> Rig 1` and `New rig detected: <second PC IP> -> Rig 2`.
+- [ ] Two status lines per second, both `fmt=2025`, both `driving` on track and `in_menu_paused` when paused.
+- [ ] The 10 s summary shows `drops: none` for both rigs, and no
+      `WARNING: rigs are sending different packet formats`.
+- [ ] Driver and track names are right; lap number, lap time and speed match each game's HUD.
 
-Start the hub the way the rest of the test runs it, **recording and with lap debug on**:
+If Rig 2 never appears: recheck its UDP IP Address, the UDP firewall rule, the network profile (Private),
+VPNs, and that both PCs are on the same network. `size_mismatch`, `unsupported_format` or
+`unknown_packet_id` drops are blockers: stop and send the output. Stop with **Ctrl+C**.
+
+## Part D: Main run, both rigs (keep it running through Part E)
 
 ```powershell
 .venv\Scripts\python -m simtelemetry run --record --lap-debug
 ```
 
 The log shows `Dashboard on http://localhost:8000/`, `Lap debug log: data\logs\lap-debug-...log` and
-`Recording raw packets to data\recordings\...f1rec`. Note both file names:
+`Recording raw packets to data\recordings\...f1rec` (one recording holds both rigs). Note both file names:
 `______________________` `______________________`
 
-Open `http://localhost:8000/` on the TV (or `http://<hub IP>:8000/` from another device), full screen (F11).
+On the dashboard screen, open `http://<hub PC IP>:8000/` (F11 for full screen).
 
-- [ ] **Status bar:** cafe name, `Rig 1  On track  F1 <format>  <track>`, `Live`. No warnings.
-- [ ] **Race view while driving:** the map shows your dot with a fading trail, and a faint line of the path
-      driven so far builds up the track shape. The timing strip row shows your name, tyre, a running lap
-      clock and speed/gear.
-- [ ] **Smoothness:** at normal viewing distance the dot glides without jumps or stutter. Notes:
+- [ ] **Status bar:** cafe name, Rig 1 and Rig 2 `On track` with `F1 2025` and the track, `Live`, no warnings.
+- [ ] **Timing strip:** two rows with each game's player name, tyre, running lap clock, speed and gear.
+- [ ] **Map:** two numbered dots in different colours with fading trails; a faint line of the path driven
+      builds up the track shape.
+- [ ] **Smoothness:** at normal viewing distance both dots glide without jumps or stutter. Notes:
       `______________________`
-- [ ] **Map orientation:** once a lap's shape is visible, compare it with the in-game track map. If it is
-      mirrored or rotated, reload with `?map=` until it matches. Try `?map=flipz`, `?map=flipx`,
+- [ ] **Map orientation:** after a full lap, compare the drawn shape with the in-game track map. If it is
+      mirrored or rotated, reload with `?map=` until it matches: `?map=flipz`, `?map=flipx`,
       `?map=flipx,flipz`, `?map=rot90`, `?map=flipz,rot90`, … (any of `flipx`, `flipz`, `rotN`; the active
       setting shows in orange on the map). **Matching value:** `______________`
-      Then put it in `config\hub.toml` under `[map]` (e.g. `?map=flipz,rot90` → `flip_z = true`,
-      `rotate_deg = 90`). It takes effect at the next hub start (section 6).
-- [ ] **Views:** press `2`: the leaderboard view (today / this week / all time). Press `1`: race view.
-      Press `0`: back to auto. `?view=board` and `?view=race` fix a view the same way.
-- [ ] **Attract mode:** go to the game's menu and wait. After about 10 s the TV shows `Attract mode` and
-      alternates between the leaderboard view (20 s) and the race view (10 s). Back on track, it returns to
-      the race view.
-- [ ] **Reconnect:** turn the TV device's network off for about 10 s and back on (skip this if the TV is
-      connected to the hub PC itself): `Reconnecting to hub`, then `Live` again, without a reload.
+- [ ] **Views:** on a keyboard, `2` = leaderboard view, `1` = race view, `0` = auto. On a phone use
+      `?view=board` / `?view=race` / no `view` for auto.
+- [ ] **Attract mode:** both drivers go to the menu. After about 10 s the screen shows `Attract mode` and
+      alternates the leaderboard view (20 s) and race view (10 s). Back on track, it returns to the race view.
+- [ ] **Reconnect** (if the screen is a separate device): turn its network off for ~10 s and back on:
+      `Reconnecting to hub`, then `Live` again, without a reload.
 
-## 5. Lap behaviour (keep the hub running from section 4)
+## Part E: Laps (both drivers, hub still running)
 
-Drive this sequence in Time Trial. Write down the in-game times and keep an eye on the hub window; every
-step lists the assumptions it checks. Afterwards, fill in the results table in
-[LAP_ASSUMPTIONS.md](LAP_ASSUMPTIONS.md) from the lap debug log (each assumption says what to look for).
+**Driver 1 (hub PC)** drives this sequence; every step lists the assumptions in
+[LAP_ASSUMPTIONS.md](LAP_ASSUMPTIONS.md) it checks. **Driver 2** drives an out lap, 4–5 clean laps and one
+cut lap at the same time. Both write down the in-game times.
 
-| # | Do this | Write down | Checks |
+| # | Driver 1 does this | Write down | Checks |
 |---|---|---|---|
 | 1 | Leave the garage and drive the out lap to the line. | — | A8, A13 |
 | 2 | Drive **3 clean timed laps**. | Lap time, S1, S2, S3 for each lap | A1, A2, A3, A4, A12, A15 |
@@ -126,89 +135,78 @@ step lists the assumptions it checks. Afterwards, fill in the results table in
 | 7 | Drive 2 more clean laps. | Times | A2, A7 |
 | 8 | Go to the menu for ~15 s, then back on track. | — | attract mode, state |
 
-While you drive, check on the TV:
+On the dashboard, check:
 
-- [ ] **Lap clock and sectors:** the clock matches the in-game timer, and S1 and S2 turn coloured as you
-      cross the sector lines. Purple = fastest on this track today (all rigs); green = your own best this
-      session; yellow = slower. Grey = the lap is invalid.
-- [ ] **Invalid lap:** the row shows `Invalid` and the clock is struck through from the moment of the cut.
-- [ ] **Last / Best:** after each lap, `Last` shows the lap time from the HUD, and `Best` your best valid lap
-      (purple when it's the fastest today, green otherwise).
-- [ ] **Track outline:** after the first clean lap the faint path is replaced by the solid track outline,
-      with the start/finish line and two sector marks in the right places.
-- [ ] **Leaderboard:** each clean lap that beats your best updates "Fastest today" and the leaderboard view.
-      The invalid lap and the out lap never appear.
+- [ ] **Lap clocks and sectors** match each game. S1 and S2 turn coloured at the sector lines:
+      purple = fastest of both rigs on this track today, green = that driver's own best this session,
+      yellow = slower; grey when the lap is invalid.
+- [ ] **Invalid laps** show `Invalid` with the clock struck through from the moment of the cut, and never
+      reach the leaderboard. Out laps never reach it either.
+- [ ] **Last / Best** after each lap match the game; `Best` is purple when it's the fastest lap today,
+      green otherwise. `PB` in the row shows that driver's best ever on this track.
+- [ ] **Track outline:** after the first clean lap from either rig, the faint path is replaced by the solid
+      track with the start/finish line and two sector marks in the right places.
+- [ ] **Head-to-head (Δ column):** once both rigs have a clean lap, each row shows the live gap to the other
+      rig's best lap at the same point on track: green when ahead, red when behind. It matches who is
+      actually quicker.
+- [ ] **Leaderboards** ("Fastest today" and the leaderboard view) list both drivers, fastest first, with
+      correct gaps.
 - [ ] **Hub window:** with `--lap-debug`, each line crossing logs `lap_started`, `session_history_update`
-      and `lap_completed ... source=session_history`. Note any `lap_data_fallback` or `lap_retracted` lines.
+      and `lap_completed ... source=session_history` for that rig. Note any `lap_data_fallback` or
+      `lap_retracted` lines.
 
-## 5b. Driver names (staff page), hub still running
+**Driver names (staff page).** On the dashboard device (or a phone), open `http://<hub PC IP>:8000/staff`.
 
-Use a phone or tablet on the same network (or the hub PC): open `http://<hub IP>:8000/staff`.
+- [ ] Both rigs are listed with "Laps saved as <game name> (name from the game)".
+- [ ] Set a name for Rig 2 and **Save driver**: within a second the dashboard shows it. Driver 2's next lap
+      is saved under that name; their earlier laps keep the game name.
+- [ ] **End session**: the name goes back to the game's name, and the next lap is saved under it.
+- [ ] If both games use the same generic player name, laps from both rigs merge into one leaderboard entry
+      until names are set on `/staff`. Note whether that happened (A14).
 
-- [ ] The page lists Rig 1 with its state and "Laps saved as <game name> (name from the game)".
-- [ ] Enter a driver name (and optionally a phone/email) and **Save driver**: within a second the TV shows
-      that name in the timing strip.
-- [ ] Drive one clean lap: it appears on the leaderboards under the new name; the laps from section 5 keep
-      the game name. The strip row shows `PB` with that driver's best on this track.
-- [ ] **End session**: the TV goes back to the game's name; the next lap is saved under it.
-- [ ] Optional PIN: stop the hub, set `[staff] pin = "1234"` in `config\hub.toml`, start it again (this can
-      be combined with section 6). The page now asks for the PIN; a wrong PIN shows `Wrong PIN.`; the
-      right one opens the page. Note: five wrong PINs in a minute lock that device out for a minute.
+## Part F: Restart (leaderboard persistence) and track change
 
-## 6. Restart: leaderboard persistence and a hub restart mid-session
-
-- [ ] Stay on track, mid-lap. In the hub window press **Ctrl+C**. The hub stops; the recording is closed.
-- [ ] Start it again the same way (`run --record --lap-debug`); it starts a new recording and a new lap
-      debug log (note the names: `______________________`).
-- [ ] The TV reconnects by itself. The **leaderboard view still shows the laps from sections 5 and 5b**
-      (today, this week, all time), with the same names. A driver name set on `/staff` is still set. The map uses the `[map]` value you set in section 4, and the outline is there
-      straight away.
-- [ ] Finish the lap you were on: it's recorded normally, and no burst of old laps appears (A9).
-- [ ] Change to **another track** (new Time Trial session): the hub logs one `reset reason=session_changed`
-      (A10); the TV shows the new track; boards for the new track start empty.
+- [ ] Both drivers stay on track, mid-lap. In the hub window press **Ctrl+C**.
+- [ ] Put the matching map value in `config\hub.toml`, e.g. `?map=flipz,rot90` becomes:
+      ```toml
+      [map]
+      flip_x = false
+      flip_z = true
+      rotate_deg = 90
+      ```
+- [ ] Optional: set `[staff] pin = "1234"` too.
+- [ ] Start the hub again: `.venv\Scripts\python -m simtelemetry run --record --lap-debug` (a new recording
+      and lap debug log; note the names: `______________________`).
+- [ ] The dashboard reconnects by itself (remove `?map=` from its address). The **leaderboards still show
+      both drivers' laps** with the same names; a name set on `/staff` is still set; the map is drawn the
+      right way round and the outline is there straight away.
+- [ ] Both finish the lap they were on: recorded normally, no burst of old laps (A9).
+- [ ] If you set a PIN: `/staff` asks for it; a wrong PIN shows `Wrong PIN.`, the right one opens the page.
+- [ ] Both change to **another track** (new Time Trial session): one `reset reason=session_changed` per rig
+      in the hub window (A10); the dashboard follows; the new track's boards start empty.
 - [ ] Stop the hub with **Ctrl+C**.
 
-## 7. Two rigs: live drive + your recording as Rig 2
+## Part G: Wrap up
 
-Back on the **track from section 5**. The hub replays your first recording as a second PC while you drive:
-
-```powershell
-.venv\Scripts\python -m simtelemetry replay data\recordings\<file from section 4>.f1rec --as-ip 192.0.2.2 --live --lap-debug
-```
-
-(`192.0.2.2` is a documentation-only address, so it can't clash with a real PC. The replay starts at the
-beginning of the recording, menus included, and plays in real time. It doesn't add its laps to the
-leaderboards unless you add `--save-laps`.)
-
-- [ ] **Two rigs:** `Rig 1` (live) and `Rig 2` (192.0.2.2) in the status bar and the timing strip, with
-      different colours, both on the same track.
-- [ ] **Map:** two numbered dots, each with its own trail colour, both moving smoothly.
-- [ ] **Head-to-head (Δ column):** once both rigs have a best lap, Δ shows each rig's live gap to the other
-      rig's best lap at the same point on track: green when ahead, red when behind. It matches your sense
-      of the gap (e.g. compare with the in-game delta to your PB if you drive the same pace).
-- [ ] **Replay ends:** about 5 s after the recording finishes, Rig 2 shows `No data`; your live rig carries on.
-- [ ] If the hub warns `Live packets are arriving from 192.0.2.2`, something really uses that address:
-      rerun with another `--as-ip` from `192.0.2.x`.
-
-## 8. Wrap up
-
-- [ ] Fill in the results table in [LAP_ASSUMPTIONS.md](LAP_ASSUMPTIONS.md) (confirmed, or what you saw).
-- [ ] Send: the recordings, the lap debug logs, `data\logs\hub.log`, this checklist with your notes, and the
-      `[map]` value that matched.
+- [ ] Fill in the results table in [LAP_ASSUMPTIONS.md](LAP_ASSUMPTIONS.md) from the lap debug logs (each
+      assumption says which lines to look for). If that's too fiddly, just send the logs.
+- [ ] Send: everything in `data\recordings\` and `data\logs\`, this checklist with your notes, both drivers'
+      in-game times, and the matching `[map]` value.
 
 ## Troubleshooting
 
 | Symptom | Likely cause / fix |
 |---|---|
-| Nothing printed, no "New rig detected" | Firewall (section 1); network profile Public; UDP Telemetry off; wrong IP or port in the game; a VPN adapter on the rig PC. |
-| `ERROR: UDP port 20777 is already in use` | Another program (SimHub, another telemetry app, a second hub) holds the port. Close it, or use `--port 20778` and set 20778 in the game. |
-| `ERROR: HTTP port 8000 is already in use` | Close the other program, or use `--http-port 8001` and open that port on the TV. |
-| `drops: unsupported_format=...` | The game sends a format other than 2025/2026. Fix UDP Format in the game. |
-| `drops: size_mismatch=...` | Packet size differs from the spec (e.g. a game patch). Keep the recording and report it. |
-| Stuck on `in_menu_paused` while driving | No Motion packets for the player's car. Check the `Motion=` rate in the summary; report with the recording. |
+| Rig 2 never detected | Wrong UDP IP Address in Rig 2's game; UDP firewall rule missing; network profile Public; PCs on different networks (guest Wi-Fi); a VPN on either PC. |
+| Rig 1 never detected | UDP IP Address must be `127.0.0.1` on the hub PC; UDP Telemetry off. |
+| `WARNING: rigs are sending different packet formats` | Set UDP Format to 2025 on both games. |
+| `ERROR: UDP port 20777 is already in use` | Another program (SimHub, another telemetry app, a second hub) holds the port. Close it, or use `--port 20778` and set 20778 in both games. |
+| `ERROR: HTTP port 8000 is already in use` | Close the other program, or use `--http-port 8001` and use that port in the dashboard address. |
+| `drops: size_mismatch=...` / `unsupported_format=...` | Packet format differs from the spec, or not 2025/2026. Keep the recording and report it. |
+| Stuck on `in_menu_paused` while driving | No Motion packets for that car. Check the `Motion=` rate in the summary; report with the recording. |
 | No `lap_completed` after crossing the line | Look for `session_history_update` and `lap_data_fallback` in the lap debug log; report with the log. |
-| TV shows "The dashboard hasn't been built yet" | Run `npm run build` in `dashboard\` (section 0), then reload. |
-| TV can't open the page | Firewall rule for TCP 8000; use the hub's IP, not `localhost`, on another device. |
-| TV stuck on `Connecting to hub` | `/ws` blocked, e.g. by a proxy or browser extension. Try another browser. |
+| Dashboard says "The dashboard hasn't been built yet" | Run `npm run build` in `dashboard\` (Part A), then reload. |
+| Dashboard page doesn't load on another device | TCP 8000 firewall rule; use the hub PC's IP, not `localhost`. |
+| Dashboard stuck on `Connecting to hub` | `/ws` blocked, e.g. by a proxy or browser extension. Try another browser. |
 
 Add `-v` for debug logging; the full log is in `data\logs\hub.log`.

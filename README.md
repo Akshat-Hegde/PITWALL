@@ -157,7 +157,7 @@ launcher). Until then, use the port-based firewall rule in [docs/TEST_PLAN.md](d
 ## Docs
 
 - [docs/RIG_SETUP.md](docs/RIG_SETUP.md): in-game UDP settings for each rig.
-- [docs/TEST_PLAN.md](docs/TEST_PLAN.md): firewall setup and the 2-device end-to-end test checklist.
+- [docs/TEST_PLAN.md](docs/TEST_PLAN.md): firewall setup and the end-to-end test checklist (2 PCs, 2 copies of F1 25).
 - [docs/WS_SCHEMA.md](docs/WS_SCHEMA.md): hub → dashboard WebSocket message format (v1, frozen).
 - [docs/LAP_ASSUMPTIONS.md](docs/LAP_ASSUMPTIONS.md): what lap tracking assumes about the game, and how to
   check each assumption with `--lap-debug`.
