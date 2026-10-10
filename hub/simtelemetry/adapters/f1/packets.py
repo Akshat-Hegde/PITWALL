@@ -144,6 +144,24 @@ class CarStatus:
 
 
 @dataclass(frozen=True, slots=True)
+class CarDamage:
+    header: PacketHeader
+    tyres_wear: tuple[float, float, float, float]       # RL, RR, FL, FR (percentage)
+    tyres_damage: tuple[int, int, int, int]
+    brakes_damage: tuple[int, int, int, int]
+    front_left_wing: int                                 # percentages
+    front_right_wing: int
+    rear_wing: int
+    floor: int
+    diffuser: int
+    sidepod: int
+    gearbox: int
+    engine: int
+    drs_fault: bool
+    ers_fault: bool
+
+
+@dataclass(frozen=True, slots=True)
 class LapHistory:
     lap_time_ms: int
     sector1_time_ms: int
@@ -214,4 +232,5 @@ class NoPlayerCar:
     packet_id: PacketId
 
 
-Decoded = Motion | Session | LapData | Event | Participant | CarTelemetry | CarStatus | SessionHistory | TimeTrial
+Decoded = (Motion | Session | LapData | Event | Participant | CarTelemetry | CarStatus | CarDamage | SessionHistory
+           | TimeTrial)

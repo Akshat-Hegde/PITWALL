@@ -9,7 +9,7 @@ from ...core.laps import LiveLap
 from .appendix import session_type_name, track_name
 from .decode import decode
 from .laps import F1LapTracker
-from .packets import CarStatus, CarTelemetry, LapData, Motion, Participant, Session
+from .packets import CarDamage, CarStatus, CarTelemetry, LapData, Motion, Participant, Session
 from .sizes import SUPPORTED_FORMATS, PacketId
 from .tyres import Compound, TyreCompound
 from .validate import Accepted, PacketGate
@@ -68,15 +68,24 @@ class F1Adapter:
             result.lap_update = isinstance(packet, LapData)
         if isinstance(packet, Motion):
             live.position = (packet.position[0], packet.position[2])
+            live.g_lat = round(packet.g_force_lateral, 2)
+            live.g_long = round(packet.g_force_longitudinal, 2)
             result.driving = True
         elif isinstance(packet, Session):
             live.track = track_name(packet.track_id, self._track_overrides)
             live.track_key = f"{self.game}:{packet.track_id}" if packet.track_id >= 0 else None
             live.track_length_m = float(packet.track_length) if packet.track_length else None
             live.session_type = session_type_name(packet.session_type)
+            live.weather = WEATHER.get(packet.weather)
+            live.air_temp_c = packet.air_temperature
+            live.track_temp_c = packet.track_temperature
+            live.time_left_s = packet.session_time_left
             if 0 < packet.sector2_lap_distance_start < packet.sector3_lap_distance_start:
                 live.sector_starts_m = (0.0, packet.sector2_lap_distance_start, packet.sector3_lap_distance_start)
         elif isinstance(packet, LapData):
+            if live.top_speed_lap_number != packet.current_lap_num:
+                live.top_speed_lap_number = packet.current_lap_num
+                live.top_speed_lap_kph = None  # new lap: the lap's speed trap starts again
             live.lap = packet.current_lap_num
             live.current_lap_ms = packet.current_lap_time_ms
         elif isinstance(packet, CarTelemetry):
@@ -85,11 +94,33 @@ class F1Adapter:
             live.throttle = packet.throttle
             live.brake = packet.brake
             live.rpm = packet.engine_rpm
+            live.steer = round(packet.steer, 3)
+            live.drs_open = packet.drs
+            live.rev_lights_pct = packet.rev_lights_percent
+            live.tyre_surface_c = wheels(packet.tyres_surface_temperature)
+            live.tyre_inner_c = wheels(packet.tyres_inner_temperature)
+            live.tyre_pressure_psi = wheels(tuple(round(p, 1) for p in packet.tyres_pressure))
+            live.brake_c = wheels(packet.brakes_temperature)
+            live.top_speed_lap_kph = max(live.top_speed_lap_kph or 0, packet.speed_kph)
+            live.top_speed_kph = max(live.top_speed_kph or 0, packet.speed_kph)
         elif isinstance(packet, CarStatus):
             live.tyre_class = tyre_class(packet.visual_compound)
             live.tyre_label = tyre_label(packet.actual_compound, packet.visual_compound)
             live.tyre_age_laps = packet.tyres_age_laps
             live.max_rpm = packet.max_rpm or None
+            live.drs_allowed = packet.drs_allowed
+            live.ers_pct = round(min(100.0, max(0.0, packet.ers_store_energy / ERS_MAX_J * 100)), 1)
+            live.ers_mode = ERS_MODES.get(packet.ers_deploy_mode)
+            live.fuel_kg = round(packet.fuel_in_tank, 2)
+            live.fuel_laps = round(packet.fuel_remaining_laps, 2)
+            live.pit_limiter = packet.pit_limiter
+        elif isinstance(packet, CarDamage):
+            live.tyre_wear_pct = wheels(tuple(round(w, 1) for w in packet.tyres_wear))
+            live.damage = {
+                "front_wing_left": packet.front_left_wing, "front_wing_right": packet.front_right_wing,
+                "rear_wing": packet.rear_wing, "floor": packet.floor, "diffuser": packet.diffuser,
+                "sidepod": packet.sidepod, "gearbox": packet.gearbox, "engine": packet.engine,
+            }
         elif isinstance(packet, Participant):
             live.driver_name = packet.name or None
         return result
@@ -103,6 +134,19 @@ class F1Adapter:
 
     def is_supported_format(self, data_format: str) -> bool:
         return data_format.isdigit() and int(data_format) in SUPPORTED_FORMATS
+
+
+# Session m_weather: 0 = clear, 1 = light cloud, 2 = overcast, 3 = light rain, 4 = heavy rain, 5 = storm
+WEATHER = {0: "clear", 1: "light_cloud", 2: "overcast", 3: "light_rain", 4: "heavy_rain", 5: "storm"}
+# CarStatus m_ersDeployMode: 0 = none, 1 = medium, 2 = hotlap, 3 = overtake
+ERS_MODES = {0: "none", 1: "medium", 2: "hotlap", 3: "overtake"}
+ERS_MAX_J = 4_000_000.0  # ERS store capacity: 4 MJ
+
+
+def wheels(values):
+    """F1 per-wheel arrays are RL, RR, FL, FR; the hub uses FL, FR, RL, RR."""
+    rl, rr, fl, fr = values
+    return (fl, fr, rl, rr)
 
 
 _TYRE_CLASS = {

@@ -398,6 +398,26 @@ def test_time_trial(fmt):
 
 # --- Ignored packets ---------------------------------------------------------------
 
-@pytest.mark.parametrize("fmt,pid", [(2025, 5), (2025, 10), (2025, 15), (2026, 13), (2026, 16)])
+@pytest.mark.parametrize("fmt,pid", [(2025, 5), (2025, 15), (2026, 13), (2026, 16)])
 def test_ignored_packets_decode_to_none(fmt, pid):
     assert decode_packet(blank_packet(fmt, pid)) is None
+
+
+# --- Car Damage (10) ---------------------------------------------------------------
+
+# float[4] wear, uint8[4] tyre damage, uint8[4] brake damage, uint8[4] blisters, 18 x uint8
+DAMAGE_FMT = "<4f4B4B4B18B"
+
+
+@BOTH
+def test_car_damage(fmt):
+    stride = struct.calcsize(DAMAGE_FMT)
+    vals = (10.5, 11.0, 4.25, 5.0, 1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0,
+            12, 13, 40, 5, 6, 7, 1, 0, 8, 9, 0, 0, 0, 0, 0, 0, 0, 0)
+    decoy = (99.0,) * 4 + (99,) * 30
+    pkt = blank_packet(fmt, 10, player=3)
+    fill_cars(pkt, DAMAGE_FMT, stride, CARS[fmt], 3, vals, decoy)
+    d = decode_packet(pkt)
+    assert d.tyres_wear == (10.5, 11.0, 4.25, 5.0) and d.tyres_damage == (1, 2, 3, 4)
+    assert (d.front_left_wing, d.front_right_wing, d.rear_wing, d.floor, d.diffuser, d.sidepod) == (12, 13, 40, 5, 6, 7)
+    assert (d.drs_fault, d.ers_fault, d.gearbox, d.engine) == (True, False, 8, 9)

@@ -78,7 +78,10 @@
       "track_key": "F1:7",
       "track_name": "Silverstone",
       "track_length_m": 5891.0,
-      "session_type": "Time Trial"
+      "session_type": "Time Trial",
+      "weather": "light_cloud",
+      "air_temp_c": 23,
+      "track_temp_c": 31
      },
      "position": {
       "x": -412.6,
@@ -95,6 +98,47 @@
       "label": "C3",
       "age_laps": 2
      },
+     "car": {
+      "drs_open": true,
+      "drs_allowed": true,
+      "rev_lights_pct": 82,
+      "ers_pct": 75.0,
+      "ers_mode": "hotlap",
+      "fuel_kg": 12.5,
+      "fuel_laps": 3.25,
+      "pit_limiter": false,
+      "steer": -0.25,
+      "g_lat": 0.0,
+      "g_long": 0.0,
+      "tyre_surface_c": [
+       97,
+       98,
+       91,
+       92
+      ],
+      "tyre_inner_c": [
+       103,
+       104,
+       101,
+       102
+      ],
+      "tyre_pressure_psi": [
+       23.1,
+       23.2,
+       21.5,
+       21.6
+      ],
+      "tyre_wear_pct": null,
+      "brake_c": [
+       610,
+       620,
+       510,
+       520
+      ],
+      "damage": null,
+      "top_speed_lap_kph": 287,
+      "top_speed_kph": 287
+     },
      "lap": null,
      "best": null,
      "personal_best": null
@@ -109,7 +153,10 @@
       "track_key": "F1:7",
       "track_name": "Silverstone",
       "track_length_m": 5891.0,
-      "session_type": "Time Trial"
+      "session_type": "Time Trial",
+      "weather": "light_cloud",
+      "air_temp_c": 23,
+      "track_temp_c": 31
      },
      "position": {
       "x": 10.5,
@@ -126,6 +173,47 @@
       "label": "C3",
       "age_laps": 2
      },
+     "car": {
+      "drs_open": true,
+      "drs_allowed": true,
+      "rev_lights_pct": 82,
+      "ers_pct": 75.0,
+      "ers_mode": "hotlap",
+      "fuel_kg": 12.5,
+      "fuel_laps": 3.25,
+      "pit_limiter": false,
+      "steer": -0.25,
+      "g_lat": 0.0,
+      "g_long": 0.0,
+      "tyre_surface_c": [
+       97,
+       98,
+       91,
+       92
+      ],
+      "tyre_inner_c": [
+       103,
+       104,
+       101,
+       102
+      ],
+      "tyre_pressure_psi": [
+       23.1,
+       23.2,
+       21.5,
+       21.6
+      ],
+      "tyre_wear_pct": null,
+      "brake_c": [
+       610,
+       620,
+       510,
+       520
+      ],
+      "damage": null,
+      "top_speed_lap_kph": 287,
+      "top_speed_kph": 287
+     },
      "lap": null,
      "best": null,
      "personal_best": null
@@ -140,7 +228,10 @@
       "track_key": null,
       "track_name": null,
       "track_length_m": null,
-      "session_type": null
+      "session_type": null,
+      "weather": null,
+      "air_temp_c": null,
+      "track_temp_c": null
      },
      "position": null,
      "speed_kph": null,
@@ -150,6 +241,7 @@
      "rpm": null,
      "max_rpm": null,
      "tyre": null,
+     "car": null,
      "lap": null,
      "best": null,
      "personal_best": null
@@ -225,7 +317,7 @@
    },
    "personal_best": true,
    "session_best": true,
-   "completed_at": 1791622712423
+   "completed_at": 1791623722562
   }
  },
  {
@@ -520,7 +612,7 @@
       "age_laps": 2
      },
      "lap_number": 1,
-     "set_at": 1791622712423
+     "set_at": 1791623722562
     }
    ]
   }
@@ -554,7 +646,7 @@
       "age_laps": 2
      },
      "lap_number": 1,
-     "set_at": 1791622712423
+     "set_at": 1791623722562
     }
    ]
   }
@@ -588,7 +680,7 @@
       "age_laps": 2
      },
      "lap_number": 1,
-     "set_at": 1791622712423
+     "set_at": 1791623722562
     }
    ]
   }
@@ -609,7 +701,10 @@
      "track_key": "F1:7",
      "track_name": "Silverstone",
      "track_length_m": 5891.0,
-     "session_type": "Time Trial"
+     "session_type": "Time Trial",
+     "weather": "light_cloud",
+     "air_temp_c": 23,
+     "track_temp_c": 31
     },
     "position": {
      "x": 937.6,
@@ -625,6 +720,47 @@
      "compound": "soft",
      "label": "C3",
      "age_laps": 2
+    },
+    "car": {
+     "drs_open": true,
+     "drs_allowed": true,
+     "rev_lights_pct": 82,
+     "ers_pct": 75.0,
+     "ers_mode": "hotlap",
+     "fuel_kg": 12.5,
+     "fuel_laps": 3.25,
+     "pit_limiter": false,
+     "steer": -0.25,
+     "g_lat": 0.0,
+     "g_long": 0.0,
+     "tyre_surface_c": [
+      97,
+      98,
+      91,
+      92
+     ],
+     "tyre_inner_c": [
+      103,
+      104,
+      101,
+      102
+     ],
+     "tyre_pressure_psi": [
+      23.1,
+      23.2,
+      21.5,
+      21.6
+     ],
+     "tyre_wear_pct": null,
+     "brake_c": [
+      610,
+      620,
+      510,
+      520
+     ],
+     "damage": null,
+     "top_speed_lap_kph": null,
+     "top_speed_kph": 287
     },
     "lap": {
      "number": 2,
@@ -661,7 +797,7 @@
       26656
      ],
      "lap_number": 1,
-     "set_at": 1791622712423
+     "set_at": 1791623722562
     },
     "personal_best": {
      "lap_ms": 88123,
@@ -671,20 +807,23 @@
       26656
      ],
      "lap_number": 1,
-     "set_at": 1791622712423
+     "set_at": 1791623722562
     }
    },
    {
     "rig_id": "192.168.1.22",
     "state": "driving",
-    "last_seen_ms": 16,
+    "last_seen_ms": 0,
     "driver": "Guest",
     "session": {
      "session_id": "0000000000000022",
      "track_key": "F1:7",
      "track_name": "Silverstone",
      "track_length_m": 5891.0,
-     "session_type": "Time Trial"
+     "session_type": "Time Trial",
+     "weather": "light_cloud",
+     "air_temp_c": 23,
+     "track_temp_c": 31
     },
     "position": {
      "x": 10.5,
@@ -701,6 +840,47 @@
      "label": "C3",
      "age_laps": 2
     },
+    "car": {
+     "drs_open": true,
+     "drs_allowed": true,
+     "rev_lights_pct": 82,
+     "ers_pct": 75.0,
+     "ers_mode": "hotlap",
+     "fuel_kg": 12.5,
+     "fuel_laps": 3.25,
+     "pit_limiter": false,
+     "steer": -0.25,
+     "g_lat": 0.0,
+     "g_long": 0.0,
+     "tyre_surface_c": [
+      97,
+      98,
+      91,
+      92
+     ],
+     "tyre_inner_c": [
+      103,
+      104,
+      101,
+      102
+     ],
+     "tyre_pressure_psi": [
+      23.1,
+      23.2,
+      21.5,
+      21.6
+     ],
+     "tyre_wear_pct": null,
+     "brake_c": [
+      610,
+      620,
+      510,
+      520
+     ],
+     "damage": null,
+     "top_speed_lap_kph": 287,
+     "top_speed_kph": 287
+    },
     "lap": null,
     "best": null,
     "personal_best": null
@@ -715,7 +895,10 @@
      "track_key": null,
      "track_name": null,
      "track_length_m": null,
-     "session_type": null
+     "session_type": null,
+     "weather": null,
+     "air_temp_c": null,
+     "track_temp_c": null
     },
     "position": null,
     "speed_kph": null,
@@ -725,6 +908,7 @@
     "rpm": null,
     "max_rpm": null,
     "tyre": null,
+    "car": null,
     "lap": null,
     "best": null,
     "personal_best": null
@@ -759,7 +943,10 @@
    "track_key": "F1:10",
    "track_name": "Spa",
    "track_length_m": 5891.0,
-   "session_type": "Time Trial"
+   "session_type": "Time Trial",
+   "weather": "light_cloud",
+   "air_temp_c": 23,
+   "track_temp_c": 31
   }
  },
  {
@@ -778,7 +965,10 @@
      "track_key": "F1:10",
      "track_name": "Spa",
      "track_length_m": 5891.0,
-     "session_type": "Time Trial"
+     "session_type": "Time Trial",
+     "weather": "light_cloud",
+     "air_temp_c": 23,
+     "track_temp_c": 31
     },
     "position": null,
     "speed_kph": null,
@@ -788,6 +978,27 @@
     "rpm": null,
     "max_rpm": null,
     "tyre": null,
+    "car": {
+     "drs_open": null,
+     "drs_allowed": null,
+     "rev_lights_pct": null,
+     "ers_pct": null,
+     "ers_mode": null,
+     "fuel_kg": null,
+     "fuel_laps": null,
+     "pit_limiter": null,
+     "steer": null,
+     "g_lat": null,
+     "g_long": null,
+     "tyre_surface_c": null,
+     "tyre_inner_c": null,
+     "tyre_pressure_psi": null,
+     "tyre_wear_pct": null,
+     "brake_c": null,
+     "damage": null,
+     "top_speed_lap_kph": null,
+     "top_speed_kph": null
+    },
     "lap": null,
     "best": null,
     "personal_best": null
@@ -795,14 +1006,17 @@
    {
     "rig_id": "192.168.1.22",
     "state": "driving",
-    "last_seen_ms": 47,
+    "last_seen_ms": 15,
     "driver": "Guest",
     "session": {
      "session_id": "0000000000000022",
      "track_key": "F1:7",
      "track_name": "Silverstone",
      "track_length_m": 5891.0,
-     "session_type": "Time Trial"
+     "session_type": "Time Trial",
+     "weather": "light_cloud",
+     "air_temp_c": 23,
+     "track_temp_c": 31
     },
     "position": {
      "x": 10.5,
@@ -819,6 +1033,47 @@
      "label": "C3",
      "age_laps": 2
     },
+    "car": {
+     "drs_open": true,
+     "drs_allowed": true,
+     "rev_lights_pct": 82,
+     "ers_pct": 75.0,
+     "ers_mode": "hotlap",
+     "fuel_kg": 12.5,
+     "fuel_laps": 3.25,
+     "pit_limiter": false,
+     "steer": -0.25,
+     "g_lat": 0.0,
+     "g_long": 0.0,
+     "tyre_surface_c": [
+      97,
+      98,
+      91,
+      92
+     ],
+     "tyre_inner_c": [
+      103,
+      104,
+      101,
+      102
+     ],
+     "tyre_pressure_psi": [
+      23.1,
+      23.2,
+      21.5,
+      21.6
+     ],
+     "tyre_wear_pct": null,
+     "brake_c": [
+      610,
+      620,
+      510,
+      520
+     ],
+     "damage": null,
+     "top_speed_lap_kph": 287,
+     "top_speed_kph": 287
+    },
     "lap": null,
     "best": null,
     "personal_best": null
@@ -833,7 +1088,10 @@
      "track_key": null,
      "track_name": null,
      "track_length_m": null,
-     "session_type": null
+     "session_type": null,
+     "weather": null,
+     "air_temp_c": null,
+     "track_temp_c": null
     },
     "position": null,
     "speed_kph": null,
@@ -843,6 +1101,7 @@
     "rpm": null,
     "max_rpm": null,
     "tyre": null,
+    "car": null,
     "lap": null,
     "best": null,
     "personal_best": null

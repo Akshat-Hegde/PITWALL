@@ -33,7 +33,8 @@ PALETTE = ("#36C5F0", "#FF8A3D", "#F15BB5", "#5B8CFF", "#2EC4B6",
            "#FF6B6B", "#C0C9D2", "#FFB3C6", "#8D99AE", "#D4A373")
 
 _NULL_SESSION: dict[str, Any] = {"session_id": None, "track_key": None, "track_name": None,
-                                 "track_length_m": None, "session_type": None}
+                                 "track_length_m": None, "session_type": None, "weather": None,
+                                 "air_temp_c": None, "track_temp_c": None}
 
 
 def lan_address() -> str | None:
@@ -48,6 +49,34 @@ def lan_address() -> str | None:
         return None
     finally:
         sock.close()
+
+
+def car_detail(s, driving: bool) -> dict[str, Any]:
+    """Schema CarDetail: everything beyond speed/gear/pedals the TV can show. Live values only while driving."""
+    def live(value):
+        return value if driving else None
+
+    return {
+        "drs_open": live(s.drs_open),
+        "drs_allowed": live(s.drs_allowed),
+        "rev_lights_pct": live(s.rev_lights_pct),
+        "ers_pct": s.ers_pct,
+        "ers_mode": s.ers_mode,
+        "fuel_kg": s.fuel_kg,
+        "fuel_laps": s.fuel_laps,
+        "pit_limiter": live(s.pit_limiter),
+        "steer": live(s.steer),
+        "g_lat": live(s.g_lat),
+        "g_long": live(s.g_long),
+        "tyre_surface_c": list(s.tyre_surface_c) if s.tyre_surface_c else None,
+        "tyre_inner_c": list(s.tyre_inner_c) if s.tyre_inner_c else None,
+        "tyre_pressure_psi": list(s.tyre_pressure_psi) if s.tyre_pressure_psi else None,
+        "tyre_wear_pct": list(s.tyre_wear_pct) if s.tyre_wear_pct else None,
+        "brake_c": list(s.brake_c) if s.brake_c else None,
+        "damage": s.damage,
+        "top_speed_lap_kph": s.top_speed_lap_kph,
+        "top_speed_kph": s.top_speed_kph,
+    }
 
 
 def rig_colour(rig: Rig) -> str:
@@ -98,6 +127,9 @@ class FeedBuilder:
             "track_name": s.track if s else None,
             "track_length_m": s.track_length_m if s else None,
             "session_type": s.session_type if s else None,
+            "weather": s.weather if s else None,
+            "air_temp_c": s.air_temp_c if s else None,
+            "track_temp_c": s.track_temp_c if s else None,
         }
 
     def rig_frame(self, rig: Rig, now: float) -> dict[str, Any]:
@@ -124,6 +156,7 @@ class FeedBuilder:
             "rpm": s.rpm if driving else None,
             "max_rpm": s.max_rpm if s is not None and state is not RigState.NO_DATA else None,
             "tyre": tyre,
+            "car": car_detail(s, driving) if s is not None and state is not RigState.NO_DATA else None,
             "lap": hub.laps.live_view(rig.ip) if driving else None,
             "best": best.best_schema() if best else None,
             "personal_best": hub.laps.driver_best(track_key, personal_best_key(hub, rig)) if track_key else None,

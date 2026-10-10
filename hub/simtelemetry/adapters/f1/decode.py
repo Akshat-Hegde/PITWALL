@@ -14,6 +14,7 @@ from .formats import FORMATS, FormatLayouts
 from .header import PacketHeader
 from .layout import Layout
 from .packets import (
+    CarDamage,
     CarStatus,
     CarTelemetry,
     Decoded,
@@ -251,6 +252,29 @@ def _decode_car_status(header: PacketHeader, data: Buffer, layouts: FormatLayout
     )
 
 
+def _decode_car_damage(header: PacketHeader, data: Buffer, layouts: FormatLayouts) -> CarDamage | NoPlayerCar:
+    idx = player_index(header, layouts)
+    if idx is None:
+        return NoPlayerCar(header, PacketId.CAR_DAMAGE)
+    d = _player_car(data, layouts.packets[PacketId.CAR_DAMAGE], "m_carDamageData", layouts.car_damage, idx)
+    return CarDamage(
+        header=header,
+        tyres_wear=tuple(float(w) for w in d["m_tyresWear"]),  # type: ignore[arg-type]
+        tyres_damage=d["m_tyresDamage"],
+        brakes_damage=d["m_brakesDamage"],
+        front_left_wing=d["m_frontLeftWingDamage"],
+        front_right_wing=d["m_frontRightWingDamage"],
+        rear_wing=d["m_rearWingDamage"],
+        floor=d["m_floorDamage"],
+        diffuser=d["m_diffuserDamage"],
+        sidepod=d["m_sidepodDamage"],
+        gearbox=d["m_gearBoxDamage"],
+        engine=d["m_engineDamage"],
+        drs_fault=bool(d["m_drsFault"]),
+        ers_fault=bool(d["m_ersFault"]),
+    )
+
+
 # m_lapValidBitFlags: 0x01 lap valid, 0x02 sector 1 valid, 0x04 sector 2 valid, 0x08 sector 3 valid
 def _lap_history(h: dict[str, Any]) -> LapHistory:
     flags = h["m_lapValidBitFlags"]
@@ -331,6 +355,7 @@ _HANDLERS: dict[PacketId, Callable[[PacketHeader, Buffer, FormatLayouts], Any]] 
     PacketId.PARTICIPANTS: _decode_participants,
     PacketId.CAR_TELEMETRY: _decode_car_telemetry,
     PacketId.CAR_STATUS: _decode_car_status,
+    PacketId.CAR_DAMAGE: _decode_car_damage,
     PacketId.SESSION_HISTORY: _decode_session_history,
     PacketId.TIME_TRIAL: _decode_time_trial,
 }

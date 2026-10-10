@@ -193,6 +193,14 @@ PacketCarStatusData = Layout("PacketCarStatusData", [
     (CarStatusData, "m_carStatusData", MAX_CARS),
 ])
 
+# --- Car Damage (10): per-car struct unchanged, array is 24 --------------------
+CarDamageData = f2025.CarDamageData
+
+PacketCarDamageData = Layout("PacketCarDamageData", [
+    (PacketHeader, "m_header"),
+    (CarDamageData, "m_carDamageData", MAX_CARS),
+])
+
 # --- Time Trial (14): teamId is uint16 ----------------------------------------
 TimeTrialDataSet = Layout("TimeTrialDataSet", [
     ("uint8", "m_carIdx"),

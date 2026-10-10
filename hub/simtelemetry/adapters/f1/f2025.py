@@ -340,6 +340,37 @@ PacketCarStatusData = Layout("PacketCarStatusData", [
     (CarStatusData, "m_carStatusData", MAX_CARS),
 ])
 
+# --- Car Damage (10) ----------------------------------------------------------
+CarDamageData = Layout("CarDamageData", [
+    ("float", "m_tyresWear", 4),
+    ("uint8", "m_tyresDamage", 4),
+    ("uint8", "m_brakesDamage", 4),
+    ("uint8", "m_tyreBlisters", 4),
+    ("uint8", "m_frontLeftWingDamage"),
+    ("uint8", "m_frontRightWingDamage"),
+    ("uint8", "m_rearWingDamage"),
+    ("uint8", "m_floorDamage"),
+    ("uint8", "m_diffuserDamage"),
+    ("uint8", "m_sidepodDamage"),
+    ("uint8", "m_drsFault"),
+    ("uint8", "m_ersFault"),
+    ("uint8", "m_gearBoxDamage"),
+    ("uint8", "m_engineDamage"),
+    ("uint8", "m_engineMGUHWear"),
+    ("uint8", "m_engineESWear"),
+    ("uint8", "m_engineCEWear"),
+    ("uint8", "m_engineICEWear"),
+    ("uint8", "m_engineMGUKWear"),
+    ("uint8", "m_engineTCWear"),
+    ("uint8", "m_engineBlown"),
+    ("uint8", "m_engineSeized"),
+])
+
+PacketCarDamageData = Layout("PacketCarDamageData", [
+    (PacketHeader, "m_header"),
+    (CarDamageData, "m_carDamageData", MAX_CARS),
+])
+
 # --- Session History (11) -----------------------------------------------------
 LapHistoryData = Layout("LapHistoryData", [
     ("uint32", "m_lapTimeInMS"),

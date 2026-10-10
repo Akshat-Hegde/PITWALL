@@ -53,6 +53,32 @@ class LiveSummary:
     tyre_label: str | None = None      # what to print, e.g. "C3"
     tyre_age_laps: int | None = None
     sector_starts_m: tuple[float, float, float] | None = None  # lap distance where S1/S2/S3 start
+    # Session conditions
+    weather: str | None = None         # clear, light_cloud, overcast, light_rain, heavy_rain, storm
+    air_temp_c: int | None = None
+    track_temp_c: int | None = None
+    time_left_s: int | None = None
+    # Car detail for the TV. Per-wheel values are ordered front-left, front-right, rear-left, rear-right.
+    drs_open: bool | None = None
+    drs_allowed: bool | None = None
+    rev_lights_pct: int | None = None
+    ers_pct: float | None = None
+    ers_mode: str | None = None        # none, medium, hotlap, overtake
+    fuel_kg: float | None = None
+    fuel_laps: float | None = None
+    pit_limiter: bool | None = None
+    steer: float | None = None         # -1 (full left) .. 1 (full right)
+    g_lat: float | None = None
+    g_long: float | None = None
+    tyre_surface_c: tuple[int, int, int, int] | None = None
+    tyre_inner_c: tuple[int, int, int, int] | None = None
+    tyre_pressure_psi: tuple[float, float, float, float] | None = None
+    tyre_wear_pct: tuple[float, float, float, float] | None = None
+    brake_c: tuple[int, int, int, int] | None = None
+    damage: dict[str, int] | None = None  # percentages: front_wing, rear_wing, floor, diffuser, sidepod, ...
+    top_speed_lap_kph: int | None = None
+    top_speed_kph: int | None = None   # this session
+    top_speed_lap_number: int | None = None
 
 
 class GameAdapter(Protocol):

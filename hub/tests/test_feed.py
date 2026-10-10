@@ -34,7 +34,8 @@ FIXTURE = Path(__file__).resolve().parents[2] / "dashboard" / "src" / "testing" 
 def set_fields(pkt: bytearray, layout, base: int, **values) -> None:
     by_name = {f.name: f for f in layout.fields}
     for name, value in values.items():
-        struct.pack_into("<" + by_name[name].fmt, pkt, base + layout.offset_of(name), value)
+        args = value if isinstance(value, tuple) else (value,)
+        struct.pack_into("<" + by_name[name].fmt, pkt, base + layout.offset_of(name), *args)
 
 
 def car_packet(fmt: int, pid: PacketId, array_field: str, car_layout, uid: int, **values) -> bytes:
@@ -50,20 +51,26 @@ def motion(fmt, uid, x, z):
 
 
 def telemetry(fmt, uid, speed=287, throttle=0.75, brake=0.0, gear=7, rpm=11240):
+    # Per-wheel arrays are RL, RR, FL, FR in the game.
     return car_packet(fmt, PacketId.CAR_TELEMETRY, "m_carTelemetryData", FORMATS[fmt].car_telemetry, uid,
-                      m_speed=speed, m_throttle=throttle, m_brake=brake, m_gear=gear, m_engineRPM=rpm)
+                      m_speed=speed, m_throttle=throttle, m_brake=brake, m_gear=gear, m_engineRPM=rpm,
+                      m_drs=1, m_revLightsPercent=82, m_steer=-0.25,
+                      m_brakesTemperature=(510, 520, 610, 620), m_tyresSurfaceTemperature=(91, 92, 97, 98),
+                      m_tyresInnerTemperature=(101, 102, 103, 104), m_tyresPressure=(21.5, 21.6, 23.1, 23.2))
 
 
 def status(fmt, uid, actual=18, visual=16, age=2, max_rpm=13000):
     return car_packet(fmt, PacketId.CAR_STATUS, "m_carStatusData", FORMATS[fmt].car_status, uid,
                       m_actualTyreCompound=actual, m_visualTyreCompound=visual, m_tyresAgeLaps=age,
-                      m_maxRPM=max_rpm)
+                      m_maxRPM=max_rpm, m_drsAllowed=1, m_ersStoreEnergy=3_000_000.0, m_ersDeployMode=2,
+                      m_fuelInTank=12.5, m_fuelRemainingLaps=3.25)
 
 
 def session(fmt, uid, track_id=7, length=5891, session_type=18):
     pkt = blank_packet(fmt, PacketId.SESSION, player=PLAYER, session_uid=uid)
     set_fields(pkt, FORMATS[fmt].packets[PacketId.SESSION], 0,
-               m_trackId=track_id, m_trackLength=length, m_sessionType=session_type)
+               m_trackId=track_id, m_trackLength=length, m_sessionType=session_type, m_weather=1,
+               m_airTemperature=23, m_trackTemperature=31)
     return bytes(pkt)
 
 
@@ -111,11 +118,35 @@ async def test_driving_rig_frame(tmp_path):
     assert rig == {
         "rig_id": RIG_A, "state": "driving", "last_seen_ms": 50, "driver": "Akshat",
         "session": {"session_id": f"{0x11:016x}", "track_key": "F1:7", "track_name": "Silverstone",
-                    "track_length_m": 5891.0, "session_type": "Time Trial"},
+                    "track_length_m": 5891.0, "session_type": "Time Trial", "weather": "light_cloud",
+                    "air_temp_c": 23, "track_temp_c": 31},
         "position": {"x": -412.6, "z": 188.2}, "speed_kph": 287, "gear": 7, "throttle": 0.75, "brake": 0.0,
         "rpm": 11240, "max_rpm": 13000, "tyre": {"compound": "soft", "label": "C3", "age_laps": 2},
         "lap": None, "best": None, "personal_best": None,
+        "car": {
+            "drs_open": True, "drs_allowed": True, "rev_lights_pct": 82, "ers_pct": 75.0, "ers_mode": "hotlap",
+            "fuel_kg": 12.5, "fuel_laps": 3.25, "pit_limiter": False, "steer": -0.25, "g_lat": 0.0, "g_long": 0.0,
+            "tyre_surface_c": [97, 98, 91, 92], "tyre_inner_c": [103, 104, 101, 102],   # FL, FR, RL, RR
+            "tyre_pressure_psi": [23.1, 23.2, 21.5, 21.6], "tyre_wear_pct": None, "brake_c": [610, 620, 510, 520],
+            "damage": None, "top_speed_lap_kph": 287, "top_speed_kph": 287,
+        },
     }
+
+
+@pytest.mark.parametrize("fmt", [2025, 2026])
+async def test_tyre_wear_damage_and_speed_trap(tmp_path, fmt):
+    hub = make_hub(tmp_path)
+    damage = car_packet(fmt, PacketId.CAR_DAMAGE, "m_carDamageData", FORMATS[fmt].car_damage, 0x11,
+                        m_tyresWear=(20.0, 21.0, 10.0, 11.5), m_frontLeftWingDamage=15, m_rearWingDamage=3)
+    from test_laps import lap_data_bytes
+    await feed(hub, driving_rig(RIG_A, fmt=fmt) + [(RIG_A, damage),
+                                                  (RIG_A, telemetry(fmt, 0x11, speed=301)),
+                                                  (RIG_A, lap_data_bytes(fmt, 0x11, 50.0, 2, 10, 100)),
+                                                  (RIG_A, telemetry(fmt, 0x11, speed=150))])
+    car = FeedBuilder(hub).frame_body(last_seen(hub))["rigs"][0]["car"]
+    assert car["tyre_wear_pct"] == [10.0, 11.5, 20.0, 21.0]
+    assert car["damage"]["front_wing_left"] == 15 and car["damage"]["rear_wing"] == 3
+    assert (car["top_speed_lap_kph"], car["top_speed_kph"]) == (150, 301)   # new lap resets the lap's trap
 
 
 @pytest.mark.parametrize("fmt", [2025, 2026])

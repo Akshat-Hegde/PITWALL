@@ -21,6 +21,7 @@ class FormatLayouts:
     participant: Layout
     car_telemetry: Layout
     car_status: Layout
+    car_damage: Layout
     lap_history: Layout
     tyre_stint: Layout
     time_trial_set: Layout
@@ -40,6 +41,7 @@ def _build(module: ModuleType, packet_format: int, gforce_divisor: float | None)
             PacketId.PARTICIPANTS: module.PacketParticipantsData,
             PacketId.CAR_TELEMETRY: module.PacketCarTelemetryData,
             PacketId.CAR_STATUS: module.PacketCarStatusData,
+            PacketId.CAR_DAMAGE: module.PacketCarDamageData,
             PacketId.SESSION_HISTORY: module.PacketSessionHistoryData,
             PacketId.TIME_TRIAL: module.PacketTimeTrialData,
         },
@@ -48,6 +50,7 @@ def _build(module: ModuleType, packet_format: int, gforce_divisor: float | None)
         participant=module.ParticipantData,
         car_telemetry=module.CarTelemetryData,
         car_status=module.CarStatusData,
+        car_damage=module.CarDamageData,
         lap_history=module.LapHistoryData,
         tyre_stint=module.TyreStintHistoryData,
         time_trial_set=module.TimeTrialDataSet,
