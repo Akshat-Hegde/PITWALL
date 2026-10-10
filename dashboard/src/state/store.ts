@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import type { HubMessage } from "../schema";
 import { applyMessage, initialState, type DashboardState, type LinkState } from "./reducer";
+import { LapShareTracker } from "./lapshare";
 import { PathTrace } from "./paths";
 import { TrailBuffer } from "./trails";
 
@@ -10,6 +11,7 @@ export class DashboardStore {
   private readonly listeners = new Set<() => void>();
   readonly trails = new TrailBuffer();
   readonly paths = new PathTrace();
+  readonly lapShare = new LapShareTracker();
 
   constructor(source: DashboardState["source"]) {
     this.state = initialState(source);
@@ -26,6 +28,7 @@ export class DashboardStore {
     if (msg.type === "snapshot") {
       this.trails.clear();
       this.paths.clear();
+      this.lapShare.clear();
     }
     if (msg.type === "session_changed") this.trails.clear(msg.rig_id);
     this.state = applyMessage(this.state, msg, now);
@@ -36,6 +39,7 @@ export class DashboardStore {
     if (msg.type === "snapshot" || msg.type === "frame") {
       const frames = msg.type === "snapshot" ? msg.frame.rigs : msg.rigs;
       for (const frame of frames) {
+        this.lapShare.add(frame);
         if (!frame.position) continue;
         this.trails.add(frame.rig_id, now, frame.position.x, frame.position.z);
         if (frame.session.track_key) {

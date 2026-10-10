@@ -51,7 +51,8 @@ export function TrackMap({ store, state, trackKey, displayOverride }: Props) {
     let raf = 0;
     let width = 0;
     let height = 0;
-    let colours = { track: "", trackEdge: "", line: "", muted: "", bg: "", path: "", s1: "", s2: "", s3: "" };
+    let colours = { track: "", trackEdge: "", line: "", muted: "", bg: "", path: "", s1: "", s2: "", s3: "",
+      fontHead: "sans-serif", fontBody: "sans-serif" };
 
     const resize = () => {
       const rect = canvas.getBoundingClientRect();
@@ -71,6 +72,8 @@ export function TrackMap({ store, state, trackKey, displayOverride }: Props) {
         s1: cssVar("--map-s1"),
         s2: cssVar("--map-s2"),
         s3: cssVar("--map-s3"),
+        fontHead: cssVar("--font-head") || "sans-serif",
+        fontBody: cssVar("--font-body") || "sans-serif",
       };
     };
     const observer = new ResizeObserver(resize);
@@ -162,7 +165,7 @@ export function TrackMap({ store, state, trackKey, displayOverride }: Props) {
         drawStartLine(ctx, outline.points, toScreen, minSide, colours.line, colours.bg);
         if (starts) {
           const fontPx = Math.round(Math.max(11, minSide * 0.02));
-          ctx.font = `700 ${fontPx}px "Titillium Web", sans-serif`;
+          ctx.font = `700 ${fontPx}px ${colours.fontBody}`;
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           starts.forEach((index, k) => {
@@ -245,7 +248,7 @@ export function TrackMap({ store, state, trackKey, displayOverride }: Props) {
         ctx.strokeStyle = colours.bg;
         ctx.stroke();
         ctx.fillStyle = colours.bg;
-        ctx.font = `700 ${Math.round(r * 1.25)}px "Barlow Condensed", sans-serif`;
+        ctx.font = `italic 700 ${Math.round(r * 1.15)}px ${colours.fontHead}`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(String(index + 1), sx, sy + r * 0.06);
@@ -253,7 +256,7 @@ export function TrackMap({ store, state, trackKey, displayOverride }: Props) {
         // Name tag next to the dot, in the rig's colour.
         const name = frame.driver ?? rig.name;
         const fontPx = Math.round(Math.max(12, minSide * 0.024));
-        ctx.font = `600 ${fontPx}px "Titillium Web", sans-serif`;
+        ctx.font = `italic 700 ${fontPx}px ${colours.fontHead}`;
         const padX = fontPx * 0.45;
         const tagW = ctx.measureText(name).width + padX * 2;
         const tagH = fontPx * 1.35;

@@ -1,12 +1,12 @@
 /* Tokens. Cafe branding from the hub config overrides --brand-* (and any other) variables on :root. */
 :root {
-  --surface-0: #0e0e13; /* page */
-  --surface-1: #16161e; /* cards */
-  --surface-2: #1f1f29;
-  --surface-3: #2a2a36;
-  --rule: #2c2c39;
-  --text: #f4f4f7;
-  --text-muted: #9a9aad;
+  --surface-0: #000000; /* page */
+  --surface-1: #050507; /* cards */
+  --surface-2: #0f0f13;
+  --surface-3: #1c1c23;
+  --rule: #23232b;
+  --text: #f5f5f7;
+  --text-muted: #8e8e9c;
 
   --sector-purple: #b26bff;
   --sector-green: #2fd27a;
@@ -28,8 +28,8 @@
   --temp-warm: #ffcc33;
   --temp-hot: #ff4b55;
 
-  --map-track: #2a2a36;
-  --map-track-edge: #3a3a49;
+  --map-track: #1d1d24;
+  --map-track-edge: #2c2c36;
   --map-path: rgba(154, 154, 173, 0.3); /* driven path while there is no outline */
   --map-s1: #ff3b5c;
   --map-s2: #3d8bff;
@@ -38,13 +38,13 @@
   --brand-accent: #e10600;
   --brand-text: #ffffff;
 
-  --font-display: "Barlow Condensed", "Arial Narrow", sans-serif; /* numbers */
-  --font-head: "Titillium Web", "Segoe UI", sans-serif; /* names, headings */
-  --font-body: "Titillium Web", "Segoe UI", sans-serif;
+  --font-display: "Bai Jamjuree", "Segoe UI", sans-serif; /* numbers (tabular) */
+  --font-head: "Cadillac Gothic", "Bai Jamjuree", "Segoe UI", sans-serif; /* names, headings */
+  --font-body: "Bai Jamjuree", "Segoe UI", sans-serif;
 
   --gap: 0.75rem;
   --pad: 1rem;
-  --radius: 0.65rem;
+  --radius: 0;
 
   color-scheme: dark;
 }
@@ -1845,6 +1845,542 @@ ul {
   font-family: var(--font-display);
   font-weight: 600;
   font-size: 1.3rem;
+}
+
+/* ==== Broadcast analysis style: black, sharp, thin rules, uppercase tracked labels ============ */
+
+.micro,
+.label {
+  display: block;
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+/* Top bar */
+.statusbar {
+  background: #000;
+  border-bottom: 1px solid var(--rule);
+}
+
+.statusbar__brand {
+  background: var(--brand-accent);
+  font-family: var(--font-head);
+  font-style: italic;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.chip__name {
+  font-weight: 600;
+}
+
+.statusbar__clock {
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+/* Cards: sharp corners, hairline border */
+.pod,
+.mapcard,
+.panel2,
+.panel,
+.strip,
+.side-empty {
+  border-radius: 0;
+  border: 1px solid var(--rule);
+}
+
+/* Podium: tinted slab with the rig colour on the left edge */
+.pod {
+  background: linear-gradient(100deg, color-mix(in srgb, var(--rig-colour) 30%, #000) 0%, #050507 58%);
+}
+
+.pod--empty,
+.pod--weather {
+  background: #050507;
+}
+
+.pod::before {
+  width: 3px;
+}
+
+.pod__pos {
+  font-family: var(--font-head);
+  font-style: italic;
+  font-size: 2.4rem;
+}
+
+.pod__driver {
+  font-family: var(--font-head);
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.pod__time,
+.pod__big {
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+.pod__time {
+  font-size: 1.45rem;
+}
+
+.pod__big {
+  font-size: 1.95rem;
+}
+
+.pod__big--sm {
+  font-size: 1.55rem;
+}
+
+.pod__label {
+  font-size: 0.64rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* Map card */
+.mapcard {
+  background: #000;
+}
+
+.mapcard .track-map {
+  background: radial-gradient(ellipse at 55% 52%, #0d0d12, #000 70%);
+}
+
+.mapcard__track {
+  font-family: var(--font-head);
+  font-style: italic;
+  font-size: 1.9rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.mapcard__meta,
+.legend {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* Car panels: rig-coloured header slab like the analysis graphics */
+.panel2 {
+  padding: 0;
+  gap: 0;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--rig-colour) 9%, #000) 0%, #000 40%);
+}
+
+.panel2::before {
+  display: none;
+}
+
+.panel2__head {
+  gap: 1.1rem;
+  padding: 0.55rem 1rem 0.55rem 0.9rem;
+  border-left: 3px solid var(--rig-colour);
+  border-bottom: 1px solid color-mix(in srgb, var(--rig-colour) 45%, var(--rule));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--rig-colour) 32%, #000) 0%, transparent 72%);
+}
+
+.panel2__pos {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.panel2__num {
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  background: none;
+  color: var(--text);
+  font-family: var(--font-head);
+  font-style: italic;
+  font-size: 1.9rem;
+  line-height: 1;
+}
+
+.panel2__driver {
+  font-family: var(--font-head);
+  font-style: italic;
+  font-weight: 700;
+  font-size: 1.55rem;
+  letter-spacing: 0.02em;
+  line-height: 1.05;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--rig-colour) 75%, #fff);
+}
+
+.panel2__rig {
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.panel2__body,
+.panel2__timing {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+.panel2__body {
+  padding-top: 0.6rem;
+}
+
+.panel2__timing {
+  padding-bottom: 0.55rem;
+  margin-top: 0.4rem;
+}
+
+.panel2__hint {
+  padding: 0.8rem 1rem;
+}
+
+.live-pill {
+  border-radius: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.compound__text {
+  font-size: 0.8rem;
+}
+
+/* Numbers */
+.dial__speed {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 46px;
+}
+
+.dial__gear {
+  font-family: var(--font-head);
+  font-style: italic;
+  font-size: 36px;
+}
+
+.dial__unit {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.dial__track {
+  stroke: #1a1a20;
+}
+
+.dial__track,
+.dial__value {
+  stroke-linecap: butt;
+  stroke-width: 10;
+}
+
+.timing__clock-value {
+  font-size: 1.8rem;
+  font-weight: 600;
+}
+
+.timing__value {
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.sec {
+  border-radius: 0;
+  background: #0d0d11;
+}
+
+.sec__time {
+  font-size: 1.02rem;
+  font-weight: 600;
+}
+
+.pedal2__track,
+.pedal2__fill,
+.ers__track,
+.tyre2,
+.tyres__body,
+.drs {
+  border-radius: 0;
+}
+
+.pedals2 {
+  height: 5.4rem;
+  gap: 0.7rem;
+}
+
+.pedal2 {
+  width: auto;
+  min-width: 3.4rem;
+}
+
+.pedal2 .micro {
+  letter-spacing: 0.06em;
+}
+
+.panel2__right {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.6rem;
+  width: 15rem;
+}
+
+.panel2__right .gforce {
+  flex-direction: row;
+  justify-content: center;
+  gap: 0.8rem;
+}
+
+.panel2__right .gforce svg {
+  width: 4.6rem;
+  height: 4.6rem;
+}
+
+.panel2__right .share__row {
+  grid-template-columns: 6.6rem minmax(0, 1fr) 2.4rem;
+  gap: 0.45rem;
+}
+
+.pedal2__pct,
+.ers__pct,
+.fuel__value,
+.gforce__value {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.drs {
+  font-family: var(--font-head);
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+.tyre2__temp {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.leds__rpm {
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+}
+
+.panel2__mid {
+  gap: 0.65rem;
+}
+
+/* Lap share bars */
+.share {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.share__row {
+  display: grid;
+  grid-template-columns: 7.2rem minmax(0, 1fr) 2.6rem;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.share__track {
+  position: relative;
+  height: 0.35rem;
+  background: #1a1a20;
+}
+
+.share__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--rig-colour);
+}
+
+.share__last {
+  position: absolute;
+  top: -0.2rem;
+  bottom: -0.2rem;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--text);
+  opacity: 0.6;
+}
+
+.share__pct {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-align: right;
+}
+
+/* Timing strip and leaderboards */
+.trow__driver,
+.lb__driver {
+  font-family: var(--font-head);
+  font-style: italic;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.lb__driver {
+  font-size: 1.15rem;
+}
+
+.trow__driver {
+  font-size: 1.15rem;
+}
+
+.lb__time,
+.trow__clock,
+.trow__last,
+.trow__best,
+.trow__delta {
+  font-weight: 600;
+}
+
+.lb__time {
+  font-size: 1.5rem;
+}
+
+.lb__rank {
+  font-family: var(--font-head);
+  font-style: italic;
+}
+
+.panel__title,
+.boards__track {
+  font-family: var(--font-head);
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.boards__today {
+  box-shadow: inset 0 2px 0 var(--brand-accent);
+}
+
+.boards__sub,
+.panel__sub,
+.lb__range {
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.waiting__title,
+.side-empty__title {
+  font-family: var(--font-head);
+  font-style: italic;
+  text-transform: uppercase;
+}
+
+.waiting__settings {
+  border-radius: 0;
+  border: 1px solid var(--rule);
+  background: #050507;
+}
+
+/* DRS / ERS / fuel in the header strip of the wide panels */
+.systems--inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 1.3rem;
+  margin-left: auto;
+}
+
+.systems--inline .ers {
+  width: 9rem;
+}
+
+.systems--inline .fuel {
+  grid-template-columns: auto auto;
+  gap: 0 0.45rem;
+}
+
+.systems--inline .fuel__laps {
+  grid-column: 2;
+}
+
+.systems--inline + .compound {
+  margin-left: 0.4rem;
+}
+
+.statusbar__clock,
+.statusbar__link,
+.statusbar__view {
+  flex: none;
+  white-space: nowrap;
+}
+
+.statusbar__rigs {
+  flex: 1 1 auto;
+}
+
+.panel2--compact .fuel__laps {
+  display: none;
+}
+
+.panel2--compact .pedal2 {
+  min-width: 2.9rem;
+}
+
+/* Wide panels: column widths that fit 2 cars at 1080p and 4K */
+.panel2:not(.panel2--compact) .panel2__body {
+  grid-template-columns: 10rem minmax(9.5rem, 1fr) auto 12rem;
+  gap: 1rem;
+}
+
+.panel2:not(.panel2--compact) .dial {
+  width: 10rem;
+}
+
+.panel2__right {
+  width: auto;
+}
+
+.panel2__right .share__row {
+  grid-template-columns: 6.2rem minmax(0, 1fr) 2.3rem;
+}
+
+.panel2__who {
+  flex: 1 1 auto;
+  min-width: 9rem;
+}
+
+.systems--inline {
+  gap: 1rem;
+  flex: none;
+}
+
+.systems--inline .ers {
+  width: 6.8rem;
+}
+
+.panel2--compact .fuel {
+  display: none;
+}
+
+.compound__text {
+  white-space: nowrap;
+}
+
+.systems--inline .ers {
+  width: 5.6rem;
+}
+
+.panel2:not(.panel2--compact) .panel2__driver {
+  font-size: 1.4rem;
 }
 
 /* ---- Small screens: stack and scroll (a phone or a laptop window, not the TV) ------------- */

@@ -1,9 +1,9 @@
-import "@fontsource/titillium-web/400.css";
-import "@fontsource/titillium-web/600.css";
-import "@fontsource/titillium-web/700.css";
-import "@fontsource/barlow-condensed/500.css";
-import "@fontsource/barlow-condensed/600.css";
-import "@fontsource/barlow-condensed/700.css";
+import "@fontsource/bai-jamjuree/400.css";
+import "@fontsource/bai-jamjuree/500.css";
+import "@fontsource/bai-jamjuree/600.css";
+import "@fontsource/bai-jamjuree/700.css";
+import "@fontsource/bai-jamjuree/700-italic.css";
+import "./fonts.css";
 import "./styles.css";
 
 import { StrictMode } from "react";

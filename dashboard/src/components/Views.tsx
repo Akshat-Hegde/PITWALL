@@ -31,7 +31,8 @@ export function RaceView({ store, state, trackKey, mapDisplay, sessionBestMs }: 
       <MapCard store={store} state={state} trackKey={trackKey} mapDisplay={mapDisplay} />
       <div className="race__side">
         {panels ? (
-          <CarPanels rigs={state.rigs} frames={state.frames} comparison={comparison} sessionBestMs={sessionBestMs} />
+          <CarPanels store={store} rigs={state.rigs} frames={state.frames} comparison={comparison}
+                     sessionBestMs={sessionBestMs} />
         ) : state.rigs.length > 0 ? (
           <TimingStrip rigs={state.rigs} frames={state.frames} comparison={comparison} sessionBestMs={sessionBestMs} />
         ) : (

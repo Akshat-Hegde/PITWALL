@@ -1,4 +1,5 @@
 import type { CarDetail, PerWheel } from "../schema";
+import type { LapShare } from "../state/lapshare";
 
 // ---- Speed dial --------------------------------------------------------------------------------
 
@@ -146,18 +147,50 @@ export function GForce({ lat, long }: { lat: number | null; long: number | null 
   );
 }
 
+// ---- Share of the lap: full throttle / heavy braking / cornering ------------------------------
+
+const SHARE_ROWS: [keyof LapShare, string][] = [
+  ["fullThrottle", "Full throttle"],
+  ["heavyBraking", "Heavy braking"],
+  ["cornering", "Cornering"],
+];
+
+/** "% lap time" bars: this lap so far, with a tick at last lap's value. */
+export function LapShareBars({ share, last }: { share: LapShare | null; last: LapShare | null }) {
+  return (
+    <div className="share" aria-label="Share of this lap">
+      {SHARE_ROWS.map(([key, label]) => {
+        const value = share ? share[key] : null;
+        const prev = last ? last[key] : null;
+        return (
+          <div key={key} className="share__row">
+            <span className="label">{label}</span>
+            <span className="share__track">
+              <span className="share__fill" style={{ width: `${Math.min(100, value ?? 0)}%` }} />
+              {prev != null && <span className="share__last" style={{ left: `${Math.min(100, prev)}%` }} />}
+            </span>
+            <span className="share__pct">{value == null ? "–" : `${Math.round(value)}%`}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ---- DRS / ERS / fuel ------------------------------------------------------------------------
 
 const ERS_MODE_TEXT: Record<string, string> = { none: "Off", medium: "Medium", hotlap: "Hotlap", overtake: "Overtake" };
 
-export function Systems({ car }: { car: CarDetail | null }) {
+export function Systems({ car, inline = false }: { car: CarDetail | null; inline?: boolean }) {
   const drs = car?.drs_open ? "open" : car?.drs_allowed ? "ready" : "off";
   const ers = car?.ers_pct ?? null;
   return (
-    <div className="systems">
+    <div className={`systems${inline ? " systems--inline" : ""}`}>
       <span className={`drs drs--${drs}`}>DRS</span>
       <div className="ers">
-        <span className="micro ers__label">ERS {car?.ers_mode ? ERS_MODE_TEXT[car.ers_mode] ?? car.ers_mode : ""}</span>
+        <span className="micro ers__label">
+          ERS {!inline && car?.ers_mode ? ERS_MODE_TEXT[car.ers_mode] ?? car.ers_mode : ""}
+        </span>
         <span className="ers__track">
           <span className="ers__fill" style={{ width: `${Math.max(0, Math.min(100, ers ?? 0))}%` }} />
         </span>
