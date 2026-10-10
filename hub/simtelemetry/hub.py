@@ -33,6 +33,8 @@ class Hub:
         self.laps = LapBook(outline_display=config.map.model_dump(), store=store,
                             day_start_hour=config.leaderboard.day_start_hour)
         self.drivers = DriverRegistry(store)
+        # Other programs listening on the telemetry port on a specific address (see net/udp.py).
+        self.port_shadows: list[str] = []
         self.started_at = time.monotonic()
         self._queue: asyncio.Queue[tuple[Checked, bytes, str, float]] = asyncio.Queue(QUEUE_MAX)
 

@@ -231,7 +231,8 @@ export class MockHub {
     this.seq = 0;
     return {
       ...this.envelope("snapshot"),
-      hub: { version: "mock", games: ["F1"], frame_hz: this.options.frameHz },
+      hub: { version: "mock", games: ["F1"], frame_hz: this.options.frameHz, udp_port: 20777,
+             lan_address: "192.168.1.10" },
       cafe: { name: "Sim Racing Cafe", branding: {} },
       status: this.status(),
       rigs: this.rigs.map((r) => r.spec.info),
@@ -483,6 +484,7 @@ export class MockHub {
       throttle: braking ? 0 : accel > 0.02 ? 1 : 0.55,
       brake: braking ? Math.min(1, -accel / 0.6) : 0,
       rpm: rpmFor(kph, gear),
+      max_rpm: 12500,
       tyre: this.tyre(rig),
       lap: {
         number: rig.lapNumber,

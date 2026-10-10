@@ -22,6 +22,8 @@ export interface DashboardState {
   receivedVersion: number | null;
   cafe: { name: string; branding: Record<string, string> };
   frameHz: number;
+  /** Where games send telemetry, from the hub (for the waiting screen). */
+  telemetryTarget: { address: string | null; port: number };
   status: HubStatus | null;
   rigs: RigInfo[];
   frames: Record<string, RigFrame>;
@@ -42,6 +44,7 @@ export function initialState(source: DashboardState["source"]): DashboardState {
     receivedVersion: null,
     cafe: { name: "", branding: {} },
     frameHz: 15,
+    telemetryTarget: { address: null, port: 20777 },
     status: null,
     rigs: [],
     frames: {},
@@ -89,6 +92,7 @@ export function applyMessage(state: DashboardState, msg: HubMessage, now: number
         receivedVersion: msg.v,
         cafe: msg.cafe,
         frameHz: msg.hub.frame_hz,
+        telemetryTarget: { address: msg.hub.lan_address ?? null, port: msg.hub.udp_port ?? 20777 },
         status: msg.status,
         rigs: msg.rigs,
         frames: framesById(msg.frame.rigs),

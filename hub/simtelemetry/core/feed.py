@@ -36,6 +36,20 @@ _NULL_SESSION: dict[str, Any] = {"session_id": None, "track_key": None, "track_n
                                  "track_length_m": None, "session_type": None}
 
 
+def lan_address() -> str | None:
+    """This PC's address on the local network (the one games should send telemetry to)."""
+    import socket
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.connect(("192.0.2.1", 9))  # no packet is sent; this only picks the outgoing interface
+        address = sock.getsockname()[0]
+        return None if address.startswith(("127.", "0.")) else address
+    except OSError:
+        return None
+    finally:
+        sock.close()
+
+
 def rig_colour(rig: Rig) -> str:
     if rig.colour:
         return rig.colour
@@ -108,6 +122,7 @@ class FeedBuilder:
             "throttle": _round(s.throttle, 3) if driving else None,
             "brake": _round(s.brake, 3) if driving else None,
             "rpm": s.rpm if driving else None,
+            "max_rpm": s.max_rpm if s is not None and state is not RigState.NO_DATA else None,
             "tyre": tyre,
             "lap": hub.laps.live_view(rig.ip) if driving else None,
             "best": best.best_schema() if best else None,
@@ -172,6 +187,8 @@ class FeedBuilder:
                 warnings.append({"code": "size_mismatch", "rig_id": rig.ip,
                                  "message": f"{rig.name} sends packets of unexpected size; "
                                             f"check its UDP format setting"})
+        for shadow in hub.port_shadows:
+            warnings.append({"code": "port_shadowed", "rig_id": None, "message": shadow})
         recorder = None
         if hub.recorder is not None:
             rs = hub.recorder.status()
@@ -199,7 +216,8 @@ class FeedBuilder:
         cafe = self.hub.config.cafe
         frame = self.frame_body(now)
         return {
-            "hub": {"version": __version__, "games": [self.hub.adapter.game], "frame_hz": self.frame_hz},
+            "hub": {"version": __version__, "games": [self.hub.adapter.game], "frame_hz": self.frame_hz,
+                    "udp_port": self.hub.config.network.udp_port, "lan_address": lan_address()},
             "cafe": {"name": cafe.name, "branding": dict(cafe.branding)},
             "status": self.status(now),
             "rigs": self.rig_infos(),

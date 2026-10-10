@@ -1,6 +1,7 @@
 import type { Display } from "../map/geometry";
 import type { DashboardState } from "../state/reducer";
 import type { DashboardStore } from "../state/store";
+import { CarCards } from "./CarCards";
 import { LeaderboardPanel } from "./LeaderboardPanel";
 import { TimingStrip } from "./TimingStrip";
 import { TrackMap } from "./TrackMap";
@@ -13,21 +14,28 @@ interface RaceProps {
   sessionBestMs: number | null;
 }
 
-/** Large map, compact timing strip (head-to-head in its Δ column), and today's top 3 when there is room. */
+/** Card view up to this many rigs (live speed, gear, revs, pedals per car); the compact strip above it. */
+export const MAX_CARDS = 4;
+
+/**
+ * Large map plus, per car, a live telemetry card (up to MAX_CARDS rigs) or a compact timing-strip row
+ * (more rigs). Head-to-head is the gap on each card / the Δ column. Today's top 3 when there is room.
+ */
 export function RaceView({ store, state, trackKey, mapDisplay, sessionBestMs }: RaceProps) {
-  const roomForBoard = state.rigs.length <= 5;
+  const cards = state.rigs.length > 0 && state.rigs.length <= MAX_CARDS;
+  const roomForBoard = cards ? state.rigs.length <= 2 : state.rigs.length <= 5;
+  const comparison = state.comparison?.rigs ?? [];
   return (
     <main className="race">
       <section className="race__map" aria-label="Track map">
         <TrackMap store={store} state={state} trackKey={trackKey} displayOverride={mapDisplay} />
       </section>
       <div className="race__side">
-        <TimingStrip
-          rigs={state.rigs}
-          frames={state.frames}
-          comparison={state.comparison?.rigs ?? []}
-          sessionBestMs={sessionBestMs}
-        />
+        {cards ? (
+          <CarCards rigs={state.rigs} frames={state.frames} comparison={comparison} sessionBestMs={sessionBestMs} />
+        ) : (
+          <TimingStrip rigs={state.rigs} frames={state.frames} comparison={comparison} sessionBestMs={sessionBestMs} />
+        )}
         {roomForBoard && (
           <LeaderboardPanel
             className="race__top"

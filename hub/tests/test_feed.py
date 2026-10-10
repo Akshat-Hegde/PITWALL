@@ -54,9 +54,10 @@ def telemetry(fmt, uid, speed=287, throttle=0.75, brake=0.0, gear=7, rpm=11240):
                       m_speed=speed, m_throttle=throttle, m_brake=brake, m_gear=gear, m_engineRPM=rpm)
 
 
-def status(fmt, uid, actual=18, visual=16, age=2):
+def status(fmt, uid, actual=18, visual=16, age=2, max_rpm=13000):
     return car_packet(fmt, PacketId.CAR_STATUS, "m_carStatusData", FORMATS[fmt].car_status, uid,
-                      m_actualTyreCompound=actual, m_visualTyreCompound=visual, m_tyresAgeLaps=age)
+                      m_actualTyreCompound=actual, m_visualTyreCompound=visual, m_tyresAgeLaps=age,
+                      m_maxRPM=max_rpm)
 
 
 def session(fmt, uid, track_id=7, length=5891, session_type=18):
@@ -112,7 +113,7 @@ async def test_driving_rig_frame(tmp_path):
         "session": {"session_id": f"{0x11:016x}", "track_key": "F1:7", "track_name": "Silverstone",
                     "track_length_m": 5891.0, "session_type": "Time Trial"},
         "position": {"x": -412.6, "z": 188.2}, "speed_kph": 287, "gear": 7, "throttle": 0.75, "brake": 0.0,
-        "rpm": 11240, "tyre": {"compound": "soft", "label": "C3", "age_laps": 2},
+        "rpm": 11240, "max_rpm": 13000, "tyre": {"compound": "soft", "label": "C3", "age_laps": 2},
         "lap": None, "best": None, "personal_best": None,
     }
 

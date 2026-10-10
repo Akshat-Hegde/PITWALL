@@ -780,6 +780,460 @@ ul {
   font-size: 1.1rem;
 }
 
+/* ---- Car cards: live telemetry per car (up to 4 rigs) ------------------------------------- */
+
+.cards {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-height: 0;
+}
+
+.card {
+  position: relative;
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.6rem;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--surface-1);
+  border-radius: var(--radius);
+  padding: 0.9rem var(--pad) 0.9rem calc(var(--pad) + 0.45rem);
+}
+
+/* Team-style colour stripe down the left edge. */
+.card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0.45rem;
+  background: var(--rig-colour);
+}
+
+.card--no-data {
+  flex: 0 0 auto;
+  opacity: 0.6;
+}
+
+.card__head {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.card__badge {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 50%;
+  background: var(--rig-colour);
+  color: var(--surface-0);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.15rem;
+}
+
+.card__driver {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.75rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.card__meta {
+  display: flex;
+  gap: 0.8rem;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+.card__tyre {
+  font-weight: 500;
+  color: var(--tyre-colour, var(--text-muted));
+}
+
+.card__state {
+  margin-left: auto;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.card__state.is-live {
+  color: var(--text);
+}
+
+.card__hint {
+  color: var(--text-muted);
+}
+
+.card__label {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.2;
+}
+
+.card__live {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 1.3rem;
+}
+
+.card__speed {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  min-width: 5.6ch;
+}
+
+.card__speed-value,
+.card__gear {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 3.4rem;
+  line-height: 0.95;
+}
+
+.card__unit {
+  color: var(--text-muted);
+}
+
+.card__gear {
+  min-width: 1.2ch;
+  text-align: center;
+  color: var(--rig-colour);
+}
+
+.card__gauges {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.rev {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.rev__bar {
+  display: grid;
+  grid-template-columns: repeat(15, minmax(0, 1fr));
+  gap: 0.18rem;
+  height: 1.1rem;
+}
+
+.rev__seg {
+  border-radius: 0.12rem;
+  background: var(--surface-2);
+}
+
+.rev__seg--low.is-lit {
+  background: var(--sector-green);
+}
+
+.rev__seg--mid.is-lit {
+  background: var(--sector-yellow);
+}
+
+.rev__seg--high.is-lit {
+  background: var(--brake);
+}
+
+.rev__value {
+  min-width: 6.5em;
+  text-align: right;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.hpedal {
+  display: grid;
+  grid-template-columns: 4.4rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.hpedal .card__label {
+  display: inline;
+}
+
+.hpedal__track {
+  position: relative;
+  height: 0.55rem;
+  border-radius: 0.3rem;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.hpedal__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+}
+
+.hpedal--throttle .hpedal__fill {
+  background: var(--throttle);
+}
+
+.hpedal--brake .hpedal__fill {
+  background: var(--brake);
+}
+
+/* Timing: lap clock on the left; sectors above last / best / gap. */
+.card__timing {
+  display: grid;
+  grid-template-columns: auto repeat(3, minmax(0, 1fr));
+  grid-template-areas:
+    "clock sectors sectors sectors"
+    "clock last best gap";
+  column-gap: 1rem;
+  row-gap: 0.45rem;
+  align-items: end;
+}
+
+.card__clock {
+  grid-area: clock;
+  align-self: center;
+  min-width: 8.6rem;
+}
+
+.card__clock-value {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 2.3rem;
+  line-height: 1;
+}
+
+.card__clock-value.is-empty {
+  color: var(--rule);
+}
+
+.card__clock-value.is-invalid {
+  color: var(--text-muted);
+  text-decoration: line-through;
+  text-decoration-thickness: 0.06em;
+}
+
+.card__invalid {
+  color: var(--brake);
+  font-weight: 500;
+  font-size: 0.85rem;
+}
+
+.card__sectors {
+  grid-area: sectors;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.3rem;
+}
+
+.csector {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 0.2rem;
+  background: var(--surface-2);
+  border-bottom: 0.22rem solid transparent;
+}
+
+.csector .card__label {
+  display: inline;
+}
+
+.csector__time {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.25rem;
+}
+
+.csector--pending .csector__time {
+  color: var(--text-muted);
+}
+
+.csector--current {
+  border-bottom-color: var(--rule);
+}
+
+.csector--session-best {
+  border-bottom-color: var(--sector-purple);
+}
+
+.csector--session-best .csector__time {
+  color: var(--sector-purple);
+}
+
+.csector--personal-best {
+  border-bottom-color: var(--sector-green);
+}
+
+.csector--personal-best .csector__time {
+  color: var(--sector-green);
+}
+
+.csector--normal {
+  border-bottom-color: var(--sector-yellow);
+}
+
+.csector--normal .csector__time {
+  color: var(--sector-yellow);
+}
+
+.csector--unrated .csector__time {
+  color: var(--text-muted);
+}
+
+.card__stat:nth-of-type(1) {
+  grid-area: last;
+}
+
+.card__stat:nth-of-type(2) {
+  grid-area: best;
+}
+
+.card__stat:nth-of-type(3) {
+  grid-area: gap;
+}
+
+.card__stat-value {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.4rem;
+}
+
+.card__stat-value.is-personal-best,
+.card__stat-value.is-ahead {
+  color: var(--sector-green);
+}
+
+.card__stat-value.is-session-best {
+  color: var(--sector-purple);
+}
+
+.card__stat-value.is-behind {
+  color: var(--brake);
+}
+
+/* Three or four cards: smaller type so each still fits. */
+.cards:has(> .card:nth-child(3)) .card__speed-value,
+.cards:has(> .card:nth-child(3)) .card__gear {
+  font-size: 2.5rem;
+}
+
+.cards:has(> .card:nth-child(3)) .card__driver {
+  font-size: 1.4rem;
+}
+
+.cards:has(> .card:nth-child(3)) .card__clock-value {
+  font-size: 1.8rem;
+}
+
+.cards:has(> .card:nth-child(3)) .card {
+  gap: 0.3rem;
+  padding-top: 0.55rem;
+  padding-bottom: 0.55rem;
+}
+
+/* Throttle and brake side by side to save a row. */
+.cards:has(> .card:nth-child(3)) .card__gauges {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.3rem 1rem;
+}
+
+.cards:has(> .card:nth-child(3)) .rev {
+  grid-column: 1 / -1;
+}
+
+.cards:has(> .card:nth-child(3)) .hpedal {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.cards:has(> .card:nth-child(3)) .rev__bar {
+  height: 0.85rem;
+}
+
+.cards:has(> .card:nth-child(3)) .card__timing {
+  row-gap: 0.25rem;
+}
+
+.cards:has(> .card:nth-child(3)) .csector__time {
+  font-size: 1.05rem;
+}
+
+.cards:has(> .card:nth-child(3)) .card__stat-value {
+  font-size: 1.15rem;
+}
+
+.cards:has(> .card:nth-child(3)) .card__label {
+  font-size: 0.72rem;
+}
+
+/* ---- Waiting for telemetry (on the map) ---------------------------------------------------- */
+
+.waiting {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1rem;
+  padding: 2rem 3rem;
+}
+
+.waiting__title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 2.4rem;
+  line-height: 1.1;
+}
+
+.waiting__lead {
+  color: var(--text-muted);
+  font-size: 1.15rem;
+  max-width: 32em;
+}
+
+.waiting__settings {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.5rem 2rem;
+  max-width: 34rem;
+  padding: 1.1rem 1.4rem;
+  border-radius: var(--radius);
+  background: var(--surface-1);
+}
+
+.waiting__settings div {
+  display: contents;
+}
+
+.waiting__settings dt {
+  color: var(--text-muted);
+}
+
+.waiting__settings dd {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.3rem;
+}
+
 /* ---- Small screens: stack and scroll (a phone or a laptop window, not the TV) ------------- */
 
 @media (max-width: 900px) {
@@ -838,6 +1292,23 @@ ul {
   .lb {
     grid-template-rows: none;
     grid-auto-rows: 3.6rem;
+  }
+
+  .card {
+    flex: none;
+  }
+
+  .card__live {
+    grid-template-columns: auto auto;
+  }
+
+  .card__gauges {
+    grid-column: 1 / -1;
+  }
+
+  .waiting {
+    position: static;
+    padding: 1.2rem;
   }
 
   .statusbar {

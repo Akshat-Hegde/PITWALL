@@ -5,7 +5,10 @@ from __future__ import annotations
 import asyncio
 import errno
 import logging
+import re
 import socket
+import subprocess
+import sys
 import time
 from collections.abc import Callable
 
@@ -39,6 +42,47 @@ def bind_socket(kind: int, host: str, port: int) -> socket.socket:
             raise PortInUseError("UDP" if kind == socket.SOCK_DGRAM else "TCP", host, port, exc) from exc
         raise
     return sock
+
+
+def port_shadows(port: int, addresses: tuple[str, ...] = ("127.0.0.1",)) -> list[str]:
+    """Other programs bound to `port` on a specific address, which take the packets sent there.
+
+    Windows allows a program to bind e.g. 127.0.0.1:20777 next to our 0.0.0.0:20777 socket, and
+    then delivers everything sent to 127.0.0.1 to that program (e.g. wheel software such as
+    SimPro Manager or SimHub). Checked by trying to bind the address ourselves. Windows only:
+    elsewhere our own wildcard socket makes such a bind fail anyway.
+    """
+    if sys.platform != "win32":
+        return []
+    found = []
+    for address in addresses:
+        probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            probe.bind((address, port))
+        except OSError:
+            owner = _udp_owner(address, port)
+            found.append(f"Another program{f' ({owner})' if owner else ''} is listening on {address}:{port}, so "
+                         f"telemetry sent to {address} goes to it, not the hub. Close it, or set the game's "
+                         f"UDP IP Address to this PC's network address instead of {address}.")
+        finally:
+            probe.close()
+    return found
+
+
+def _udp_owner(address: str, port: int) -> str | None:
+    """Best-effort name of the process bound to address:port (Windows netstat + tasklist)."""
+    try:
+        out = subprocess.run(["netstat", "-ano", "-p", "UDP"], capture_output=True, text=True, timeout=5).stdout
+        pid = next((line.split()[-1] for line in out.splitlines()
+                    if re.search(rf"\s{re.escape(address)}:{port}\s", line)), None)
+        if pid is None:
+            return None
+        task = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
+                              capture_output=True, text=True, timeout=5).stdout
+        name = task.split(",")[0].strip('" \r\n')
+        return name or f"process {pid}"
+    except (OSError, subprocess.SubprocessError, StopIteration):
+        return None
 
 
 class _Protocol(asyncio.DatagramProtocol):

@@ -19,7 +19,7 @@ from .core.health import RigState
 from .core.rigs import RigRegistry
 from .hub import Hub
 from .logging_setup import setup_logging, teardown_logging
-from .net.udp import PortInUseError, UdpListener, bind_socket
+from .net.udp import PortInUseError, UdpListener, bind_socket, port_shadows
 from .core.store import LapStore
 from .tools.recorder import GB, Recorder
 from .tools.replay import ReplayError, SourceSelection, replay, select_source
@@ -157,6 +157,9 @@ async def run_hub(args: argparse.Namespace, hub: Hub, selection: SourceSelection
             if http_sock:
                 http_sock.close()
             raise
+        hub.port_shadows = port_shadows(listener.port)
+        for shadow in hub.port_shadows:
+            log.warning("%s", shadow)
 
     if hub.recorder is not None:
         hub.recorder.start()

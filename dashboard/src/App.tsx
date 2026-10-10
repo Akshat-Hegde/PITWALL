@@ -67,7 +67,9 @@ export function App({ store, mapDisplay = null, viewMode = "auto" }: Props) {
     document.title = state.cafe.name ? `${state.cafe.name}: live timing` : "Live timing";
   }, [state.cafe.name]);
   const anyDriving = Object.values(state.frames).some((f) => f.state === "driving");
-  const { view, mode, attract } = useView(viewMode, anyDriving);
+  // Until any rig has connected, keep the race view: its map explains how to set up the games.
+  const nothingYet = state.rigs.length === 0;
+  const { view, mode, attract } = useView(viewMode, anyDriving || nothingYet);
 
   if (state.link === "version_mismatch") {
     return (

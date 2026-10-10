@@ -48,6 +48,7 @@ class LiveSummary:
     throttle: float | None = None
     brake: float | None = None
     rpm: int | None = None
+    max_rpm: int | None = None         # the car's rev limit, for the TV's rev bar
     tyre_class: str | None = None      # soft/medium/hard/inter/wet/other/unknown
     tyre_label: str | None = None      # what to print, e.g. "C3"
     tyre_age_laps: int | None = None

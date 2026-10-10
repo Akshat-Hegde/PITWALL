@@ -87,6 +87,8 @@ export interface RigFrame {
   throttle: number | null;
   brake: number | null;
   rpm: number | null;
+  /** The car's rev limit (added in v1; older hubs don't send it). */
+  max_rpm?: number | null;
   tyre: Tyre | null;
   lap: LiveLap | null;
   best: BestLap | null;
@@ -166,7 +168,14 @@ export interface Envelope<T extends string> {
 }
 
 export interface SnapshotMessage extends Envelope<"snapshot"> {
-  hub: { version: string; games: string[]; frame_hz: number };
+  hub: {
+    version: string;
+    games: string[];
+    frame_hz: number;
+    /** Added in v1 (optional): where games should send telemetry. */
+    udp_port?: number;
+    lan_address?: string | null;
+  };
   cafe: { name: string; branding: Record<string, string> };
   status: HubStatus;
   rigs: RigInfo[];

@@ -167,3 +167,23 @@ def test_hub_keeps_running_when_recording_stops_for_low_disk(tmp_path, capsys):
     assert "recording stopped: low disk" in captured.err
     assert any("127.0.0.1" in l and "driving" in l for l in captured.out.splitlines())
     assert not list(tmp_path.glob("recordings/*.f1rec"))
+
+
+def test_port_shadow_warning(monkeypatch):
+    """Another program bound to 127.0.0.1 on the telemetry port is reported (Windows behaviour)."""
+    import socket
+    import sys
+    from simtelemetry.net import udp
+
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(udp, "_udp_owner", lambda address, port: "simpro3.exe")
+    other = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    other.bind(("127.0.0.1", 0))
+    port = other.getsockname()[1]
+    try:
+        (message,) = udp.port_shadows(port)
+    finally:
+        other.close()
+    assert message.startswith(f"Another program (simpro3.exe) is listening on 127.0.0.1:{port}")
+    assert "UDP IP Address to this PC's network address" in message
+    assert udp.port_shadows(port) == []

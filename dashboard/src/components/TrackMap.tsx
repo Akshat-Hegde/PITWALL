@@ -13,6 +13,7 @@ import {
 } from "../map/geometry";
 import type { DashboardState } from "../state/reducer";
 import type { DashboardStore } from "../state/store";
+import { Waiting } from "./Waiting";
 
 interface Props {
   store: DashboardStore;
@@ -191,6 +192,7 @@ export function TrackMap({ store, state, trackKey, displayOverride }: Props) {
         }
         ctx.globalAlpha = 1;
       }
+      const placedTags: { x: number; y: number; w: number; h: number }[] = [];
       rigs.forEach((rig, index) => {
         const frame = s.frames[rig.rig_id];
         if (!frame || frame.state !== "driving" || frame.session.track_key !== key) return;
@@ -214,6 +216,34 @@ export function TrackMap({ store, state, trackKey, displayOverride }: Props) {
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(String(index + 1), sx, sy + r * 0.06);
+
+        // Name tag next to the dot, in the rig's colour.
+        const name = frame.driver ?? rig.name;
+        const fontPx = Math.round(Math.max(12, minSide * 0.024));
+        ctx.font = `600 ${fontPx}px "Barlow Condensed", sans-serif`;
+        const padX = fontPx * 0.45;
+        const tagW = ctx.measureText(name).width + padX * 2;
+        const tagH = fontPx * 1.35;
+        let tx = sx + r * 1.35;
+        if (tx + tagW > width - 4) tx = sx - r * 1.35 - tagW; // keep it on screen
+        let ty = sy - r * 1.1 - tagH;
+        // Cars close together: stack their tags instead of drawing them on top of each other.
+        const overlaps = (y: number) =>
+          placedTags.some((p) => tx < p.x + p.w && tx + tagW > p.x && y < p.y + p.h && y + tagH > p.y);
+        for (let tries = 0; tries < 6 && overlaps(ty); tries++) ty -= tagH + 3;
+        placedTags.push({ x: tx, y: ty, w: tagW, h: tagH });
+        ctx.fillStyle = colours.bg;
+        ctx.globalAlpha = 0.85;
+        ctx.beginPath();
+        ctx.roundRect(tx, ty, tagW, tagH, tagH * 0.25);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = rig.colour;
+        ctx.fillRect(tx, ty, Math.max(3, fontPx * 0.18), tagH);
+        ctx.fillStyle = colours.line;
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.fillText(name, tx + padX + fontPx * 0.12, ty + tagH / 2 + fontPx * 0.04);
       });
     };
     raf = requestAnimationFrame(draw);
@@ -228,7 +258,7 @@ export function TrackMap({ store, state, trackKey, displayOverride }: Props) {
   return (
     <div className="track-map">
       <canvas ref={canvasRef} className="track-map__canvas" aria-label="Track map with live car positions" />
-      {!anyDriving && <p className="track-map__note">Cars appear here when a rig is on track.</p>}
+      {!anyDriving && <Waiting state={state} />}
       {anyDriving && !hasOutline && (
         <p className="track-map__note track-map__note--corner">Track outline appears after the first clean lap.</p>
       )}

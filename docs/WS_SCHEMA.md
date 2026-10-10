@@ -81,6 +81,8 @@ Compatibility rules:
 }
 ```
 
+- `hub.udp_port`, `hub.lan_address` *(added in v1, optional)*: where games should send telemetry (this PC's
+  network address, `null` if unknown); shown on the dashboard's waiting screen.
 - `cafe.branding`: CSS custom properties from `[cafe.branding]` in the hub config. The dashboard applies
   them to `:root` as-is (keys must start with `--`; others are ignored).
 - `outlines`: every outline the hub has (one per track that has had a complete valid lap).
@@ -121,7 +123,7 @@ Conventions: times are integer **milliseconds**; distances **metres**; speed **k
 | `format_mismatch` | bool | Active rigs send different `data_format`s. |
 | `formats` | object | `rig_id → data_format` for active rigs. |
 | `recorder` | object \| null | `null` = recording disabled. Else `{ "state": "recording" \| "low_disk_warning" \| "stopped", "message": string \| null, "free_gb": number \| null }`. |
-| `warnings` | array | `[{ "code": string, "message": string, "rig_id": string \| null }]`, human-readable, for the status bar. Codes in v1: `format_mismatch`, `format_unsupported`, `size_mismatch`, `recorder_low_disk`, `recorder_stopped`. |
+| `warnings` | array | `[{ "code": string, "message": string, "rig_id": string \| null }]`, human-readable, for the status bar. Codes in v1: `format_mismatch`, `format_unsupported`, `size_mismatch`, `recorder_low_disk`, `recorder_stopped`, `port_shadowed` (added: another program on the hub PC listens on the telemetry port at a specific address, e.g. wheel software on 127.0.0.1, and takes the packets sent there). |
 
 ### SessionInfo
 
@@ -148,6 +150,7 @@ Conventions: times are integer **milliseconds**; distances **metres**; speed **k
 | `throttle` | number \| null | 0–1 |
 | `brake` | number \| null | 0–1 |
 | `rpm` | int \| null | |
+| `max_rpm` | int \| null | *(Added in v1, optional.)* The car's rev limit, for a rev bar. Known while the rig sends data, also when not driving. |
 | `tyre` | Tyre \| null | |
 | `lap` | LiveLap \| null | The lap in progress; `null` when not driving. |
 | `best` | BestLap \| null | This rig's best valid lap on the current track in this hub session. |

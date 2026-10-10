@@ -89,6 +89,7 @@ class F1Adapter:
             live.tyre_class = tyre_class(packet.visual_compound)
             live.tyre_label = tyre_label(packet.actual_compound, packet.visual_compound)
             live.tyre_age_laps = packet.tyres_age_laps
+            live.max_rpm = packet.max_rpm or None
         elif isinstance(packet, Participant):
             live.driver_name = packet.name or None
         return result
