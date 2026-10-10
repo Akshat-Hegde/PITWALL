@@ -76,7 +76,8 @@ describe("mock laps are plausible", () => {
     }
     const s2 = fast.filter((m) => m.type === "lap_completed").map((m) => m.lap.sectors_ms![1]);
     expect(s2.length).toBeGreaterThan(4);
-    expect(s2.filter((ms) => ms % 533 === 0 || ms % 1000 === 0)).toEqual([]);
+    // Quantised splits would all be multiples of the tick; one can be by chance (1 in 533).
+    expect(s2.filter((ms) => ms % 533 === 0 || ms % 1000 === 0).length).toBeLessThanOrEqual(1);
   });
 
   test("leaderboard: sorted, gaps to the leader, valid laps only", () => {

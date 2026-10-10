@@ -43,35 +43,39 @@ export function findBattle(state: DashboardState, trackKey: string | null): Batt
   };
 }
 
-export function BattleCard({ battle }: { battle: Battle }) {
+/** One line under the map: the closest pair, the gap, and whether it is closing (no box, DESIGN.md). */
+export function BattleLine({ battle }: { battle: Battle }) {
   const rate = battle.ratePerLapMs;
   const trend = rate == null ? "none" : rate <= -HOLDING_MS ? "closing" : rate >= HOLDING_MS ? "opening" : "holding";
   const trendText =
-    trend === "closing" ? `Catching by ${(Math.abs(rate!) / 1000).toFixed(2)} s per lap`
-      : trend === "opening" ? `Gap growing by ${(rate! / 1000).toFixed(2)} s per lap`
-        : trend === "holding" ? "Holding the gap" : "Trend after their next laps";
+    trend === "closing" ? `Closing ${(Math.abs(rate!) / 1000).toFixed(2)} s / lap`
+      : trend === "opening" ? `Gap growing ${(rate! / 1000).toFixed(2)} s / lap`
+        : trend === "holding" ? "Holding the gap" : "Trend after the next laps";
   return (
     <section className="battle" aria-label="Battle">
-      <span className="label battle__title">Battle</span>
-      {[battle.leader, battle.chaser].map((d, i) => (
-        <div key={d.rigId} className="battle__row" style={{ "--rig-colour": d.colour } as React.CSSProperties}>
-          <span className="battle__pos">{i + 1}</span>
-          <span className="battle__name">{d.name}</span>
-          <span className="battle__time">{formatLapTime(d.bestMs)}</span>
-        </div>
-      ))}
-      <div className={`battle__gap battle__gap--${trend}`}>
-        <span className="battle__gap-value">{formatDelta(battle.gapMs)}</span>
-        <span className="battle__arrow" aria-hidden="true">
-          {trend === "closing" ? "▼" : trend === "opening" ? "▲" : "■"}
-        </span>
-        <span className="battle__trend">{trendText}</span>
+      <div className="battle__row">
+        <span className="label">Battle</span>
+        {[battle.leader, battle.chaser].map((d) => (
+          <span key={d.rigId} className="battle__who" style={{ "--rig-colour": d.colour } as React.CSSProperties}>
+            <span className="stripe" aria-hidden="true" />
+            <span className="battle__name">{d.name}</span>
+            <span className="battle__time">{formatLapTime(d.bestMs)}</span>
+          </span>
+        ))}
       </div>
+      <div className="battle__row">
+      <span className="battle__gap">{formatDelta(battle.gapMs)}</span>
+      <span className={`battle__trend ${trend === "closing" ? "c-green" : trend === "opening" ? "c-yellow" : "t2"}`}>
+        <span aria-hidden="true">{trend === "closing" ? "▼ " : trend === "opening" ? "▲ " : ""}</span>
+        {trendText}
+      </span>
       {battle.liveMs != null && (
         <span className="battle__live">
-          Live on this lap <strong>{formatDelta(battle.liveMs, 2)}</strong>
+          <span className="label">This lap</span>
+          <span className={battle.liveMs <= 0 ? "c-green" : "c-yellow"}>{formatDelta(battle.liveMs, 2)}</span>
         </span>
       )}
+      </div>
     </section>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { findBattle } from "./components/BattleCard";
+import { findBattle } from "./components/Battle";
 import type { DashboardState } from "./state/reducer";
 
 type Car = { id: string; best: number; last: number | null; track?: string };

@@ -1,30 +1,64 @@
 import { useEffect, useRef, useState } from "react";
 
-/** What the TV is set to show: a fixed view, or "auto" (race while someone drives, attract mode otherwise). */
-export type ViewMode = "auto" | "race" | "board";
-export type View = "race" | "board";
+export type View = "race" | "board" | "analysis" | "onboard";
+/** What the TV is set to show: a fixed view, or "auto" (rotates while someone drives, attract mode otherwise). */
+export type ViewMode = "auto" | View;
 
 export const IDLE_AFTER_MS = 10_000; // nobody driving this long: attract mode
 export const ATTRACT_BOARD_MS = 20_000; // attract mode: leaderboard view this long...
-export const ATTRACT_RACE_MS = 10_000; // ...then race view (the track) this long, repeating
+export const ATTRACT_RACE_MS = 10_000; // ...then race view (the track) this long...
+export const ATTRACT_ANALYSIS_MS = 10_000; // ...then head to head (if there is one), repeating
+export const LIVE_RACE_MS = 40_000; // someone driving: race view this long...
+export const LIVE_ANALYSIS_MS = 15_000; // ...head to head (when two drivers have a full lap)...
+export const LIVE_ONBOARD_MS = 15_000; // ...onboard, repeating
+
+/** Views that have something to show right now. */
+export interface Available {
+  analysis: boolean;
+  onboard: boolean;
+}
+
+const NONE: Available = { analysis: false, onboard: false };
+const VIEWS: readonly View[] = ["race", "board", "analysis", "onboard"];
 
 export function viewModeFromQuery(query: URLSearchParams): ViewMode {
-  const v = query.get("view");
-  return v === "race" || v === "board" ? v : "auto";
+  const v = query.get("view") as View | null;
+  return v && VIEWS.includes(v) ? v : "auto";
 }
 
-/** idleForMs: time since a rig last drove (or since the page loaded); null while a rig is driving. */
-export function chooseView(mode: ViewMode, idleForMs: number | null): { view: View; attract: boolean } {
+function pick(schedule: [View, number][], t: number): View {
+  const total = schedule.reduce((s, [, ms]) => s + ms, 0);
+  let left = ((t % total) + total) % total;
+  for (const [view, ms] of schedule) {
+    if (left < ms) return view;
+    left -= ms;
+  }
+  return schedule[0]![0];
+}
+
+/**
+ * idleForMs: time since a rig last drove (or since the page loaded); null while a rig is driving.
+ * clockMs: a steady clock that drives the rotation while someone is driving.
+ */
+export function chooseView(mode: ViewMode, idleForMs: number | null, clockMs = 0,
+                           available: Available = NONE): { view: View; attract: boolean } {
   if (mode !== "auto") return { view: mode, attract: false };
-  if (idleForMs === null || idleForMs < IDLE_AFTER_MS) return { view: "race", attract: false };
-  const t = (idleForMs - IDLE_AFTER_MS) % (ATTRACT_BOARD_MS + ATTRACT_RACE_MS);
-  return { view: t < ATTRACT_BOARD_MS ? "board" : "race", attract: true };
+  if (idleForMs === null) {
+    const schedule: [View, number][] = [["race", LIVE_RACE_MS]];
+    if (available.analysis) schedule.push(["analysis", LIVE_ANALYSIS_MS]);
+    if (available.onboard) schedule.push(["onboard", LIVE_ONBOARD_MS]);
+    return { view: pick(schedule, clockMs), attract: false };
+  }
+  if (idleForMs < IDLE_AFTER_MS) return { view: "race", attract: false };
+  const schedule: [View, number][] = [["board", ATTRACT_BOARD_MS], ["race", ATTRACT_RACE_MS]];
+  if (available.analysis) schedule.push(["analysis", ATTRACT_ANALYSIS_MS]);
+  return { view: pick(schedule, idleForMs - IDLE_AFTER_MS), attract: true };
 }
 
-const KEYS: Record<string, ViewMode> = { "1": "race", "2": "board", "0": "auto", a: "auto" };
+const KEYS: Record<string, ViewMode> = { "1": "race", "2": "board", "3": "analysis", "4": "onboard", "0": "auto", a: "auto" };
 
-/** Current view; keys 1 / 2 / 0 on the TV PC switch to race / leaderboard / auto. */
-export function useView(initialMode: ViewMode, anyDriving: boolean) {
+/** Current view; keys 1-4 on the TV PC fix race / leaderboard / head to head / onboard, 0 goes back to auto. */
+export function useView(initialMode: ViewMode, anyDriving: boolean, available: Available) {
   const [mode, setMode] = useState<ViewMode>(initialMode);
   const [now, setNow] = useState(() => performance.now());
   const lastDriving = useRef<number>(performance.now());
@@ -43,5 +77,5 @@ export function useView(initialMode: ViewMode, anyDriving: boolean) {
     };
   }, []);
 
-  return { mode, ...chooseView(mode, anyDriving ? null : now - lastDriving.current) };
+  return { mode, ...chooseView(mode, anyDriving ? null : now - lastDriving.current, now, available) };
 }

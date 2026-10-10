@@ -56,18 +56,25 @@ export function LeaderboardPanel({ leaderboard, rigs, title, showTrack = true, s
     : pageSlice(entries, page, slots);
   const paged = !top && entries.length > slots;
   return (
-    <section className={`panel board-lb ${className}`} aria-label={title}>
-      <h2 className="panel__title">
+    <section className={`lbcol ${className}`} aria-label={title}>
+      <h2 className="lbcol__title">
         {title}
-        {showTrack && leaderboard?.track_name && <span className="panel__sub">{leaderboard.track_name}</span>}
+        {showTrack && leaderboard?.track_name && <span className="t2"> {leaderboard.track_name}</span>}
         {paged && (
-          <span className="lb__range" aria-live="polite">
+          <span className="lbcol__range t3" aria-live="polite">
             {first}–{last} of {entries.length}
           </span>
         )}
       </h2>
+      <div className="lb__head" aria-hidden="true">
+        <span>Pos</span>
+        <span />
+        <span>Driver</span>
+        <span className="r">Time</span>
+        <span className="r">Gap</span>
+      </div>
       {entries.length === 0 ? (
-        <p className="panel__empty">No valid laps yet. Times appear here after a clean lap.</p>
+        <p className="lbcol__empty t2">No valid laps yet. Times appear here after a clean lap.</p>
       ) : (
         <ol className="lb" start={first} style={{ "--slots": slots } as React.CSSProperties}>
           {items.map((e) => (
@@ -81,18 +88,15 @@ export function LeaderboardPanel({ leaderboard, rigs, title, showTrack = true, s
 
 function BoardRow({ entry: e, colour }: { entry: LeaderboardEntry; colour: string | undefined }) {
   return (
-    <li
-      className={`lb__row${e.rank === 1 ? " lb__row--first" : ""}`}
-      style={{ "--rig-colour": colour ?? "#888" } as React.CSSProperties}
-    >
-      <span className="lb__rank">{e.rank}</span>
+    <li className="lb__row" style={{ "--rig-colour": colour ?? "var(--text-3)" } as React.CSSProperties}>
+      <span className="pos">{e.rank}</span>
       <span className="stripe" aria-hidden="true" />
-      <span className="lb__who">
-        <span className="lb__driver">{e.driver ?? e.rig_name}</span>
-        <span className="lb__rig">{e.rig_name}</span>
+      <span className="who__text">
+        <span className="who__name">{e.driver ?? e.rig_name}</span>
+        <span className="who__sub">{e.rig_name}</span>
       </span>
-      <span className="lb__time num">{formatLapTime(e.lap_ms)}</span>
-      <span className="lb__gap num">{e.rank === 1 ? "" : formatDelta(e.gap_ms)}</span>
+      <span className={`lb__time r${e.rank === 1 ? " c-purple" : ""}`}>{formatLapTime(e.lap_ms)}</span>
+      <span className="lb__gap r t2">{e.rank === 1 ? "" : formatDelta(e.gap_ms)}</span>
     </li>
   );
 }

@@ -1,4 +1,6 @@
 import { useEffect } from "react";
+import { AnalysisView, chooseDuel } from "./components/Analysis";
+import { OnboardView, onboardRigs } from "./components/Onboard";
 import { StatusBar } from "./components/StatusBar";
 import { BoardView, RaceView } from "./components/Views";
 import type { Display } from "./map/geometry";
@@ -69,7 +71,12 @@ export function App({ store, mapDisplay = null, viewMode = "auto" }: Props) {
   const anyDriving = Object.values(state.frames).some((f) => f.state === "driving");
   // Until any rig has connected, keep the race view: its map explains how to set up the games.
   const nothingYet = state.rigs.length === 0;
-  const { view, mode, attract } = useView(viewMode, anyDriving || nothingYet);
+  const trackKey = chooseTrackKey(state);
+  const available = {
+    analysis: chooseDuel(state, store.laps, trackKey) !== null,
+    onboard: onboardRigs(state).length > 0,
+  };
+  const { view, mode, attract } = useView(viewMode, anyDriving || nothingYet, available);
 
   if (state.link === "version_mismatch") {
     return (
@@ -83,16 +90,19 @@ export function App({ store, mapDisplay = null, viewMode = "auto" }: Props) {
     );
   }
 
-  const trackKey = chooseTrackKey(state);
   return (
     <div className={`app app--${view}`}>
-      <StatusBar state={state} viewNote={mode === "auto" ? (attract ? "Attract mode" : null) : `${view === "race" ? "Race" : "Leaderboard"} view (fixed)`} />
-      {view === "race" ? (
-        <RaceView store={store} state={state} trackKey={trackKey} mapDisplay={mapDisplay}
-                  sessionBestMs={sessionBest(state, trackKey)} />
-      ) : (
-        <BoardView state={state} />
-      )}
+      <StatusBar state={state} trackKey={trackKey} view={view}
+                 modeNote={mode !== "auto" ? "Fixed" : attract ? "Attract" : "Auto"} />
+      <div className="app__view" key={view}>
+        {view === "race" && (
+          <RaceView store={store} state={state} trackKey={trackKey} mapDisplay={mapDisplay}
+                    sessionBestMs={sessionBest(state, trackKey)} />
+        )}
+        {view === "board" && <BoardView state={state} />}
+        {view === "analysis" && <AnalysisView store={store} state={state} trackKey={trackKey} />}
+        {view === "onboard" && <OnboardView store={store} state={state} />}
+      </div>
     </div>
   );
 }

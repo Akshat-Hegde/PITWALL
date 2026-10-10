@@ -12,6 +12,7 @@ import {
   type RigInfo,
   type TrackOutline,
 } from "../schema";
+import { softenColour } from "../colour";
 
 export type LinkState = "connecting" | "live" | "reconnecting" | "version_mismatch";
 
@@ -71,7 +72,13 @@ function framesById(frames: RigFrame[]): Record<string, RigFrame> {
   return Object.fromEntries(frames.map((f) => [f.rig_id, f]));
 }
 
-function upsertRig(rigs: RigInfo[], rig: RigInfo): RigInfo[] {
+/** Rig colours are shown desaturated everywhere (map, stripes, charts). */
+function soften(rig: RigInfo): RigInfo {
+  return { ...rig, colour: softenColour(rig.colour) };
+}
+
+function upsertRig(rigs: RigInfo[], incoming: RigInfo): RigInfo[] {
+  const rig = soften(incoming);
   const i = rigs.findIndex((r) => r.rig_id === rig.rig_id);
   if (i < 0) return [...rigs, rig];
   const next = rigs.slice();
@@ -98,7 +105,7 @@ export function applyMessage(state: DashboardState, msg: HubMessage, now: number
         telemetryTarget: { address: msg.hub.lan_address ?? null, port: msg.hub.udp_port ?? 20777 },
         steeringRotationDeg: msg.hub.steering_rotation_deg ?? 360,
         status: msg.status,
-        rigs: msg.rigs,
+        rigs: msg.rigs.map(soften),
         frames: framesById(msg.frame.rigs),
         comparison: msg.frame.comparison,
         outlines: Object.fromEntries(msg.outlines.map((o) => [o.track_key, o])),

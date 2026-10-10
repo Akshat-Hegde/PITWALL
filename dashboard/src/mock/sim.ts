@@ -87,6 +87,8 @@ interface RigSim {
   lapNumber: number;
   lapMs: number;
   lapPace: number;
+  /** Driving style: where on the lap this driver is a little quicker or slower (head-to-head variety). */
+  stylePhase: number;
   valid: boolean;
   invalidAtM: number | null;
   sectorSplits: number[]; // ms at the end of each completed sector this lap
@@ -100,6 +102,8 @@ interface RigSim {
   tyreAge: number;
   speed: number; // m/s, smoothed
   prevSpeed: number;
+  /** Smoothed longitudinal g for the friction circle. */
+  gLong: number;
   saves: number;
   savedLap: number;
   lastSaveAt: number | null;
@@ -210,6 +214,7 @@ export class MockHub {
       lapNumber: 1,
       lapMs: 0,
       lapPace: spec.pace,
+      stylePhase: i * 1.9,
       valid: true,
       invalidAtM: null,
       sectorSplits: [],
@@ -223,6 +228,7 @@ export class MockHub {
       tyreAge: 0,
       speed: 30,
       prevSpeed: 30,
+      gLong: 0,
       saves: 0,
       savedLap: 0,
       lastSaveAt: null,
@@ -270,7 +276,9 @@ export class MockHub {
   private advance(rig: RigSim, dtMs: number): HubMessage[] {
     if (!this.driving(rig)) return [];
     const msgs: HubMessage[] = [];
-    const target = sampleTrack(this.track, rig.distance).speed * rig.lapPace;
+    const lapAngle = (Math.max(0, rig.distance) / this.track.length) * Math.PI * 2;
+    const style = 1 + 0.014 * Math.sin(lapAngle * 3 + rig.stylePhase);
+    const target = sampleTrack(this.track, rig.distance).speed * rig.lapPace * style;
     rig.prevSpeed = rig.speed;
     rig.speed += (target - rig.speed) * Math.min(1, dtMs / 250);
     const before = rig.distance;
@@ -515,18 +523,22 @@ export class MockHub {
     const surface: [number, number, number, number] = [96 + heat, 99 + heat, 92, 94];
     const lapFraction = Math.max(0, rig.distance) / this.track.length;
     const g = Math.max(-1, Math.min(1, (rig.speed - rig.prevSpeed) / 1.2));
+    const stintLap = (rig.lapNumber - 1) % 10;
+    const gTarget = braking ? -4 * Math.min(1, -accel / 0.6) : g * 1.2;
+    rig.gLong += (gTarget - rig.gLong) * 0.3; // smoothed, like a real car's
     return {
       drs_open: kph > 285,
       drs_allowed: true,
       rev_lights_pct: Math.round(Math.max(0, Math.min(100, ((rpmFor(kph, gear) - 7000) / 5000) * 100))),
       ers_pct: Math.round((60 + 35 * Math.sin(lapFraction * Math.PI * 2 + rig.lapNumber)) * 10) / 10,
       ers_mode: "hotlap",
-      fuel_kg: Math.round((18 - rig.lapNumber * 1.6 - lapFraction * 1.6) * 100) / 100,
-      fuel_laps: Math.round((4.5 - rig.lapNumber * 0.4) * 100) / 100,
+      // Fuel runs down over a 10-lap stint, then the car is refuelled.
+      fuel_kg: Math.round((18 - stintLap * 1.6 - lapFraction * 1.6) * 100) / 100,
+      fuel_laps: Math.round((4.5 - stintLap * 0.4) * 100) / 100,
       pit_limiter: false,
       steer: Math.round(Math.sin(rig.distance / 140) * 0.6 * 1000) / 1000,
       g_lat: Math.round(Math.sin(rig.distance / 140) * 3.2 * 100) / 100,
-      g_long: Math.round((braking ? -4 * Math.min(1, -accel / 0.6) : g * 1.2) * 100) / 100,
+      g_long: Math.round(rig.gLong * 100) / 100,
       tyre_surface_c: surface,
       tyre_inner_c: [101, 103, 98, 99] as [number, number, number, number],
       tyre_pressure_psi: [23.1, 23.2, 21.4, 21.5] as [number, number, number, number],

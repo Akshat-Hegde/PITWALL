@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 import type { HubMessage } from "../schema";
 import { applyMessage, initialState, type DashboardState, type LinkState } from "./reducer";
 import { LapShareTracker } from "./lapshare";
+import { LapTraceTracker } from "./laptrace";
 import { PathTrace } from "./paths";
 import { TrailBuffer } from "./trails";
 
@@ -15,6 +16,8 @@ export class DashboardStore {
   readonly trails = new TrailBuffer();
   readonly paths = new PathTrace();
   readonly lapShare = new LapShareTracker();
+  /** Mini-sectors and speed traces per lap (race map colours, head to head). */
+  readonly laps = new LapTraceTracker();
   /** Recent (lateral, longitudinal) g per rig, newest last: the friction-circle trail. */
   readonly gTrail = new Map<string, [number, number][]>();
 
@@ -35,8 +38,12 @@ export class DashboardStore {
       this.paths.clear();
       this.lapShare.clear();
       this.gTrail.clear();
+      this.laps.clear();
     }
-    if (msg.type === "session_changed") this.trails.clear(msg.rig_id);
+    if (msg.type === "session_changed") {
+      this.trails.clear(msg.rig_id);
+      this.laps.clear(msg.rig_id);
+    }
     this.state = applyMessage(this.state, msg, now);
     if (this.state.link === "version_mismatch") {
       this.emit();
@@ -46,6 +53,7 @@ export class DashboardStore {
       const frames = msg.type === "snapshot" ? msg.frame.rigs : msg.rigs;
       for (const frame of frames) {
         this.lapShare.add(frame);
+        this.laps.add(frame);
         this.addG(frame.rig_id, frame.state === "driving" ? frame.car ?? null : null);
         if (!frame.position) continue;
         this.trails.add(frame.rig_id, now, frame.position.x, frame.position.z);

@@ -1,9 +1,11 @@
-import "@fontsource/bai-jamjuree/400.css";
-import "@fontsource/bai-jamjuree/500.css";
-import "@fontsource/bai-jamjuree/600.css";
-import "@fontsource/bai-jamjuree/700.css";
-import "@fontsource/bai-jamjuree/700-italic.css";
-import "./fonts.css";
+// One family, self-hosted (DESIGN.md): Barlow for numbers and text, Barlow Condensed for names and labels.
+import "@fontsource/barlow/latin-400.css";
+import "@fontsource/barlow/latin-500.css";
+import "@fontsource/barlow/latin-600.css";
+import "@fontsource/barlow/latin-700.css";
+import "@fontsource/barlow-condensed/latin-500.css";
+import "@fontsource/barlow-condensed/latin-600.css";
+import "@fontsource/barlow-condensed/latin-700.css";
 import "./styles.css";
 
 import { StrictMode } from "react";

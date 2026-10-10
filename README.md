@@ -110,19 +110,29 @@ Mock options, combined in the URL, e.g. `http://localhost:5173/?outline=late&mis
 | `rigs=N` | Number of driving rigs, 1–10 (default 2). |
 | `idle=1` | Every rig stays in the menu: shows attract mode. |
 
-**TV views.** Two views, sized for 1080p and 4K:
+**TV views.** Four views, sized for 1080p and 4K; the look is specified in [docs/DESIGN.md](docs/DESIGN.md):
 
-- **Race view:** today's top three, the speed trap and the weather across the top; the track map drawn in
-  sector colours with each car's dot and name; and per car (up to 4 rigs) a telemetry panel: speed dial and
-  gear, rev lights, throttle and brake, DRS, ERS and fuel, the four tyres coloured by temperature with wear,
-  a g-force circle, and lap clock, sectors, last / best lap and the live gap to the other car. With 5 or more
-  rigs the panels become a compact timing strip, one row per rig.
+- **Race view:** the track map (a thin line coloured by the lead car's mini-sectors: purple fastest, green
+  personal best, yellow slower) with each car's dot and name, the closest battle underneath, and the timing:
+  per car position, name, tyre, lap time, sectors with mini-sectors, last, best, gap, speed, gear and thin
+  throttle / brake bars. Cards for up to 4 rigs, a one-line-per-car tower for 5–10. A strip along the bottom
+  shows today's top three, the speed trap and the conditions.
 - **Leaderboard view:** today, this week and all time side by side, ten rows each, paging every 8 s when a
   board has more than ten drivers.
+- **Head to head:** the two drivers closest on best lap, left and right, with the map coloured by who is
+  faster in each of 24 mini-sectors, LOW / MEDIUM / HIGH SPEED corner labels, mirrored full throttle /
+  heavy braking / cornering bars, and both speed traces with the delta per mini-sector. It compares best laps
+  this screen saw from start to finish (the dashboard works mini-sectors out from the 15 Hz feed), so it
+  appears once two drivers have each completed a lap with the TV on.
+- **Onboard:** two cars at a time (paging through the rest): speed, gear, revs, throttle, brake, steering,
+  g-force circle with trail, the four tyres (temperature, wear, inner temperature, pressure, brake
+  temperature), fuel, ERS, DRS, top speed, slide angle and saves with the "Save!" flash, lap share bars and
+  damage.
 
-`?view=race` or `?view=board` fixes the view; the default `?view=auto` shows the race view while anyone is
-driving and switches to attract mode after 10 s with nobody driving (leaderboard view 20 s, race view 10 s,
-repeating). On the TV PC's keyboard: `1` race view, `2` leaderboard view, `0` auto.
+`?view=race|board|analysis|onboard` fixes the view; the default `?view=auto` rotates while anyone is driving
+(race 40 s, head to head 15 s when available, onboard 15 s) and switches to attract mode after 10 s with
+nobody driving (leaderboard view 20 s, race view 10 s, head to head 10 s if available, repeating). On the TV
+PC's keyboard: `1` race, `2` leaderboard, `3` head to head, `4` onboard, `0` auto.
 
 Branding comes from `[cafe]` in the hub config: `name`, plus CSS variables in `[cafe.branding]` (e.g.
 `"--brand-accent" = "#0a7cff"`), applied to the page as-is.
@@ -184,8 +194,8 @@ dashboard/src/
   schema.ts      TypeScript twin of docs/WS_SCHEMA.md
   data/          data sources: mock, WebSocket (reconnect, resync on seq gap)
   mock/          simulated track and rigs that emit schema messages
-  state/         reducer, store, position trails
+  state/         reducer, store, position trails, lap traces (mini-sectors, speed traces)
   map/           map geometry (display transform, fit)
-  components/    status bar, track map, timing strip, leaderboards, race and leaderboard views
-  views.ts       view selection: race / leaderboard / auto (attract mode)
+  components/    header, track map, timing, leaderboards, race / leaderboard / head-to-head / onboard views
+  views.ts       view selection and rotation (auto, attract mode)
 ```

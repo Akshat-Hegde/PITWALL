@@ -69,7 +69,8 @@ next to the value.
 
 ### Motion
 
-- 150–250 ms, `ease-out`, opacity and colour only. View changes fade 250 ms. A new best lap fades its colour in.
+- 150–250 ms, `ease-out`, opacity only. View changes fade 250 ms. Timing colours (purple / green / yellow)
+  switch instantly, like a timing screen; mini-sector lines fade in over 200 ms.
 - Bars may transition width over 120 ms (smooths the 15 Hz feed). Nothing bounces, scales or slides.
 - Respect `prefers-reduced-motion`: no transitions.
 
