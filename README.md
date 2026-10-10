@@ -111,9 +111,11 @@ Mock options, combined in the URL, e.g. `http://localhost:5173/?outline=late&mis
 
 **TV views.** Two views, sized for 1080p and 4K:
 
-- **Race view:** large track map and a timing strip, one row per rig (up to 10): driver, lap clock, sector
-  colours, last and best lap, and the live gap to the fastest other rig's best lap (Δ). With three rigs or
-  fewer, rows are larger and also show speed and gear. Today's top 3 fills the space below when there is room.
+- **Race view:** today's top three, the speed trap and the weather across the top; the track map drawn in
+  sector colours with each car's dot and name; and per car (up to 4 rigs) a telemetry panel: speed dial and
+  gear, rev lights, throttle and brake, DRS, ERS and fuel, the four tyres coloured by temperature with wear,
+  a g-force circle, and lap clock, sectors, last / best lap and the live gap to the other car. With 5 or more
+  rigs the panels become a compact timing strip, one row per rig.
 - **Leaderboard view:** today, this week and all time side by side, ten rows each, paging every 8 s when a
   board has more than ten drivers.
 

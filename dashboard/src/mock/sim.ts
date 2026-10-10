@@ -446,6 +446,9 @@ export class MockHub {
       track_name: TRACK_NAME,
       track_length_m: Math.round(this.track.length),
       session_type: "Time Trial",
+      weather: "light_cloud",
+      air_temp_c: 23,
+      track_temp_c: 31,
     };
   }
 
@@ -485,6 +488,7 @@ export class MockHub {
       brake: braking ? Math.min(1, -accel / 0.6) : 0,
       rpm: rpmFor(kph, gear),
       max_rpm: 12500,
+      car: this.carDetail(rig, kph, gear, braking, accel),
       tyre: this.tyre(rig),
       lap: {
         number: rig.lapNumber,
@@ -496,6 +500,38 @@ export class MockHub {
         sectors: [...rig.sectors] as Sectors,
         last_sectors: rig.lastSectors,
       },
+    };
+  }
+
+  private carDetail(rig: RigSim, kph: number, gear: number, braking: boolean, accel: number) {
+    const wear = Math.min(60, rig.tyreAge * 2.4 + (rig.distance / this.track.length) * 2.4);
+    const heat = braking ? 8 : 0;
+    const surface: [number, number, number, number] = [96 + heat, 99 + heat, 92, 94];
+    const lapFraction = Math.max(0, rig.distance) / this.track.length;
+    const g = Math.max(-1, Math.min(1, (rig.speed - rig.prevSpeed) / 1.2));
+    return {
+      drs_open: kph > 285,
+      drs_allowed: true,
+      rev_lights_pct: Math.round(Math.max(0, Math.min(100, ((rpmFor(kph, gear) - 7000) / 5000) * 100))),
+      ers_pct: Math.round((60 + 35 * Math.sin(lapFraction * Math.PI * 2 + rig.lapNumber)) * 10) / 10,
+      ers_mode: "hotlap",
+      fuel_kg: Math.round((18 - rig.lapNumber * 1.6 - lapFraction * 1.6) * 100) / 100,
+      fuel_laps: Math.round((4.5 - rig.lapNumber * 0.4) * 100) / 100,
+      pit_limiter: false,
+      steer: Math.round(Math.sin(rig.distance / 140) * 0.6 * 1000) / 1000,
+      g_lat: Math.round(Math.sin(rig.distance / 140) * 3.2 * 100) / 100,
+      g_long: Math.round((braking ? -4 * Math.min(1, -accel / 0.6) : g * 1.2) * 100) / 100,
+      tyre_surface_c: surface,
+      tyre_inner_c: [101, 103, 98, 99] as [number, number, number, number],
+      tyre_pressure_psi: [23.1, 23.2, 21.4, 21.5] as [number, number, number, number],
+      tyre_wear_pct: [wear * 1.1, wear * 1.15, wear * 0.9, wear * 0.95].map((w) => Math.round(w * 10) / 10) as [
+        number, number, number, number],
+      brake_c: [braking ? 780 : 420, braking ? 790 : 430, braking ? 610 : 360, braking ? 620 : 370] as [
+        number, number, number, number],
+      damage: { front_wing_left: 0, front_wing_right: 0, rear_wing: 0, floor: 0, diffuser: 0, sidepod: 0,
+        gearbox: 0, engine: 0 },
+      top_speed_lap_kph: Math.round(Math.max(kph, 300 * rig.lapPace)),
+      top_speed_kph: Math.round(318 * rig.spec.pace),
     };
   }
 

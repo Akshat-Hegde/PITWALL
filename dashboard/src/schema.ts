@@ -42,6 +42,36 @@ export interface SessionInfo {
   track_name: string | null;
   track_length_m: number | null;
   session_type: string | null;
+  /** Added in v1 (optional): conditions. */
+  weather?: "clear" | "light_cloud" | "overcast" | "light_rain" | "heavy_rain" | "storm" | string | null;
+  air_temp_c?: number | null;
+  track_temp_c?: number | null;
+}
+
+/** Four values per wheel, ordered front-left, front-right, rear-left, rear-right. */
+export type PerWheel = [number, number, number, number];
+
+/** Added in v1 (optional): car detail beyond speed / gear / pedals. */
+export interface CarDetail {
+  drs_open: boolean | null;
+  drs_allowed: boolean | null;
+  rev_lights_pct: number | null;
+  ers_pct: number | null;
+  ers_mode: "none" | "medium" | "hotlap" | "overtake" | string | null;
+  fuel_kg: number | null;
+  fuel_laps: number | null;
+  pit_limiter: boolean | null;
+  steer: number | null;
+  g_lat: number | null;
+  g_long: number | null;
+  tyre_surface_c: PerWheel | null;
+  tyre_inner_c: PerWheel | null;
+  tyre_pressure_psi: PerWheel | null;
+  tyre_wear_pct: PerWheel | null;
+  brake_c: PerWheel | null;
+  damage: Record<string, number> | null;
+  top_speed_lap_kph: number | null;
+  top_speed_kph: number | null;
 }
 
 export interface Tyre {
@@ -94,6 +124,7 @@ export interface RigFrame {
   best: BestLap | null;
   /** The driver's fastest valid lap on this track ever (added in v1; older hubs don't send it). */
   personal_best?: BestLap | null;
+  car?: CarDetail | null;
 }
 
 export interface ComparisonEntry {

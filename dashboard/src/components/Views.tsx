@@ -1,8 +1,9 @@
 import type { Display } from "../map/geometry";
 import type { DashboardState } from "../state/reducer";
 import type { DashboardStore } from "../state/store";
-import { CarCards } from "./CarCards";
+import { CarPanels } from "./CarPanel";
 import { LeaderboardPanel } from "./LeaderboardPanel";
+import { PodiumRow } from "./PodiumRow";
 import { TimingStrip } from "./TimingStrip";
 import { TrackMap } from "./TrackMap";
 
@@ -14,40 +15,62 @@ interface RaceProps {
   sessionBestMs: number | null;
 }
 
-/** Card view up to this many rigs (live speed, gear, revs, pedals per car); the compact strip above it. */
-export const MAX_CARDS = 4;
+/** Telemetry panels up to this many rigs (dial, revs, pedals, tyres per car); the compact strip above it. */
+export const MAX_PANELS = 4;
 
 /**
- * Large map plus, per car, a live telemetry card (up to MAX_CARDS rigs) or a compact timing-strip row
- * (more rigs). Head-to-head is the gap on each card / the Δ column. Today's top 3 when there is room.
+ * Race view: today's podium, speed trap and conditions across the top; the track map; and per car a
+ * telemetry panel (up to MAX_PANELS rigs) or a compact timing-strip row (more rigs).
  */
 export function RaceView({ store, state, trackKey, mapDisplay, sessionBestMs }: RaceProps) {
-  const cards = state.rigs.length > 0 && state.rigs.length <= MAX_CARDS;
-  const roomForBoard = cards ? state.rigs.length <= 2 : state.rigs.length <= 5;
+  const panels = state.rigs.length > 0 && state.rigs.length <= MAX_PANELS;
   const comparison = state.comparison?.rigs ?? [];
   return (
     <main className="race">
-      <section className="race__map" aria-label="Track map">
-        <TrackMap store={store} state={state} trackKey={trackKey} displayOverride={mapDisplay} />
-      </section>
+      <PodiumRow state={state} trackKey={trackKey} />
+      <MapCard store={store} state={state} trackKey={trackKey} mapDisplay={mapDisplay} />
       <div className="race__side">
-        {cards ? (
-          <CarCards rigs={state.rigs} frames={state.frames} comparison={comparison} sessionBestMs={sessionBestMs} />
-        ) : (
+        {panels ? (
+          <CarPanels rigs={state.rigs} frames={state.frames} comparison={comparison} sessionBestMs={sessionBestMs} />
+        ) : state.rigs.length > 0 ? (
           <TimingStrip rigs={state.rigs} frames={state.frames} comparison={comparison} sessionBestMs={sessionBestMs} />
-        )}
-        {roomForBoard && (
-          <LeaderboardPanel
-            className="race__top"
-            title="Fastest today"
-            leaderboard={state.leaderboards.today ?? null}
-            rigs={state.rigs}
-            slots={3}
-            top
-          />
+        ) : (
+          <section className="side-empty">
+            <h2 className="side-empty__title">No rigs yet</h2>
+            <p>Each rig appears here as soon as its game sends telemetry.</p>
+          </section>
         )}
       </div>
     </main>
+  );
+}
+
+function MapCard({ store, state, trackKey, mapDisplay }: Omit<RaceProps, "sessionBestMs">) {
+  const frame = Object.values(state.frames).find((f) => f.session.track_key === trackKey);
+  const session = frame?.session;
+  const name = session?.track_name ?? state.leaderboards.today?.track_name ?? null;
+  const length = session?.track_length_m ? `${(session.track_length_m / 1000).toFixed(3)} km` : null;
+  const hasOutline = trackKey ? Boolean(state.outlines[trackKey]) : false;
+  return (
+    <section className="mapcard" aria-label="Track map">
+      <TrackMap store={store} state={state} trackKey={trackKey} displayOverride={mapDisplay} />
+      {name && (
+        <header className="mapcard__head">
+          <h1 className="mapcard__track">{name}</h1>
+          <span className="mapcard__meta">
+            {session?.session_type && <span>{session.session_type}</span>}
+            {length && <span>{length}</span>}
+          </span>
+        </header>
+      )}
+      {hasOutline && (
+        <ul className="mapcard__legend" aria-label="Sectors">
+          <li className="legend legend--s1">Sector 1</li>
+          <li className="legend legend--s2">Sector 2</li>
+          <li className="legend legend--s3">Sector 3</li>
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -56,7 +79,10 @@ export function BoardView({ state }: { state: DashboardState }) {
   const track = state.leaderboards.today?.track_name ?? state.leaderboards.all_time?.track_name ?? null;
   return (
     <main className="boards">
-      <h1 className="boards__track">{track ?? "Best laps"}</h1>
+      <header className="boards__head">
+        <h1 className="boards__track">{track ?? "Best laps"}</h1>
+        <span className="boards__sub">Best lap per driver</span>
+      </header>
       <div className="boards__grid">
         <LeaderboardPanel className="boards__today" title="Today" leaderboard={state.leaderboards.today ?? null}
                           rigs={state.rigs} showTrack={false} />

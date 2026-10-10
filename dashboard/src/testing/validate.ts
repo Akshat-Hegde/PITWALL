@@ -129,6 +129,16 @@ function rigFrame(c: Checker, v: unknown, p: string) {
         c.field(b, "set_at", isInt, `${p}.personal_best`);
       });
     }
+    if (o.car !== null && o.car !== undefined) {
+      c.object(o.car, `${p}.car`, (car) => {
+        for (const k of ["ers_pct", "fuel_kg", "fuel_laps", "steer", "g_lat", "g_long", "rev_lights_pct",
+          "top_speed_lap_kph", "top_speed_kph"]) c.field(car, k, orNull(isNum), `${p}.car`);
+        for (const k of ["drs_open", "drs_allowed", "pit_limiter"]) c.field(car, k, orNull(isBool), `${p}.car`);
+        for (const k of ["tyre_surface_c", "tyre_inner_c", "tyre_pressure_psi", "tyre_wear_pct", "brake_c"]) {
+          c.field(car, k, (x) => x === null || (Array.isArray(x) && x.length === 4 && x.every(isNum)), `${p}.car`);
+        }
+      });
+    }
     if (!("best" in o)) c.errors.push(`${p}.best: missing`);
     if (o.best !== null && o.best !== undefined) {
       c.object(o.best, `${p}.best`, (b) => {

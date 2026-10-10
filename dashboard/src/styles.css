@@ -1,38 +1,50 @@
 /* Tokens. Cafe branding from the hub config overrides --brand-* (and any other) variables on :root. */
 :root {
-  --surface-0: #18232d; /* tarmac: page */
-  --surface-1: #202e3a; /* pit lane: panels */
-  --surface-2: #283a49;
-  --rule: #33475a; /* kerb line */
-  --text: #eef3f6; /* paddock white */
-  --text-muted: #8fa3b3; /* grandstand grey */
+  --surface-0: #0e0e13; /* page */
+  --surface-1: #16161e; /* cards */
+  --surface-2: #1f1f29;
+  --surface-3: #2a2a36;
+  --rule: #2c2c39;
+  --text: #f4f4f7;
+  --text-muted: #9a9aad;
 
-  --sector-purple: #b57bff;
-  --sector-green: #3ddc84;
-  --sector-yellow: #f2c94c;
-  --throttle: #3ddc84;
-  --brake: #ff5a5f;
-  --warning: #f2a33a;
+  --sector-purple: #b26bff;
+  --sector-green: #2fd27a;
+  --sector-yellow: #ffcc33;
+  --throttle: #2fd27a;
+  --brake: #ff4b55;
+  --warning: #ffa53a;
 
-  --tyre-soft: #ff4d57;
-  --tyre-medium: #f7d046;
-  --tyre-hard: #eef3f6;
-  --tyre-inter: #3ddc84;
-  --tyre-wet: #3a8dff;
+  --tyre-soft: #ff3b47;
+  --tyre-medium: #ffd23f;
+  --tyre-hard: #f4f4f7;
+  --tyre-inter: #2fd27a;
+  --tyre-wet: #3d8bff;
 
-  --map-track: #2c3e4f;
-  --map-track-edge: #3f5568;
-  --map-path: rgba(143, 163, 179, 0.28); /* driven path while there is no outline */
+  /* Tyre surface temperature bands */
+  --temp-cold: #3d8bff;
+  --temp-cool: #38c6e8;
+  --temp-ok: #2fd27a;
+  --temp-warm: #ffcc33;
+  --temp-hot: #ff4b55;
 
-  --brand-accent: #e5484d;
+  --map-track: #2a2a36;
+  --map-track-edge: #3a3a49;
+  --map-path: rgba(154, 154, 173, 0.3); /* driven path while there is no outline */
+  --map-s1: #ff3b5c;
+  --map-s2: #3d8bff;
+  --map-s3: #ffcc33;
+
+  --brand-accent: #e10600;
   --brand-text: #ffffff;
 
-  --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
-  --font-body: "Barlow", "Segoe UI", sans-serif;
+  --font-display: "Barlow Condensed", "Arial Narrow", sans-serif; /* numbers */
+  --font-head: "Titillium Web", "Segoe UI", sans-serif; /* names, headings */
+  --font-body: "Titillium Web", "Segoe UI", sans-serif;
 
   --gap: 0.75rem;
   --pad: 1rem;
-  --radius: 0.35rem;
+  --radius: 0.65rem;
 
   color-scheme: dark;
 }
@@ -99,20 +111,21 @@ ul {
   overflow: hidden;
 }
 
-/* Race view: large map | timing strip (+ today's top 3 when there is room). */
+/* Race view: podium row across the top; map | car panels. */
 .race {
   display: grid;
-  grid-template-columns: minmax(0, 1.38fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.98fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    "podium podium"
+    "map side";
   gap: var(--gap);
   padding: var(--gap);
   min-height: 0;
 }
 
-.race__map {
-  min-height: 0;
-}
-
 .race__side {
+  grid-area: side;
   display: flex;
   flex-direction: column;
   gap: var(--gap);
@@ -128,11 +141,22 @@ ul {
   min-height: 0;
 }
 
+.boards__head {
+  display: flex;
+  align-items: baseline;
+  gap: 1.2rem;
+}
+
 .boards__track {
-  font-family: var(--font-display);
+  font-family: var(--font-head);
   font-weight: 700;
   font-size: 2.4rem;
   line-height: 1.1;
+}
+
+.boards__sub {
+  color: var(--text-muted);
+  font-size: 1.1rem;
 }
 
 .boards__grid {
@@ -171,9 +195,9 @@ ul {
 }
 
 .panel__title {
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 1.35rem;
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 1.3rem;
   letter-spacing: 0.01em;
   margin-bottom: 0.6rem;
   display: flex;
@@ -347,7 +371,7 @@ ul {
 }
 
 .track-map__note--top {
-  inset: var(--pad) auto auto var(--pad);
+  inset: var(--pad) var(--pad) auto auto;
   font-size: 0.95rem;
   color: var(--warning);
 }
@@ -660,15 +684,6 @@ ul {
   height: 0.85rem;
 }
 
-.race__top {
-  flex: none;
-}
-
-.race__top .lb {
-  flex: none;
-  grid-template-rows: repeat(3, 3.4rem);
-}
-
 /* ---- Leaderboard: timing tower ----------------------------------------------------------- */
 /* Ten equal row slots fill the column, so 10 entries fit at 1080p and 4K and the spacing doesn't
    change as the board fills up. More than ten: the panel pages (see LeaderboardPanel). */
@@ -780,9 +795,264 @@ ul {
   font-size: 1.1rem;
 }
 
-/* ---- Car cards: live telemetry per car (up to 4 rigs) ------------------------------------- */
+/* ---- Podium row: today's top 3, speed trap, conditions -------------------------------------- */
 
-.cards {
+.podium {
+  grid-area: podium;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 0.8fr) minmax(0, 1fr);
+  gap: var(--gap);
+}
+
+.pod {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  min-width: 0;
+  min-height: 5.4rem;
+  padding: 0.7rem 1rem 0.7rem 1.25rem;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: linear-gradient(120deg, color-mix(in srgb, var(--rig-colour) 26%, var(--surface-1)) 0%,
+    var(--surface-1) 62%);
+}
+
+.pod::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0.3rem;
+  background: var(--rig-colour);
+}
+
+.pod__pos {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 2.7rem;
+  line-height: 0.9;
+}
+
+.pod--empty {
+  background: var(--surface-1);
+}
+
+.pod--empty .pod__pos {
+  color: var(--surface-3);
+}
+
+.pod__body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.pod__driver {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 1.35rem;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pod__line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.8rem;
+}
+
+.pod__time {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.65rem;
+}
+
+.pod__time.is-purple {
+  color: var(--sector-purple);
+}
+
+.pod__gap {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+.pod--stat {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.05rem;
+}
+
+.pod__label {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.pod__big {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 2.2rem;
+  line-height: 1;
+}
+
+.pod__big--sm {
+  font-size: 1.75rem;
+}
+
+.pod__unit {
+  margin-left: 0.3rem;
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.pod--weather {
+  background: var(--surface-1);
+}
+
+.weather {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.weather__icon {
+  width: 2.8rem;
+  height: 2.8rem;
+}
+
+.weather__temps {
+  display: flex;
+  gap: 1.3rem;
+}
+
+.weather__temps > span {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.05;
+}
+
+.wx-sun circle {
+  fill: #ffcc33;
+}
+
+.wx-sun line {
+  stroke: #ffcc33;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+.wx-cloud {
+  fill: #c8c8d6;
+}
+
+.wx-rain line {
+  stroke: #3d8bff;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+/* ---- Map card -------------------------------------------------------------------------------- */
+
+.mapcard {
+  grid-area: map;
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--surface-1);
+}
+
+.mapcard .track-map {
+  border-radius: 0;
+  background: radial-gradient(ellipse at 55% 52%, var(--surface-2), var(--surface-1) 72%);
+}
+
+.mapcard__head {
+  position: absolute;
+  top: 1rem;
+  left: 1.3rem;
+  pointer-events: none;
+}
+
+.mapcard__track {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 2.1rem;
+  line-height: 1.05;
+}
+
+.mapcard__meta {
+  display: flex;
+  gap: 1.1rem;
+  color: var(--text-muted);
+  font-size: 1rem;
+}
+
+.mapcard__legend {
+  position: absolute;
+  left: 1.3rem;
+  bottom: 1rem;
+  display: flex;
+  gap: 1.2rem;
+}
+
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.legend::before {
+  content: "";
+  width: 1.5rem;
+  height: 0.3rem;
+  border-radius: 0.15rem;
+  background: var(--c);
+}
+
+.legend--s1 {
+  --c: var(--map-s1);
+}
+
+.legend--s2 {
+  --c: var(--map-s2);
+}
+
+.legend--s3 {
+  --c: var(--map-s3);
+}
+
+.side-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 2rem;
+  border-radius: var(--radius);
+  background: var(--surface-1);
+  color: var(--text-muted);
+}
+
+.side-empty__title {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 1.6rem;
+  color: var(--text);
+}
+
+/* ---- Car telemetry panels (up to 4 rigs) ------------------------------------------------------ */
+
+.panels {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -790,399 +1060,742 @@ ul {
   min-height: 0;
 }
 
-.card {
+.panels--grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+}
+
+.panel2 {
   position: relative;
   flex: 1 1 0;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
   gap: 0.6rem;
   min-height: 0;
+  padding: 0.8rem 1rem 0.75rem 1.3rem;
   overflow: hidden;
-  background: var(--surface-1);
   border-radius: var(--radius);
-  padding: 0.9rem var(--pad) 0.9rem calc(var(--pad) + 0.45rem);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--rig-colour) 13%, var(--surface-1)) 0%,
+    var(--surface-1) 28%);
 }
 
-/* Team-style colour stripe down the left edge. */
-.card::before {
+.panel2::before {
   content: "";
   position: absolute;
   inset: 0 auto 0 0;
-  width: 0.45rem;
+  width: 0.3rem;
   background: var(--rig-colour);
 }
 
-.card--no-data {
+.panel2--no-data {
   flex: 0 0 auto;
   opacity: 0.6;
 }
 
-.card__head {
+.panel2__head {
   display: flex;
   align-items: center;
-  gap: 0.7rem;
+  gap: 0.8rem;
   min-width: 0;
 }
 
-.card__badge {
+.panel2__num {
   display: grid;
   place-items: center;
   flex: none;
-  width: 1.9rem;
-  height: 1.9rem;
+  width: 2.1rem;
+  height: 2.1rem;
   border-radius: 50%;
   background: var(--rig-colour);
   color: var(--surface-0);
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 1.15rem;
+  font-size: 1.25rem;
 }
 
-.card__driver {
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 1.75rem;
+.panel2__who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.1;
+}
+
+.panel2__driver {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 1.65rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  min-width: 0;
 }
 
-.card__meta {
+.panel2__rig {
   display: flex;
-  gap: 0.8rem;
+  gap: 0.9rem;
   color: var(--text-muted);
-  font-size: 0.95rem;
+  font-size: 0.88rem;
   white-space: nowrap;
 }
 
-.card__tyre {
-  font-weight: 500;
-  color: var(--tyre-colour, var(--text-muted));
+.panel2__hint {
+  color: var(--text-muted);
 }
 
-.card__state {
+.compound {
   margin-left: auto;
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-
-.card__state.is-live {
-  color: var(--text);
-}
-
-.card__hint {
-  color: var(--text-muted);
-}
-
-.card__label {
-  display: block;
-  color: var(--text-muted);
-  font-size: 0.8rem;
-  line-height: 1.2;
-}
-
-.card__live {
-  display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr);
-  align-items: center;
-  gap: 1.3rem;
-}
-
-.card__speed {
   display: flex;
-  align-items: baseline;
-  gap: 0.35rem;
-  min-width: 5.6ch;
+  align-items: center;
+  gap: 0.5rem;
 }
 
-.card__speed-value,
-.card__gear {
+.compound--soft {
+  --tyre-colour: var(--tyre-soft);
+}
+
+.compound--medium {
+  --tyre-colour: var(--tyre-medium);
+}
+
+.compound--hard {
+  --tyre-colour: var(--tyre-hard);
+}
+
+.compound--inter {
+  --tyre-colour: var(--tyre-inter);
+}
+
+.compound--wet {
+  --tyre-colour: var(--tyre-wet);
+}
+
+.compound__ring {
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 50%;
+  border: 0.3rem solid var(--tyre-colour, var(--text-muted));
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 3.4rem;
-  line-height: 0.95;
+  font-size: 1.05rem;
 }
 
-.card__unit {
-  color: var(--text-muted);
-}
-
-.card__gear {
-  min-width: 1.2ch;
-  text-align: center;
-  color: var(--rig-colour);
-}
-
-.card__gauges {
+.compound__text {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  line-height: 1.1;
+}
+
+.live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.2rem 0.75rem;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.compound + .live-pill {
+  margin-left: 0.4rem;
+}
+
+.panel2__head > .live-pill:nth-child(3) {
+  margin-left: auto;
+}
+
+.live-pill.is-live {
+  color: var(--text);
+  background: color-mix(in srgb, var(--rig-colour) 24%, var(--surface-2));
+}
+
+.live-pill__dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: #ff3b47;
+}
+
+.micro {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.panel2__body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 1.2rem;
+}
+
+/* Speed dial */
+.dial {
+  width: 11.5rem;
+  height: auto;
+  overflow: visible;
+}
+
+.dial__track,
+.dial__value {
+  fill: none;
+  stroke-width: 12;
+  stroke-linecap: round;
+}
+
+.dial__track {
+  stroke: var(--surface-3);
+}
+
+.dial__value {
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--rig-colour) 70%, transparent));
+}
+
+.dial__tick {
+  stroke: var(--text-muted);
+  stroke-width: 1.5;
+  opacity: 0.55;
+}
+
+.dial__speed,
+.dial__gear {
+  font-family: var(--font-display);
+  font-weight: 700;
+  text-anchor: middle;
+}
+
+.dial__speed {
+  font-size: 54px;
+  fill: var(--text);
+}
+
+.dial__unit {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 13px;
+  fill: var(--text-muted);
+  text-anchor: middle;
+}
+
+.dial__gear {
+  font-size: 42px;
+}
+
+.panel2__mid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
   min-width: 0;
 }
 
-.rev {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.6rem;
-}
-
-.rev__bar {
+/* Rev lights */
+.leds__row {
   display: grid;
   grid-template-columns: repeat(15, minmax(0, 1fr));
-  gap: 0.18rem;
-  height: 1.1rem;
+  gap: 0.25rem;
 }
 
-.rev__seg {
-  border-radius: 0.12rem;
-  background: var(--surface-2);
+.led {
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--surface-3);
 }
 
-.rev__seg--low.is-lit {
-  background: var(--sector-green);
+.led--g.is-on {
+  background: #2fd27a;
+  box-shadow: 0 0 0.45rem #2fd27a;
 }
 
-.rev__seg--mid.is-lit {
-  background: var(--sector-yellow);
+.led--r.is-on {
+  background: #ff3b47;
+  box-shadow: 0 0 0.45rem #ff3b47;
 }
 
-.rev__seg--high.is-lit {
-  background: var(--brake);
+.led--b.is-on {
+  background: #5a7dff;
+  box-shadow: 0 0 0.45rem #5a7dff;
 }
 
-.rev__value {
-  min-width: 6.5em;
-  text-align: right;
+.leds__rpm {
+  display: block;
+  margin-top: 0.3rem;
   color: var(--text-muted);
-  font-size: 0.9rem;
-  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+  text-align: right;
 }
 
-.hpedal {
+.panel2__controls {
   display: grid;
-  grid-template-columns: 4.4rem minmax(0, 1fr);
-  align-items: center;
-  gap: 0.6rem;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 1.3rem;
+  align-items: stretch;
 }
 
-.hpedal .card__label {
-  display: inline;
+/* Pedals (vertical) */
+.pedals2 {
+  display: flex;
+  gap: 0.5rem;
+  height: 6.6rem;
 }
 
-.hpedal__track {
+.pedal2 {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  justify-items: center;
+  gap: 0.15rem;
+  width: 2.8rem;
+}
+
+.pedal2__track {
   position: relative;
-  height: 0.55rem;
-  border-radius: 0.3rem;
-  background: var(--surface-2);
+  width: 0.95rem;
+  height: 100%;
   overflow: hidden;
+  border-radius: 0.5rem;
+  background: var(--surface-3);
 }
 
-.hpedal__fill {
+.pedal2__fill {
   position: absolute;
-  inset: 0 auto 0 0;
+  inset: auto 0 0 0;
+  border-radius: 0.5rem;
 }
 
-.hpedal--throttle .hpedal__fill {
+.pedal2--thr .pedal2__fill {
   background: var(--throttle);
 }
 
-.hpedal--brake .hpedal__fill {
+.pedal2--brk .pedal2__fill {
   background: var(--brake);
 }
 
-/* Timing: lap clock on the left; sectors above last / best / gap. */
-.card__timing {
-  display: grid;
-  grid-template-columns: auto repeat(3, minmax(0, 1fr));
-  grid-template-areas:
-    "clock sectors sectors sectors"
-    "clock last best gap";
-  column-gap: 1rem;
-  row-gap: 0.45rem;
-  align-items: end;
-}
-
-.card__clock {
-  grid-area: clock;
-  align-self: center;
-  min-width: 8.6rem;
-}
-
-.card__clock-value {
-  display: block;
+.pedal2__pct {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 2.3rem;
+  font-size: 1.15rem;
   line-height: 1;
 }
 
-.card__clock-value.is-empty {
-  color: var(--rule);
+/* DRS / ERS / fuel */
+.systems {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.6rem;
+  min-width: 0;
 }
 
-.card__clock-value.is-invalid {
+.drs {
+  align-self: flex-start;
+  padding: 0.12rem 0.75rem;
+  border-radius: 0.3rem;
+  background: var(--surface-3);
+  color: var(--text-muted);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.1rem;
+  letter-spacing: 0.06em;
+}
+
+.drs--ready {
+  color: var(--text);
+  box-shadow: inset 0 0 0 2px var(--sector-green);
+}
+
+.drs--open {
+  background: var(--sector-green);
+  color: var(--surface-0);
+}
+
+.ers {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 3ch;
+  align-items: center;
+  gap: 0.15rem 0.5rem;
+}
+
+.ers__label {
+  grid-column: 1 / -1;
+}
+
+.ers__track {
+  position: relative;
+  height: 0.55rem;
+  overflow: hidden;
+  border-radius: 0.3rem;
+  background: var(--surface-3);
+}
+
+.ers__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(90deg, #f7b500, #ffe680);
+}
+
+.ers__pct {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.05rem;
+  text-align: right;
+}
+
+.fuel {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  gap: 0 0.5rem;
+  white-space: nowrap;
+}
+
+.fuel__value {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.15rem;
+}
+
+.fuel__laps {
+  grid-column: 2;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.fuel__laps.is-short {
+  color: var(--brake);
+}
+
+/* Tyres: four corners around the car, coloured by surface temperature */
+.tyres {
+  display: grid;
+  grid-template-columns: 3.2rem 1.6rem 3.2rem;
+  grid-template-rows: 4.1rem 4.1rem auto;
+  grid-template-areas:
+    "fl car fr"
+    "rl car rr"
+    "label label label";
+  gap: 0.4rem 0.3rem;
+}
+
+.tyres__car {
+  grid-area: car;
+  display: flex;
+  justify-content: center;
+  padding: 0.6rem 0;
+}
+
+.tyres__body {
+  width: 1.1rem;
+  border-radius: 0.6rem 0.6rem 0.35rem 0.35rem;
+  background: var(--surface-3);
+}
+
+.tyre2 {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  background: var(--band);
+  color: #0e0e13;
+  line-height: 1.05;
+}
+
+.tyre2--0 {
+  grid-area: fl;
+}
+
+.tyre2--1 {
+  grid-area: fr;
+}
+
+.tyre2--2 {
+  grid-area: rl;
+}
+
+.tyre2--3 {
+  grid-area: rr;
+}
+
+.band--none {
+  --band: var(--surface-3);
+  color: var(--text-muted);
+}
+
+.band--cold {
+  --band: var(--temp-cold);
+}
+
+.band--cool {
+  --band: var(--temp-cool);
+}
+
+.band--ok {
+  --band: var(--temp-ok);
+}
+
+.band--warm {
+  --band: var(--temp-warm);
+}
+
+.band--hot {
+  --band: var(--temp-hot);
+}
+
+.tyre2__temp {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.2rem;
+}
+
+.tyre2__wear {
+  font-size: 0.78rem;
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+.tyre2__brake {
+  font-size: 0.66rem;
+  font-weight: 600;
+  opacity: 0.7;
+}
+
+.tyres__compound {
+  grid-area: label;
+  text-align: center;
+}
+
+/* G-force */
+.gforce {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.gforce svg {
+  width: 7.2rem;
+  height: 7.2rem;
+}
+
+.gforce__ring {
+  fill: none;
+  stroke: var(--surface-3);
+  stroke-width: 1;
+}
+
+.gforce__ring.is-major {
+  stroke: var(--rule);
+}
+
+.gforce__axis {
+  stroke: var(--surface-3);
+  stroke-width: 1;
+}
+
+.gforce__dot {
+  fill: var(--rig-colour);
+  filter: drop-shadow(0 0 4px var(--rig-colour));
+}
+
+.gforce__value {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.15rem;
+}
+
+/* Lap timing footer */
+.panel2__timing {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1.7fr) repeat(3, minmax(0, 0.75fr));
+  align-items: end;
+  gap: 1rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--rule);
+}
+
+.timing__clock .micro,
+.timing__stat .micro {
+  display: block;
+}
+
+.timing__clock-value {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 2.15rem;
+  line-height: 1;
+}
+
+.timing__clock-value.is-empty {
+  color: var(--surface-3);
+}
+
+.timing__clock-value.is-invalid {
   color: var(--text-muted);
   text-decoration: line-through;
   text-decoration-thickness: 0.06em;
 }
 
-.card__invalid {
-  color: var(--brake);
-  font-weight: 500;
-  font-size: 0.85rem;
-}
-
-.card__sectors {
-  grid-area: sectors;
+.timing__sectors {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.3rem;
 }
 
-.csector {
+.sec {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  gap: 0.4rem;
-  padding: 0.2rem 0.45rem;
-  border-radius: 0.2rem;
+  gap: 0.3rem;
+  padding: 0.22rem 0.45rem;
+  border-radius: 0.25rem;
   background: var(--surface-2);
   border-bottom: 0.22rem solid transparent;
 }
 
-.csector .card__label {
-  display: inline;
-}
-
-.csector__time {
+.sec__time {
   font-family: var(--font-display);
   font-weight: 600;
-  font-size: 1.25rem;
+  font-size: 1.2rem;
 }
 
-.csector--pending .csector__time {
+.sec--pending .sec__time,
+.sec--unrated .sec__time {
   color: var(--text-muted);
 }
 
-.csector--current {
+.sec--current {
   border-bottom-color: var(--rule);
 }
 
-.csector--session-best {
+.sec--session-best {
   border-bottom-color: var(--sector-purple);
 }
 
-.csector--session-best .csector__time {
+.sec--session-best .sec__time {
   color: var(--sector-purple);
 }
 
-.csector--personal-best {
+.sec--personal-best {
   border-bottom-color: var(--sector-green);
 }
 
-.csector--personal-best .csector__time {
+.sec--personal-best .sec__time {
   color: var(--sector-green);
 }
 
-.csector--normal {
+.sec--normal {
   border-bottom-color: var(--sector-yellow);
 }
 
-.csector--normal .csector__time {
+.sec--normal .sec__time {
   color: var(--sector-yellow);
 }
 
-.csector--unrated .csector__time {
-  color: var(--text-muted);
-}
-
-.card__stat:nth-of-type(1) {
-  grid-area: last;
-}
-
-.card__stat:nth-of-type(2) {
-  grid-area: best;
-}
-
-.card__stat:nth-of-type(3) {
-  grid-area: gap;
-}
-
-.card__stat-value {
+.timing__value {
   font-family: var(--font-display);
   font-weight: 600;
   font-size: 1.4rem;
 }
 
-.card__stat-value.is-personal-best,
-.card__stat-value.is-ahead {
-  color: var(--sector-green);
-}
-
-.card__stat-value.is-session-best {
+.timing__value.is-purple {
   color: var(--sector-purple);
 }
 
-.card__stat-value.is-behind {
+.timing__value.is-green {
+  color: var(--sector-green);
+}
+
+.timing__value.is-red {
   color: var(--brake);
 }
 
-/* Three or four cards: smaller type so each still fits. */
-.cards:has(> .card:nth-child(3)) .card__speed-value,
-.cards:has(> .card:nth-child(3)) .card__gear {
-  font-size: 2.5rem;
-}
-
-.cards:has(> .card:nth-child(3)) .card__driver {
-  font-size: 1.4rem;
-}
-
-.cards:has(> .card:nth-child(3)) .card__clock-value {
-  font-size: 1.8rem;
-}
-
-.cards:has(> .card:nth-child(3)) .card {
-  gap: 0.3rem;
-  padding-top: 0.55rem;
+/* Three or four cars: two columns of panels, tyres and g-force left out, timing on two rows. */
+.panel2--compact {
+  gap: 0.4rem;
+  padding-top: 0.6rem;
   padding-bottom: 0.55rem;
 }
 
-/* Throttle and brake side by side to save a row. */
-.cards:has(> .card:nth-child(3)) .card__gauges {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.3rem 1rem;
+.panel2--compact .panel2__driver {
+  font-size: 1.3rem;
 }
 
-.cards:has(> .card:nth-child(3)) .rev {
-  grid-column: 1 / -1;
+.panel2--compact .compound__text,
+.panel2--compact .panel2__rig span {
+  display: none;
 }
 
-.cards:has(> .card:nth-child(3)) .hpedal {
+.panel2--compact .panel2__body {
   grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.8rem;
 }
 
-.cards:has(> .card:nth-child(3)) .rev__bar {
-  height: 0.85rem;
+.panel2--compact .tyres {
+  display: none;
 }
 
-.cards:has(> .card:nth-child(3)) .card__timing {
-  row-gap: 0.25rem;
+.panel2--compact .dial {
+  width: 8.6rem;
 }
 
-.cards:has(> .card:nth-child(3)) .csector__time {
-  font-size: 1.05rem;
+.panel2--compact .pedals2 {
+  height: 5rem;
 }
 
-.cards:has(> .card:nth-child(3)) .card__stat-value {
-  font-size: 1.15rem;
+.panel2--compact .panel2__controls {
+  gap: 0.7rem;
 }
 
-.cards:has(> .card:nth-child(3)) .card__label {
-  font-size: 0.72rem;
+.panel2--compact .ers .micro {
+  display: none;
+}
+
+.panel2--compact .panel2__timing {
+  grid-template-columns: auto repeat(3, minmax(0, 1fr));
+  grid-template-areas:
+    "clock sectors sectors sectors"
+    "clock last best gap";
+  row-gap: 0.3rem;
+  gap: 0.3rem 0.7rem;
+}
+
+.panel2--compact .timing__clock {
+  grid-area: clock;
+  align-self: center;
+}
+
+.panel2--compact .timing__clock-value {
+  font-size: 1.7rem;
+}
+
+.panel2--compact .timing__sectors {
+  grid-area: sectors;
+}
+
+.panel2--compact .timing__stat:nth-of-type(1) {
+  grid-area: last;
+}
+
+.panel2--compact .timing__stat:nth-of-type(2) {
+  grid-area: best;
+}
+
+.panel2--compact .timing__stat:nth-of-type(3) {
+  grid-area: gap;
+}
+
+.panel2--compact .timing__value,
+.panel2--compact .sec__time {
+  font-size: 1.1rem;
 }
 
 /* ---- Waiting for telemetry (on the map) ---------------------------------------------------- */
@@ -1254,10 +1867,39 @@ ul {
 
   .race {
     align-content: start;
+    grid-template-areas:
+      "podium"
+      "map"
+      "side";
   }
 
-  .race__map {
-    height: 70vw;
+  .podium {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mapcard {
+    height: 75vw;
+  }
+
+  .panel2 {
+    flex: none;
+  }
+
+  .panels--grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .panel2__body {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .panel2__timing {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .timing__clock,
+  .timing__sectors {
+    grid-column: 1 / -1;
   }
 
   .strip {
@@ -1292,18 +1934,6 @@ ul {
   .lb {
     grid-template-rows: none;
     grid-auto-rows: 3.6rem;
-  }
-
-  .card {
-    flex: none;
-  }
-
-  .card__live {
-    grid-template-columns: auto auto;
-  }
-
-  .card__gauges {
-    grid-column: 1 / -1;
   }
 
   .waiting {

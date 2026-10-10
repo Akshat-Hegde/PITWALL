@@ -51,7 +51,7 @@ export function TrackMap({ store, state, trackKey, displayOverride }: Props) {
     let raf = 0;
     let width = 0;
     let height = 0;
-    let colours = { track: "", trackEdge: "", line: "", muted: "", bg: "", path: "" };
+    let colours = { track: "", trackEdge: "", line: "", muted: "", bg: "", path: "", s1: "", s2: "", s3: "" };
 
     const resize = () => {
       const rect = canvas.getBoundingClientRect();
@@ -68,6 +68,9 @@ export function TrackMap({ store, state, trackKey, displayOverride }: Props) {
         muted: cssVar("--text-muted"),
         bg: cssVar("--surface-0"),
         path: cssVar("--map-path"),
+        s1: cssVar("--map-s1"),
+        s2: cssVar("--map-s2"),
+        s3: cssVar("--map-s3"),
       };
     };
     const observer = new ResizeObserver(resize);
@@ -136,17 +139,47 @@ export function TrackMap({ store, state, trackKey, displayOverride }: Props) {
         ctx.strokeStyle = colours.track;
         ctx.lineWidth = minSide * 0.026;
         ctx.stroke(path);
-        drawStartLine(ctx, outline.points, toScreen, minSide, colours.line, colours.bg);
-        if (outline.sector_starts) {
-          for (const index of outline.sector_starts.slice(1)) {
-            const p = outline.points[index];
-            if (!p) continue;
-            const [sx, sy] = toScreen(p[0], p[1]);
-            ctx.fillStyle = colours.muted;
-            ctx.beginPath();
-            ctx.arc(sx, sy, minSide * 0.006, 0, Math.PI * 2);
-            ctx.fill();
+        // Sector colours down the middle of the track, with an S1/S2/S3 label where each starts.
+        const starts = outline.sector_starts ?? null;
+        if (starts) {
+          const n = outline.points.length;
+          const sectorColours = [colours.s1, colours.s2, colours.s3];
+          for (let k = 0; k < 3; k++) {
+            const from = starts[k]!;
+            const to = k < 2 ? starts[k + 1]! : n;
+            const seg = new Path2D();
+            for (let i = from; i <= to; i++) {
+              const pt = outline.points[i % n]!;
+              const [sx, sy] = toScreen(pt[0], pt[1]);
+              if (i === from) seg.moveTo(sx, sy);
+              else seg.lineTo(sx, sy);
+            }
+            ctx.strokeStyle = sectorColours[k]!;
+            ctx.lineWidth = minSide * 0.006;
+            ctx.stroke(seg);
           }
+        }
+        drawStartLine(ctx, outline.points, toScreen, minSide, colours.line, colours.bg);
+        if (starts) {
+          const fontPx = Math.round(Math.max(11, minSide * 0.02));
+          ctx.font = `700 ${fontPx}px "Titillium Web", sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          starts.forEach((index, k) => {
+            const p0 = outline.points[(index + 3) % outline.points.length];
+            if (!p0) return;
+            const [sx, sy] = toScreen(p0[0], p0[1]);
+            const rr = fontPx * 0.95;
+            ctx.fillStyle = colours.bg;
+            ctx.beginPath();
+            ctx.arc(sx, sy, rr, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = [colours.s1, colours.s2, colours.s3][k]!;
+            ctx.lineWidth = Math.max(1.5, fontPx * 0.12);
+            ctx.stroke();
+            ctx.fillStyle = colours.line;
+            ctx.fillText(`S${k + 1}`, sx, sy + 1);
+          });
         }
       }
 
@@ -220,7 +253,7 @@ export function TrackMap({ store, state, trackKey, displayOverride }: Props) {
         // Name tag next to the dot, in the rig's colour.
         const name = frame.driver ?? rig.name;
         const fontPx = Math.round(Math.max(12, minSide * 0.024));
-        ctx.font = `600 ${fontPx}px "Barlow Condensed", sans-serif`;
+        ctx.font = `600 ${fontPx}px "Titillium Web", sans-serif`;
         const padX = fontPx * 0.45;
         const tagW = ctx.measureText(name).width + padX * 2;
         const tagH = fontPx * 1.35;
