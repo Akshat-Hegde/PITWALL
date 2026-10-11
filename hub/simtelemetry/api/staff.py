@@ -133,9 +133,18 @@ def staff_router(hub: Hub) -> APIRouter:
     # --- driver profiles -----------------------------------------------------------------------
 
     @router.get("/api/staff/drivers", dependencies=[Depends(guard)])
-    def search(phone: str = "") -> dict[str, Any]:
+    def search(q: str = "", phone: str = "") -> dict[str, Any]:
+        """Search profiles by name or phone (?q=; ?phone= still works)."""
         try:
-            return {"drivers": drivers.search(phone)}
+            return {"drivers": drivers.search(q or phone)}
+        except DriverError as exc:
+            raise _bad(exc) from None
+
+    @router.post("/api/staff/drivers/quick", dependencies=[Depends(guard)])
+    def quick(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+        """Quick profile: a name only, for walk-ins at events."""
+        try:
+            return drivers.create_quick_profile(body.get("name"))
         except DriverError as exc:
             raise _bad(exc) from None
 
@@ -228,7 +237,7 @@ def staff_router(hub: Hub) -> APIRouter:
 
     @router.post("/api/staff/teams/{team_id}/members", dependencies=[Depends(guard)])
     def member_add(team_id: int, body: dict[str, Any] = Body(...)) -> dict[str, Any]:
-        return guarded(comp.add_member, team_id, body.get("name"), body.get("driver_id"))
+        return guarded(comp.add_member, team_id, body.get("driver_id"))
 
     @router.delete("/api/staff/members/{member_id}", dependencies=[Depends(guard)])
     def member_remove(member_id: int) -> dict[str, Any]:

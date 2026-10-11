@@ -60,8 +60,8 @@ CREATE INDEX IF NOT EXISTS driver_sessions_open ON driver_sessions (rig_id, ende
 CREATE TABLE IF NOT EXISTS drivers (
     id         INTEGER PRIMARY KEY,
     name       TEXT NOT NULL,
-    phone      TEXT NOT NULL UNIQUE,
-    consent_at INTEGER NOT NULL,
+    phone      TEXT UNIQUE,          -- NULL for quick profiles (name only)
+    consent_at INTEGER,              -- when the driver agreed to their phone number being stored
     created_at INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS queue (
@@ -167,6 +167,15 @@ class LapStore:
                 if column.split()[0] not in existing:
                     self._db.execute(f"ALTER TABLE {table} ADD COLUMN {column}")
             self._db.execute("CREATE INDEX IF NOT EXISTS laps_driver ON laps (driver_id)")
+            # Quick profiles (name only) came later: older databases required a phone number.
+            phone = next(r for r in self._db.execute("PRAGMA table_info(drivers)") if r[1] == "phone")
+            if phone[3]:  # NOT NULL
+                self._db.executescript(
+                    "ALTER TABLE drivers RENAME TO drivers_old;"
+                    "CREATE TABLE drivers (id INTEGER PRIMARY KEY, name TEXT NOT NULL, phone TEXT UNIQUE,"
+                    " consent_at INTEGER, created_at INTEGER NOT NULL);"
+                    "INSERT INTO drivers SELECT id, name, phone, consent_at, created_at FROM drivers_old;"
+                    "DROP TABLE drivers_old;")
         log.info("Lap database: %s (%d laps)", path or "in memory, not saved", self.count())
 
     def close(self) -> None:
@@ -264,7 +273,7 @@ class LapStore:
 
     # --- driver profiles (phone numbers only with consent) ----------------------------------
 
-    def create_driver(self, name: str, phone: str, consent_at: int, created_at: int) -> dict[str, Any]:
+    def create_driver(self, name: str, phone: str | None, consent_at: int | None, created_at: int) -> dict[str, Any]:
         with self._lock, self._db:
             cur = self._db.execute("INSERT INTO drivers (name, phone, consent_at, created_at) VALUES (?,?,?,?)",
                                    (name, phone, consent_at, created_at))
@@ -286,6 +295,13 @@ class LapStore:
         with self._lock:
             rows = self._db.execute("SELECT * FROM drivers WHERE replace(phone, '+', '') LIKE ? ORDER BY name LIMIT ?",
                                     (f"%{digits}%", limit)).fetchall()
+        return [dict(r) for r in rows]
+
+    def search_drivers_by_name(self, text: str, limit: int = 10) -> list[dict[str, Any]]:
+        pattern = "%" + text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        with self._lock:
+            rows = self._db.execute("SELECT * FROM drivers WHERE name LIKE ? ESCAPE '\\' ORDER BY name LIMIT ?",
+                                    (pattern, limit)).fetchall()
         return [dict(r) for r in rows]
 
     def delete_driver(self, driver_id: int) -> dict[str, int]:

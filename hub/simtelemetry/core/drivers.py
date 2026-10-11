@@ -166,11 +166,19 @@ class DriverRegistry:
         now = self._now_ms()
         return self._store.create_driver(name, phone, consent_at=now, created_at=now)
 
-    def search(self, phone: Any) -> list[dict[str, Any]]:
-        digits = re.sub(r"\D", "", str(phone or ""))
-        if len(digits) < 4:
-            raise DriverError("Type at least 4 digits of the phone number.")
-        return self._store.search_drivers(digits)
+    def create_quick_profile(self, name: Any) -> dict[str, Any]:
+        """A profile with a name only (walk-ins at events): no phone number, so nothing needs consent."""
+        return self._store.create_driver(clean_name(name), None, consent_at=None, created_at=self._now_ms())
+
+    def search(self, query: Any) -> list[dict[str, Any]]:
+        """Profiles by phone (4+ digits, e.g. the last four) or by name (2+ letters)."""
+        text = " ".join(str(query or "").split())
+        digits = re.sub(r"\D", "", text)
+        if len(digits) >= 4 and len(digits) >= len(text.replace(" ", "")) - 2:
+            return self._store.search_drivers(digits)
+        if len(text) >= 2 and not digits:
+            return self._store.search_drivers_by_name(text)
+        raise DriverError("Type 4 or more digits of the phone number, or 2 or more letters of the name.")
 
     def profile(self, driver_id: int) -> dict[str, Any] | None:
         return self._store.get_driver(driver_id)

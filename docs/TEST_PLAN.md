@@ -174,7 +174,8 @@ On the dashboard, check:
 - [ ] **Compete** tab: create a challenge on the track you're driving, Pro, today to today, prize "Test".
       The TV's leaderboard view shows it; a Pro lap puts the driver on it.
 - [ ] Start a corporate event (any name, company colour blue, best N = 1), add two teams with one driver each,
-      upload any PNG as the logo. The TV turns blue, shows the company next to the cafe name and the
+      upload any PNG as the logo. Add drivers by searching their profile, or with **Add walk-in** (quick profile).
+      Start a session for that driver from the profile (★ on the Rigs tab) so their laps count for the team. The TV turns blue, shows the company next to the cafe name and the
       **Teams** view (key `6`). After a lap from each driver the teams are ranked. **End event**.
 - [ ] Set `[owner] pin = "0000"` in `config\hub.toml`, restart the hub, open `/owner` and enter it: today's
       sessions and laps appear; **Daily CSV** downloads a file.

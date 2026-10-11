@@ -80,13 +80,20 @@ def test_event_teams_score_on_their_best_n_drivers(world):
         comp.create_event({"name": "Other", "company": "X"})
     red = comp.add_team(event["id"], "Red team")
     blue = comp.add_team(event["id"], "Blue team")
+    walk_ins = {name: drivers.create_quick_profile(name) for name in ("Rob", "Rae", "Rik", "Bo")}
+    assert walk_ins["Rob"]["phone"] is None and walk_ins["Rob"]["consent_at"] is None
     for name in ("Rob", "Rae", "Rik"):
-        comp.add_member(red["id"], name)
-    comp.add_member(blue["id"], driver_id=ana["id"])
-    comp.add_member(blue["id"], "Bo")
+        comp.add_member(red["id"], walk_ins[name]["id"])
+    comp.add_member(blue["id"], ana["id"])
+    comp.add_member(blue["id"], walk_ins["Bo"]["id"])
+    with pytest.raises(DriverError, match="already in this team"):
+        comp.add_member(blue["id"], ana["id"])
+    with pytest.raises(DriverError, match="Choose a driver profile"):
+        comp.add_member(blue["id"], None)
     clock.t += 60
     for rig, name, ms in (("A", "Rob", 90000), ("B", "Rae", 92000), ("C", "Rik", 95000), ("E", "Bo", 89000)):
-        lap(book, rig, name, 2, ms)
+        lap(book, rig, name, 2, ms, driver_id=walk_ins[name]["id"])
+    lap(book, "F", "Rob", 2, 80000)                                    # another "Rob" without the profile: not counted
     lap(book, "D", "Ana", 2, 91000, driver_id=ana["id"])
     active = comp.active_event()
     assert [(t["name"], t["counted"], t["average_ms"]) for t in active["teams"]] == [
@@ -113,7 +120,10 @@ async def test_competitions_through_the_api_and_the_tv_feed(tmp_path):
     assert r.status_code == 200
     event = client.post("/api/staff/events", json={"name": "Away day", "company": "Acme", "best_n": 1}).json()
     team = client.post(f"/api/staff/events/{event['id']}/teams", json={"name": "Pit crew"}).json()
-    client.post(f"/api/staff/teams/{team['id']}/members", json={"name": "Akshat"})
+    assert client.post(f"/api/staff/teams/{team['id']}/members", json={"name": "Akshat"}).status_code == 400
+    akshat = client.post("/api/staff/drivers/quick", json={"name": "Akshat"}).json()
+    assert client.get("/api/staff/drivers", params={"q": "aksh"}).json()["drivers"][0]["id"] == akshat["id"]
+    assert client.post(f"/api/staff/teams/{team['id']}/members", json={"driver_id": akshat["id"]}).status_code == 200
     logo = client.post(f"/api/staff/events/{event['id']}/logo", json={"data_url": PNG}).json()["logo"]
     assert client.get(f"/api/logos/{logo}").headers["content-type"] == "image/png"
     assert client.get("/api/logos/..%2Fsecrets.txt").status_code == 404
@@ -127,3 +137,20 @@ async def test_competitions_through_the_api_and_the_tv_feed(tmp_path):
     changed = [m for m in conn.tick(last_seen(hub)) if m["type"] == "competition"]
     assert changed and changed[0]["competition"]["event"] is None
     hub.laps.store.close()
+
+
+def test_old_drivers_table_allows_quick_profiles_after_migration(tmp_path):
+    import sqlite3
+    db = sqlite3.connect(tmp_path / "laps.db")
+    db.execute("CREATE TABLE drivers (id INTEGER PRIMARY KEY, name TEXT NOT NULL, phone TEXT NOT NULL UNIQUE,"
+               " consent_at INTEGER NOT NULL, created_at INTEGER NOT NULL)")
+    db.execute("INSERT INTO drivers VALUES (1, 'Maya', '+447700900123', 5, 5)")
+    db.commit()
+    db.close()
+    drivers = DriverRegistry(LapStore(tmp_path / "laps.db"))
+    assert drivers.profile(1)["phone"] == "+447700900123"              # kept
+    quick = drivers.create_quick_profile("Guest")
+    assert drivers.profile(quick["id"])["phone"] is None
+    assert [d["name"] for d in drivers.search("may")] == ["Maya"] and [d["name"] for d in drivers.search("0123")] == ["Maya"]
+    with pytest.raises(DriverError, match="2 or more letters"):
+        drivers.search("m")

@@ -177,8 +177,9 @@ Open `http://<hub>:8000/staff` on a phone or tablet. Three tabs (a link like `/s
   staff page shows **Extend?** (+5 / +10). **End session** frees the rig. Starting a session shows **Now
   driving** on the TV.
 - **Queue:** names waiting for a rig, in order; the TV shows the first few as **Next up** (names only).
-- **Drivers:** profiles keyed by phone number. Search by the last 4 digits, or create one: the phone number
-  is only stored after the driver agrees (the consent checkbox is required). A profile shows visits, best
+- **Drivers:** profiles keyed by phone number. Search by name or the last 4 digits, or create one: the phone
+  number is only stored after the driver agrees (the consent checkbox is required). Quick profiles made at
+  events have a name only. A profile shows visits, best
   lap per track and the improvement since the last visit. **Delete profile** removes the profile, its phone
   number, its sessions and all its laps (they leave the leaderboards too).
 - **Show podium** (top right) puts today's top three on the TV.
@@ -200,8 +201,10 @@ On `/staff`, the **Compete** tab:
   and announces the winner full screen when it ends.
 - **Pro and Open boards:** the leaderboard view alternates between Open (all laps) and Pro (every assist
   off) every 15 seconds once there are Pro laps.
-- **Corporate events:** event name, company, company colour, optional track and "best N". Add teams and their
-  drivers (names, or a selected driver profile), and upload the company logo and team logos (PNG, JPEG or WebP,
+- **Corporate events:** event name, company, company colour, optional track and "best N". Add teams, then their
+  drivers from driver profiles (search by name or phone); a walk-in gets a **quick profile** (name only, no
+  phone, so no consent needed) right from the team. Laps count for a team only when driven under that
+  profile, never by matching a typed name, and upload the company logo and team logos (PNG, JPEG or WebP,
   up to 512 KB; stored in `data\logos\`). The team score is the average of each team's best N drivers' best
   laps since the event started. While the event runs the TV uses the company colour, shows the company next to
   the cafe name and adds the **Teams** view (key `6`) to the rotation. **End event** goes back to normal.

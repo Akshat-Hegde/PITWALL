@@ -21,7 +21,7 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from .drivers import DriverError, clean_name
+from .drivers import DriverError
 from .laps import CLASSES, OPEN_CLASS, driver_key
 
 if TYPE_CHECKING:
@@ -167,18 +167,20 @@ class Competitions:
         self.store.remove_team(team_id)
         self._changed()
 
-    def add_member(self, team_id: int, name: Any = None, driver_id: Any = None) -> dict[str, Any]:
+    def add_member(self, team_id: int, driver_id: Any) -> dict[str, Any]:
+        """Team members are driver profiles (search, or a quick name-only profile for walk-ins), so their laps
+        are matched by profile, never by a typed name."""
         if self.store.team(team_id) is None:
             raise DriverError("That team doesn't exist any more.")
-        if driver_id not in (None, ""):
-            profile = self.store.get_driver(int(driver_id))
-            if profile is None:
-                raise DriverError("That driver profile doesn't exist any more.")
-            member_name, key = profile["name"], driver_key(profile["name"], "", profile["id"])
-        else:
-            member_name = clean_name(name)
-            key = driver_key(member_name, "")
-        member = self.store.add_member(team_id, member_name, key)
+        if driver_id in (None, ""):
+            raise DriverError("Choose a driver profile (search, or add a quick profile for a walk-in).")
+        profile = self.store.get_driver(int(driver_id))
+        if profile is None:
+            raise DriverError("That driver profile doesn't exist any more.")
+        key = driver_key(profile["name"], "", profile["id"])
+        if any(m["driver_key"] == key for m in self.store.members(team_id)):
+            raise DriverError(f"{profile['name']} is already in this team.")
+        member = self.store.add_member(team_id, profile["name"], key)
         self._changed()
         return member
 

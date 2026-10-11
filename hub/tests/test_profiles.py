@@ -37,7 +37,7 @@ def test_a_phone_number_is_only_stored_with_consent():
     with pytest.raises(DriverError, match="already exists"):
         drivers.create_profile("Maya again", "+447700900123", consent=True)
     assert [d["name"] for d in drivers.search("0123")] == ["Maya"]   # the last digits are enough
-    with pytest.raises(DriverError, match="at least 4 digits"):
+    with pytest.raises(DriverError, match="4 or more digits"):
         drivers.search("12")
 
 

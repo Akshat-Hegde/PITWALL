@@ -164,8 +164,8 @@
   <section id="tab-drivers" role="tabpanel" hidden>
     <form class="panel" id="search-form">
       <div class="title">Find a driver</div>
-      <label for="search">Phone number (the last 4 digits are enough)</label>
-      <input id="search" inputmode="tel" autocomplete="off">
+      <label for="search">Name or phone number (the last 4 digits are enough)</label>
+      <input id="search" autocomplete="off">
       <div class="actions"><button class="btn primary" type="submit">Search</button></div>
       <ul class="list" id="results"></ul>
       <p class="msg" id="search-msg" role="status"></p>
@@ -459,13 +459,13 @@
     const results = $("results");
     results.textContent = "";
     try {
-      const data = await api("GET", "/api/staff/drivers?phone=" + encodeURIComponent($("search").value));
-      say($("search-msg"), data.drivers.length ? "" : "No driver with that number. Create a profile below.");
+      const data = await api("GET", "/api/staff/drivers?q=" + encodeURIComponent($("search").value));
+      say($("search-msg"), data.drivers.length ? "" : "No driver found. Create a profile below.");
       for (const d of data.drivers) {
         const li = document.createElement("li");
         li.innerHTML = '<span class="grow"><strong></strong><br><span class="faint"></span></span>';
         li.querySelector("strong").textContent = d.name;
-        li.querySelector(".faint").textContent = "…" + d.phone.slice(-4);
+        li.querySelector(".faint").textContent = d.phone ? "…" + d.phone.slice(-4) : "quick profile (name only)";
         const b = document.createElement("button");
         b.type = "button"; b.className = "btn small primary"; b.textContent = "Open";
         b.addEventListener("click", () => openProfile(d.id));
@@ -492,7 +492,9 @@
         <div class="actions"><button class="btn danger small" type="button" data-act="delete">Delete profile and all its data</button></div>
         <p class="msg" role="status"></p>`;
       box.querySelector(".title").textContent = p.name;
-      box.querySelector(".phone").textContent = p.phone + " · consent " + new Date(p.consent_at).toLocaleDateString();
+      box.querySelector(".phone").textContent = p.phone
+        ? p.phone + " · consent " + new Date(p.consent_at).toLocaleDateString()
+        : "Quick profile: name only, no phone number";
       const table = (sel, head, rows) => {
         const t = box.querySelector(sel);
         t.innerHTML = "<tr>" + head.map(([h, r]) => `<th class="${r ? "r" : ""}">${h}</th>`).join("") + "</tr>";
@@ -610,7 +612,9 @@
         div.style.marginTop = "10px";
         div.innerHTML = `<div class="row"><span class="title"></span><span class="faint score"></span></div>
           <ul class="list members"></ul>
-          <form class="actions add"><input maxlength="32" placeholder="Driver name" style="flex:1"><button class="btn small" type="submit">Add</button></form>
+          <form class="actions find"><input maxlength="32" placeholder="Find a driver: name or phone" style="flex:1" autocomplete="off"><button class="btn small" type="submit">Search</button></form>
+          <ul class="list found"></ul>
+          <form class="actions quick"><input maxlength="32" placeholder="Walk-in? Quick profile: name only" style="flex:1" autocomplete="off"><button class="btn small" type="submit">Add walk-in</button></form>
           <div class="actions"><label class="btn small" style="margin:0">Team logo<input type="file" accept="image/png,image/jpeg,image/webp" hidden></label>
           <button class="btn danger small" type="button" data-remove>Remove team</button></div>`;
         div.querySelector(".title").textContent = `${t.rank}. ${t.name}`;
@@ -627,16 +631,41 @@
           li.appendChild(rm);
           ul.appendChild(li);
         }
+        const addMember = async (driverId) => {
+          try { await api("POST", `/api/staff/teams/${t.id}/members`, { driver_id: driverId }); loadCompete(); }
+          catch (err) { fail($("ev-msg"), err); }
+        };
         if (selectedDriver) {
           const star = document.createElement("button");
           star.type = "button"; star.className = "btn small primary"; star.textContent = "★ " + selectedDriver.name;
-          star.addEventListener("click", async () => { try { await api("POST", `/api/staff/teams/${t.id}/members`, { driver_id: selectedDriver.id }); loadCompete(); } catch (err) { fail($("ev-msg"), err); } });
-          div.querySelector(".add").prepend(star);
+          star.addEventListener("click", () => addMember(selectedDriver.id));
+          div.querySelector(".find").prepend(star);
         }
-        div.querySelector(".add").addEventListener("submit", async (e) => {
+        div.querySelector(".find").addEventListener("submit", async (e) => {
           e.preventDefault();
-          const input = e.target.querySelector("input");
-          try { await api("POST", `/api/staff/teams/${t.id}/members`, { name: input.value }); loadCompete(); } catch (err) { fail($("ev-msg"), err); }
+          const found = div.querySelector(".found");
+          found.textContent = "";
+          try {
+            const data = await api("GET", "/api/staff/drivers?q=" + encodeURIComponent(e.target.querySelector("input").value));
+            if (!data.drivers.length) found.innerHTML = '<li class="muted">No profile found: add them as a walk-in below.</li>';
+            for (const d of data.drivers) {
+              const li = document.createElement("li");
+              li.innerHTML = '<span class="grow"></span>';
+              li.querySelector(".grow").textContent = d.name + (d.phone ? `  …${d.phone.slice(-4)}` : "  (quick profile)");
+              const b = document.createElement("button");
+              b.type = "button"; b.className = "btn small primary"; b.textContent = "Add";
+              b.addEventListener("click", () => addMember(d.id));
+              li.appendChild(b);
+              found.appendChild(li);
+            }
+          } catch (err) { fail($("ev-msg"), err); }
+        });
+        div.querySelector(".quick").addEventListener("submit", async (e) => {
+          e.preventDefault();
+          try {
+            const d = await api("POST", "/api/staff/drivers/quick", { name: e.target.querySelector("input").value });
+            await addMember(d.id);
+          } catch (err) { fail($("ev-msg"), err); }
         });
         div.querySelector('input[type="file"]').addEventListener("change", async (e) => {
           try { await api("POST", `/api/staff/teams/${t.id}/logo`, { data_url: await readFile(e.target) }); say($("ev-msg"), "Team logo saved.", "ok"); loadCompete(); }
