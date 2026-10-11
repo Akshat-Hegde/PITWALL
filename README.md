@@ -168,6 +168,25 @@ Mock options for demos: `?moment=now_driving|record|podium&momentAfter=5` shows 
 Branding comes from `[cafe]` in the hub config: `name`, plus CSS variables in `[cafe.branding]` (e.g.
 `"--brand-accent" = "#0a7cff"`), applied to the page as-is.
 
+## TV PC: kiosk launcher
+
+On the PC that drives the TV, double-click `tools\windows\Start TV.cmd`. It waits until the hub answers, then
+opens the dashboard full screen in Edge or Chrome (kiosk mode) with sound allowed
+(`--autoplay-policy=no-user-gesture-required`), in its own browser profile. **Alt+F4** closes it.
+
+Options (run from a terminal in `tools\windows`, or put them in a shortcut):
+
+```
+"Start TV.cmd" -Url http://192.168.1.64:8000/            # the hub is another PC
+"Start TV.cmd" -Url http://192.168.1.64:8000/portrait    # the entrance screen
+"Start TV.cmd" -Browser edge                             # edge, chrome or auto (default: Chrome, else Edge)
+"Start TV.cmd" -Url http://192.168.1.64:8000/ -StartOnLogin   # also open it at every Windows login
+"Start TV.cmd" -RemoveStartOnLogin
+```
+
+For a TV PC that should come back by itself after a power cut, also set Windows to sign in automatically
+(or use a dedicated local account) and set the BIOS to power on after AC loss.
+
 ## Staff page and driver profiles
 
 Open `http://<hub>:8000/staff` on a phone or tablet. Three tabs (a link like `/staff#queue` opens one):
