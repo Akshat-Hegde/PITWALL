@@ -20,7 +20,8 @@
     "attract": true,
     "portrait": true,
     "head_to_head": true,
-    "onboard": true
+    "onboard": true,
+    "sharing": true
    },
    "moments": {
     "battle_margin_ms": 300
@@ -88,7 +89,7 @@
     {
      "rig_id": "192.168.1.21",
      "state": "driving",
-     "last_seen_ms": 31,
+     "last_seen_ms": 47,
      "driver": "Akshat",
      "session": {
       "session_id": "0000000000000011",
@@ -346,7 +347,7 @@
    },
    "personal_best": true,
    "session_best": true,
-   "completed_at": 1791713442097,
+   "completed_at": 1791714065994,
    "lap_class": "open"
   }
  },
@@ -642,7 +643,7 @@
       "age_laps": 2
      },
      "lap_number": 1,
-     "set_at": 1791713442097
+     "set_at": 1791714065994
     }
    ]
   }
@@ -676,7 +677,7 @@
       "age_laps": 2
      },
      "lap_number": 1,
-     "set_at": 1791713442097
+     "set_at": 1791714065994
     }
    ]
   }
@@ -710,7 +711,7 @@
       "age_laps": 2
      },
      "lap_number": 1,
-     "set_at": 1791713442097
+     "set_at": 1791714065994
     }
    ]
   }
@@ -831,7 +832,7 @@
       26656
      ],
      "lap_number": 1,
-     "set_at": 1791713442097
+     "set_at": 1791714065994
     },
     "personal_best": {
      "lap_ms": 88123,
@@ -841,14 +842,14 @@
       26656
      ],
      "lap_number": 1,
-     "set_at": 1791713442097
+     "set_at": 1791714065994
     },
     "booking": null
    },
    {
     "rig_id": "192.168.1.22",
     "state": "driving",
-    "last_seen_ms": 15,
+    "last_seen_ms": 0,
     "driver": "Guest",
     "session": {
      "session_id": "0000000000000022",

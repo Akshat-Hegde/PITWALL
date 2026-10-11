@@ -139,6 +139,12 @@
     <p class="msg error" id="pin-msg" role="alert"></p>
   </form>
   <p class="msg" id="top-msg" role="status"></p>
+  <section class="panel" id="card-panel" hidden>
+    <div class="row"><span class="title">Session card</span><button class="btn small" type="button" id="card-close">Close</button></div>
+    <p class="muted" id="card-text"></p>
+    <img id="card-qr" alt="QR code of the session card" width="220" height="220" style="display:block;background:#fff;margin:8px 0">
+    <a id="card-link" class="muted" target="_blank" rel="noopener"></a>
+  </section>
 
   <section id="tab-rigs" role="tabpanel"><div id="rigs"></div></section>
 
@@ -243,6 +249,15 @@
     return data;
   }
 
+  function showCard(card) {
+    if (!card) return;
+    $("card-panel").hidden = false;
+    $("card-text").textContent = `${card.driver}: scan to open your session card (phone on the cafe Wi-Fi).`;
+    $("card-qr").src = `/api/cards/${encodeURIComponent(card.token)}/qr.svg`;
+    $("card-link").href = `/card/${encodeURIComponent(card.token)}`;
+    $("card-link").textContent = "Open the card";
+    window.scrollTo(0, 0);
+  }
   function say(el, text, kind) { el.textContent = text || ""; el.className = "msg" + (kind ? " " + kind : ""); }
   function fail(el, err) { if (err.message !== "locked") say(el, err.message, "error"); }
 
@@ -324,7 +339,7 @@
         catch (err) { fail(msg, err); }
       }));
       el.querySelector(".rig__end").addEventListener("click", async () => {
-        try { await api("DELETE", `/api/staff/rigs/${encodeURIComponent(rig.rig_id)}/driver`); await load(); }
+        try { const r = await api("DELETE", `/api/staff/rigs/${encodeURIComponent(rig.rig_id)}/driver`); showCard(r.card); await load(); }
         catch (err) { fail(msg, err); }
       });
     } else {
@@ -334,7 +349,7 @@
       el.querySelector(".rig__next").hidden = !state.queue.length && !selectedDriver;
       const minutes = () => el.querySelector(".rig__minutes").value || null;
       const start = async (body) => {
-        try { await api("PUT", `/api/staff/rigs/${encodeURIComponent(rig.rig_id)}/driver`, { ...body, minutes: minutes() }); await load(); }
+        try { const r = await api("PUT", `/api/staff/rigs/${encodeURIComponent(rig.rig_id)}/driver`, { ...body, minutes: minutes() }); showCard(r.card); await load(); }
         catch (err) { fail(msg, err); }
       };
       if (selectedDriver) {
@@ -475,6 +490,8 @@
       openProfile(d.id);
     } catch (err) { fail($("create-msg"), err); }
   });
+
+  $("card-close").addEventListener("click", () => { $("card-panel").hidden = true; });
 
   // --- podium --------------------------------------------------------------------------------
   $("podium-btn").addEventListener("click", async () => {

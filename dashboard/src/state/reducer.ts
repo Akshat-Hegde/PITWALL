@@ -6,6 +6,7 @@ import {
   type Comparison,
   type Features,
   MOMENT_KINDS,
+  type CardMoment,
   type Moment,
   type QueueEntry,
   type HubMessage,
@@ -48,11 +49,15 @@ export interface DashboardState {
   moments: Moment[];
   /** Who's waiting for a rig (names only). */
   queue: QueueEntry[];
+  /** Story cards just made (newest last): the TV shows their QR codes for a while. */
+  cards: CardMoment[];
 }
 
 export const ALL_FEATURES: Features = {
   moments: true, battles: true, podium: true, attract: true, portrait: true, head_to_head: true, onboard: true,
+  sharing: true,
 };
+export const CARDS_MAX = 3;
 export const MOMENTS_MAX = 5;
 
 export const RECENT_LAPS_MAX = 20;
@@ -79,6 +84,7 @@ export function initialState(source: DashboardState["source"]): DashboardState {
     sounds: { enabled: false, volume: 0.6 },
     moments: [],
     queue: [],
+    cards: [],
   };
 }
 
@@ -162,8 +168,12 @@ export function applyMessage(state: DashboardState, msg: HubMessage, now: number
     case "queue":
       return { ...state, queue: msg.queue };
     case "moment":
-      if (!momentAllowed(msg.moment, state.features)) return state;
-      return { ...state, moments: [...state.moments, msg.moment].slice(-MOMENTS_MAX) };
+      if (msg.moment?.kind === "card") {
+        if (!state.features.sharing) return state;
+        return { ...state, cards: [...state.cards, msg.moment as CardMoment].slice(-CARDS_MAX) };
+      }
+      if (!momentAllowed(msg.moment as Moment, state.features)) return state;
+      return { ...state, moments: [...state.moments, msg.moment as Moment].slice(-MOMENTS_MAX) };
     case "leaderboard": {
       const period = msg.leaderboard.period;
       if (!isPeriod(period)) return state;

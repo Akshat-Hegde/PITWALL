@@ -92,6 +92,7 @@ class FeaturesConfig(_Section):
     portrait: bool = True         # /portrait layout for vertical screens
     head_to_head: bool = True     # head-to-head analysis view
     onboard: bool = True          # onboard view
+    sharing: bool = True          # story card + QR code when a session ends
 
 
 class MomentsConfig(_Section):

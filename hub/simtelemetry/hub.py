@@ -35,6 +35,7 @@ class Hub:
         self.drivers = DriverRegistry(store)
         # Other programs listening on the telemetry port on a specific address (see net/udp.py).
         self.port_shadows: list[str] = []
+        self._session_top_kph: dict[str, int] = {}             # top speed per rig in the staff session
         self.started_at = time.monotonic()
         self._queue: asyncio.Queue[tuple[Checked, bytes, str, float]] = asyncio.Queue(QUEUE_MAX)
 
@@ -69,6 +70,8 @@ class Hub:
             summary = self.adapter.live_summary(ip)
             if summary is not None:
                 self.registry.set_driver_name(ip, summary.driver_name)
+                if summary.speed_kph and self.drivers.get(ip) is not None:
+                    self._session_top_kph[ip] = max(self._session_top_kph.get(ip, 0), summary.speed_kph)
             if result.lap_events or result.lap_update:
                 try:
                     self.laps.update(ip, self.lap_context(ip), self.adapter.live_lap(ip), result.lap_events)
@@ -106,6 +109,45 @@ class Hub:
                 continue
             counts[s.track_key] = counts.get(s.track_key, 0) + (2 if state is RigState.DRIVING else 1)
         return max(counts, key=lambda k: (counts[k], k)) if counts else None
+
+    def session_top_speed(self, ip: str) -> int | None:
+        return self._session_top_kph.get(ip)
+
+    def session_started(self, ip: str) -> None:
+        """Staff started a session on a rig: reset its session stats and show 'now driving'."""
+        self._session_top_kph.pop(ip, None)
+        self.announce_driver(ip)
+
+    def end_session(self, ip: str) -> dict[str, Any] | None:
+        """End the staff session on a rig; returns the story card (None without a counted lap or sharing off)."""
+        from .core.cards import build_card
+        from .core.feed import lan_address
+        session = self.drivers.get(ip)
+        if session is None:
+            return None
+        self.drivers.end(ip)
+        return self.session_card(ip, session)
+
+    def session_card(self, ip: str, session: Any) -> dict[str, Any] | None:
+        """Story card for a session that has just ended (ended by staff, or replaced by the next driver)."""
+        from .core.cards import build_card
+        from .core.feed import lan_address
+        if not self.config.features.sharing:
+            return None
+        ended_at = round(time.time() * 1000)
+        try:
+            card = build_card(self, ip, session, ended_at)
+        except Exception:  # a card must never stop a session from ending
+            log.exception("Could not make the story card for %s", ip)
+            return None
+        self._session_top_kph.pop(ip, None)
+        if card is None:
+            return None
+        self.drivers.save_card(ip, session.driver_id, card)
+        url = f"http://{lan_address() or 'localhost'}:{self.config.network.http_port}/card/{card['token']}"
+        self.laps.publish_moment("card", rig_id=ip, driver=card["driver"], token=card["token"], url=url,
+                                 best_ms=card["best_ms"], track_name=card["track_name"])
+        return {**card, "url": url}
 
     def announce_driver(self, ip: str) -> dict[str, Any] | None:
         """'Now driving' moment when staff start a session on a rig."""

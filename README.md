@@ -190,6 +190,20 @@ stay separate). The TV shows the name and that driver's best lap on the track ("
 Set `[staff] pin` in `config\hub.toml` so customers can't use the page: it then asks for the PIN, and five
 wrong PINs in a minute lock that device out for a minute. Without a PIN anyone on the LAN can use it.
 
+## Sharing: session story cards
+
+When staff end a session (or start the next driver on the rig), the hub makes a **story card** if the driver
+set at least one clean lap. It shows the driver, track, best lap, top speed, theoretical best (best sectors
+added up), laps, the improvement since the last visit (profiles only) and the best lap's 24 mini-sectors on
+the track map, in the cafe's branding.
+
+- The TV shows a QR code to the card for 30 seconds; the staff page shows one too, after **End session**.
+- The card page (`http://<hub>:8000/card/<code>`) draws the 1080×1920 image on the phone: **Save image**, or
+  **Share on WhatsApp** (opens WhatsApp with a message and the card's link).
+- **Phones must be on the cafe's network (Wi-Fi) to open the card**, and so must anyone the link is sent to,
+  until there is a cloud version. Saving the image and posting it works from anywhere.
+- `/card/demo` shows a sample card without a hub. `[features] sharing = false` turns cards off.
+
 **Privacy:** phone numbers, names and lap times stay in `data\laps.db` on the hub PC; nothing is sent
 anywhere. The TV and its WebSocket feed only ever carry names, never phone numbers.
 

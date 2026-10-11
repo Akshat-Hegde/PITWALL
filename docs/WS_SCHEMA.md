@@ -290,6 +290,7 @@ Something the TV shows full screen for a few seconds, then returns to the view i
 |---|---|
 | `now_driving` | `rig_id`, `rig_name`, `driver`, `track_key`, `track_name`, `today_record` (`{ "driver", "lap_ms" }` \| null), `personal_best_ms` (int \| null). Sent when staff start a session on a rig. |
 | `record` | `rig_id`, `driver`, `track_key`, `track_name`, `lap_ms`, `lap_class`, `records`: what the lap beat, most important first, each `{ "period": "all_time" \| "today", "lap_class": "pro" \| "open", "previous_ms", "previous_driver", "gap_ms" }` (`gap_ms` negative). Only sent when an existing record is beaten. |
+| `card` | `rig_id`, `driver`, `token`, `url`, `best_ms`, `track_name`. A session ended and its story card is ready: the TV shows a QR code to `url` for 30 s (not full screen). The card itself is `GET /api/cards/<token>`, outside this feed. |
 | `podium` | `reason` (`"hourly"`, `"scheduled"` or `"staff"`), `track_key`, `track_name`, `entries`: today's top three (LeaderboardEntry). |
 
 Pro laps count on the Open boards too; the Pro boards hold Pro laps only.

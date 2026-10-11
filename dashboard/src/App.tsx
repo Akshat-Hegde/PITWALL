@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { AnalysisView, chooseDuel } from "./components/Analysis";
 import { AttractView, PortraitView } from "./components/Attract";
+import { CardQr } from "./components/CardQr";
 import { BattlePopups, MomentLayer } from "./components/Moments";
 import { KineticType } from "./components/Motifs";
 import { OnboardView, onboardRigs } from "./components/Onboard";
@@ -120,6 +121,7 @@ export function App({ store, mapDisplay = null, viewMode = "auto", layout = "tv"
         {f.portrait ? <PortraitView state={state} /> : (
           <div className="fullscreen-message"><h1>Portrait screen is switched off</h1></div>
         )}
+        <CardQr state={state} />
         <MomentLayer store={store} state={state} />
       </div>
     );
@@ -141,6 +143,7 @@ export function App({ store, mapDisplay = null, viewMode = "auto", layout = "tv"
       </div>
       {viewChanged.current && <ViewWipe key={view} view={view} />}
       {view !== "attract" && <BattlePopups state={state} trackKey={trackKey} />}
+      <CardQr state={state} />
       <MomentLayer store={store} state={state} />
     </div>
   );

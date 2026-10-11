@@ -84,3 +84,16 @@ describe("attract rotation", () => {
     expect(chooseView("auto", idle, 0, { analysis: false, onboard: false, attract: false }).view).toBe("board");
   });
 });
+
+describe("story cards", () => {
+  test("a card moment goes to the QR list, not the full-screen queue; off when sharing is off", () => {
+    const card = { v: 1, type: "moment", seq: 1, ts: 5, moment: { kind: "card", at: 5, rig_id: "r", driver: "Maya",
+      token: "t", url: "http://hub/card/t", best_ms: 88000, track_name: null } } as unknown as HubMessage;
+    let s: DashboardState = { ...initialState("hub"), link: "live", receivedVersion: 1 };
+    s = applyMessage(s, card, 0);
+    expect(s.cards.map((c) => c.token)).toEqual(["t"]);
+    expect(s.moments).toEqual([]);
+    s = applyMessage({ ...s, cards: [], features: { ...ALL_FEATURES, sharing: false } }, card, 0);
+    expect(s.cards).toEqual([]);
+  });
+});

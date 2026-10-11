@@ -41,6 +41,7 @@ OUTLINE_END_MARGIN_M = 80     # last point within this distance of the track len
 OUTLINE_MAX_GAP_M = 120       # no bigger gap between consecutive points
 OUTLINE_MIN_POINTS = 50
 OUTLINE_STEP_M = 6            # outline point spacing
+MINI_SECTORS = 24             # per lap, by distance (story cards; the dashboard uses the same count)
 
 PRO_CLASS = "pro"             # every assist off for the whole lap (LAP_ASSUMPTIONS A16)
 OPEN_CLASS = "open"           # anything else; the Open boards include Pro laps too
@@ -224,6 +225,7 @@ class LapRecord:
     db_id: int | None = None                                               # row in the lap store
     lap_class: str = OPEN_CLASS                                            # "pro" or "open"
     driver_id: int | None = None                                           # driver profile
+    minis: list[int] | None = field(default=None, repr=False)              # mini-sector times (ms), if traced
 
     @property
     def counted(self) -> bool:
@@ -396,6 +398,7 @@ class LapBook:
             lap_class=PRO_CLASS if event.lap in rig.pro_laps and event.lap not in rig.assisted_laps else OPEN_CLASS,
             driver_id=ctx.driver_id,
         )
+        record.minis = mini_sector_times(record.trace, ctx.track_length_m, record.lap_ms)
         broken = self._records_broken(record) if record.counted else []
         session = self._session.setdefault(record.track_key, Bests())
         personal = self._personal.setdefault((record.track_key, record.driver_key), Bests())
@@ -480,6 +483,13 @@ class LapBook:
             best = rig.best.get(record.track_key)
             if best is None or record.lap_ms < best.lap_ms:
                 rig.best[record.track_key] = record
+
+    def today_best_minis(self, track_key: str) -> list[int] | None:
+        """Fastest time in each mini-sector on a track today (laps this hub session saw with a full trace)."""
+        since = self.period_starts()["today"] or 0
+        minis = [r.minis for r in self.laps if r.counted and r.minis and r.track_key == track_key
+                 and r.completed_at >= since]
+        return [min(ms) for ms in zip(*minis)] if minis else None
 
     # --- records -----------------------------------------------------------------------------
 
@@ -725,3 +735,18 @@ class LapBook:
                 if current is None or record.lap_ms < current.lap_ms:
                     best[record.driver_key] = record
         return sorted(best.values(), key=lambda r: (r.lap_ms, r.completed_at))
+
+
+def mini_sector_times(trace: Trace | None, track_length: float | None, lap_ms: int) -> list[int] | None:
+    """Time in each of MINI_SECTORS equal-distance parts of a lap, from its trace; None if the trace is partial."""
+    if trace is None or not track_length or not trace.complete(track_length):
+        return None
+    edges = [0.0]
+    for k in range(1, MINI_SECTORS):
+        t = trace.time_at(track_length * k / MINI_SECTORS)
+        if t is None:
+            return None
+        edges.append(t)
+    edges.append(float(lap_ms))
+    times = [round(b - a) for a, b in zip(edges, edges[1:])]
+    return times if all(t > 0 for t in times) else None

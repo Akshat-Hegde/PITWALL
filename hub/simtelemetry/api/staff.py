@@ -102,6 +102,7 @@ def staff_router(hub: Hub) -> APIRouter:
     def start(rig_id: str, body: dict[str, Any] = Body(...)) -> dict[str, Any]:
         """Start a session: {"name"} for a walk-in or {"driver_id"} for a profile, optional "minutes"."""
         rig = find_rig(rig_id)
+        previous = drivers.get(rig.ip)  # replaced by the new session once that is valid
         try:
             if body.get("queue_id") is not None:
                 drivers.start_from_queue(int(body["queue_id"]), rig.ip, body.get("minutes"))
@@ -109,8 +110,9 @@ def staff_router(hub: Hub) -> APIRouter:
                 drivers.assign(rig.ip, body.get("name"), body.get("driver_id"), body.get("minutes"))
         except DriverError as exc:
             raise _bad(exc) from None
-        hub.announce_driver(rig.ip)
-        return rig_row(rig, time.monotonic())
+        card = hub.session_card(rig.ip, previous) if previous else None
+        hub.session_started(rig.ip)
+        return {**rig_row(rig, time.monotonic()), "card": _card_link(card)}
 
     @router.post("/api/staff/rigs/{rig_id}/extend", dependencies=[Depends(guard)])
     def extend(rig_id: str, body: dict[str, Any] = Body(...)) -> dict[str, Any]:
@@ -124,8 +126,8 @@ def staff_router(hub: Hub) -> APIRouter:
     @router.delete("/api/staff/rigs/{rig_id}/driver", dependencies=[Depends(guard)])
     def end(rig_id: str) -> dict[str, Any]:
         rig = find_rig(rig_id)
-        drivers.end(rig.ip)
-        return rig_row(rig, time.monotonic())
+        card = hub.end_session(rig.ip)
+        return {**rig_row(rig, time.monotonic()), "card": _card_link(card)}
 
     # --- driver profiles -----------------------------------------------------------------------
 
@@ -184,6 +186,10 @@ def staff_router(hub: Hub) -> APIRouter:
         return {"shown": True, "entries": len(moment["entries"])}
 
     return router
+
+
+def _card_link(card: dict[str, Any] | None) -> dict[str, Any] | None:
+    return {"token": card["token"], "url": card["url"], "driver": card["driver"]} if card else None
 
 
 def _colour(rig) -> str:

@@ -168,6 +168,9 @@ On the dashboard, check:
       **5 min**: the rig card shows "5 minutes left. Extend?"; **+5 min** makes it 10.
 - [ ] Drive a lap, then open the profile again: the visit and the best lap are listed.
 - [ ] **End session** on both rigs: the names go back to the game's names.
+- [ ] **End session** on a rig whose driver set a clean lap: the staff page shows a QR code and the TV shows one
+      bottom left for 30 seconds. Scan it with a phone on the same Wi-Fi: the card opens with the best lap,
+      top speed and the mini-sector map. **Save image** downloads it; **Share on WhatsApp** opens WhatsApp.
 - [ ] At the end of the test: **Delete profile** on your test profile; its laps disappear from the boards.
 - [ ] If both games use the same generic player name, laps from both rigs merge into one leaderboard entry
       until names are set on `/staff`. Note whether that happened (A14).

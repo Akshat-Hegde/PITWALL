@@ -70,6 +70,13 @@ CREATE TABLE IF NOT EXISTS queue (
     driver_id INTEGER,
     added_at  INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS cards (
+    token      TEXT PRIMARY KEY,
+    rig_id     TEXT NOT NULL,
+    driver_id  INTEGER,
+    data       TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS outlines (
     track_key  TEXT PRIMARY KEY,
     outline    TEXT NOT NULL,
@@ -241,6 +248,7 @@ class LapStore:
             laps = self._db.execute("DELETE FROM laps WHERE driver_id = ?", (driver_id,)).rowcount
             sessions = self._db.execute("DELETE FROM driver_sessions WHERE driver_id = ?", (driver_id,)).rowcount
             self._db.execute("DELETE FROM queue WHERE driver_id = ?", (driver_id,))
+            self._db.execute("DELETE FROM cards WHERE driver_id = ?", (driver_id,))
             self._db.execute("DELETE FROM drivers WHERE id = ?", (driver_id,))
         return {"laps": laps, "sessions": sessions}
 
@@ -291,6 +299,18 @@ class LapStore:
                            "best_ms": min(latest), "previous_best_ms": min(before),
                            "delta_ms": min(latest) - min(before)})
         return sorted(result, key=lambda r: r["delta_ms"])
+
+    # --- story cards ---------------------------------------------------------------------------
+
+    def save_card(self, rig_id: str, driver_id: int | None, card: dict[str, Any]) -> None:
+        with self._lock, self._db:
+            self._db.execute("INSERT INTO cards (token, rig_id, driver_id, data, created_at) VALUES (?,?,?,?,?)",
+                             (card["token"], rig_id, driver_id, json.dumps(card), card["created_at"]))
+
+    def card(self, token: str) -> dict[str, Any] | None:
+        with self._lock:
+            row = self._db.execute("SELECT data FROM cards WHERE token = ?", (token,)).fetchone()
+        return json.loads(row["data"]) if row else None
 
     # --- waiting queue -----------------------------------------------------------------------
 

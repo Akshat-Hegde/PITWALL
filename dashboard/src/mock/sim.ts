@@ -258,7 +258,7 @@ export class MockHub {
       hub: { version: "mock", games: ["F1"], frame_hz: this.options.frameHz, udp_port: 20777,
              lan_address: "192.168.1.10", steering_rotation_deg: 360,
              features: { moments: true, battles: true, podium: true, attract: true, portrait: true,
-                         head_to_head: true, onboard: true },
+                         head_to_head: true, onboard: true, sharing: true },
              moments: { battle_margin_ms: 300 }, sounds: { enabled: false, volume: 0.6 } },
       cafe: { name: "Sim Racing Cafe", branding: {} },
       status: this.status(),
@@ -448,6 +448,12 @@ export class MockHub {
     if (kind === "podium") {
       const m = this.podiumMoment();
       return m ? this.moment(m) : null;
+    }
+    if (kind === "card") {
+      return { ...this.envelope("moment"), moment: {
+        kind: "card", at: this.clock(), rig_id: rig.spec.info.rig_id, driver: rig.spec.driver ?? "Driver",
+        token: "demo", url: `${globalThis.location?.origin ?? ""}/card/demo`, best_ms: rig.best?.lap_ms ?? 87_259,
+        track_name: TRACK_NAME } };
     }
     if (kind === "record") {
       const top = this.leaderboard?.entries[0];

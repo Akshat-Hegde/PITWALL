@@ -199,6 +199,7 @@ export interface Features {
   portrait: boolean;
   head_to_head: boolean;
   onboard: boolean;
+  sharing: boolean;
 }
 
 export interface RecordBroken {
@@ -240,6 +241,42 @@ export interface PodiumMoment {
   track_key: string;
   track_name: string | null;
   entries: LeaderboardEntry[];
+}
+
+/** A session ended and its story card is ready: the TV shows a QR code to it for 30 s (not full screen). */
+export interface CardMoment {
+  kind: "card";
+  at: number;
+  rig_id: string;
+  driver: string;
+  token: string;
+  url: string;
+  best_ms: number;
+  track_name: string | null;
+}
+
+/** Story card data (GET /api/cards/<token>), drawn by the card page. Not part of the WebSocket feed. */
+export interface StoryCard {
+  token: string;
+  created_at: number;
+  driver: string;
+  rig_name: string;
+  track_key: string;
+  track_name: string | null;
+  cafe: { name: string; branding: Record<string, string> };
+  session_minutes: number;
+  laps: number;
+  best_ms: number;
+  best_sectors_ms: [number, number, number] | null;
+  best_lap_class: LapClass | string;
+  theoretical_ms: number | null;
+  top_speed_kph: number | null;
+  today_position: number | null;
+  today_drivers: number;
+  today_record_ms: number | null;
+  improvement: { previous_best_ms: number; delta_ms: number } | null;
+  minis: { ms: number; rating: "purple" | "green" | "yellow" | string }[] | null;
+  outline: { points: [number, number][]; display: TrackOutline["display"] } | null;
 }
 
 /** Added in v1 (optional): a full-screen broadcast moment. Unknown kinds are ignored. */
@@ -336,7 +373,7 @@ export interface LeaderboardMessage extends Envelope<"leaderboard"> {
 }
 
 export interface MomentMessage extends Envelope<"moment"> {
-  moment: Moment;
+  moment: Moment | CardMoment;
 }
 
 export interface QueueMessage extends Envelope<"queue"> {

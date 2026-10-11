@@ -187,6 +187,14 @@ class DriverRegistry:
             self.end(rig_id)
         return self._store.delete_driver(driver_id)
 
+    # --- story cards -------------------------------------------------------------------------
+
+    def save_card(self, rig_id: str, driver_id: int | None, card: dict[str, Any]) -> None:
+        self._store.save_card(rig_id, driver_id, card)
+
+    def card(self, token: str) -> dict[str, Any] | None:
+        return self._store.card(token)
+
     # --- queue -----------------------------------------------------------------------------
 
     def queue(self) -> list[dict[str, Any]]:

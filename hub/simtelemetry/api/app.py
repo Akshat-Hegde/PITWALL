@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 
 from ..core.feed import FeedBuilder, FeedConnection
 from ..hub import Hub
+from .cards import card_router
 from .staff import staff_router
 
 log = logging.getLogger(__name__)
@@ -47,6 +48,7 @@ def create_app(hub: Hub, dashboard_dir: Path | None = None) -> FastAPI:
         return hub.health_snapshot()
 
     app.include_router(staff_router(hub))
+    app.include_router(card_router(hub))
 
     @app.websocket("/ws")
     async def feed(websocket: WebSocket) -> None:
@@ -78,6 +80,11 @@ def create_app(hub: Hub, dashboard_dir: Path | None = None) -> FastAPI:
         @app.get("/portrait", include_in_schema=False)
         def portrait() -> FileResponse:
             """Portrait layout for vertical screens: the same dashboard, which reads the path."""
+            return FileResponse(directory / "index.html")
+
+        @app.get("/card/{token}", include_in_schema=False)
+        def card_page(token: str) -> FileResponse:
+            """Story card page: the dashboard reads the token from the path and draws the card."""
             return FileResponse(directory / "index.html")
 
         app.mount("/", StaticFiles(directory=directory, html=True), name="dashboard")
