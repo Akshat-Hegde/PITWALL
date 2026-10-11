@@ -94,9 +94,28 @@ function LapClock({ frame }: { frame: RigFrame | undefined }) {
 
 const STATE_TEXT: Record<string, string> = { driving: "On track", in_menu_paused: "In menu", no_data: "Waiting" };
 
-/** A generic steering wheel that turns with the driver's input; the angle in degrees under it. */
-export function SteeringWheel({ store, rigId, frameHz, rotationDeg }: {
-  store: DashboardStore; rigId: string; frameHz: number; rotationDeg: number;
+/** Wheel body: a wide formula-style wheel with two grips, drawn by us. Screen, buttons and LED slots are
+ *  cut out (even-odd), so the page shows through them. */
+const WHEEL_BODY =
+  "M-30 -30 L30 -30 C42 -30 47 -24 48 -14 L48 -2 C48 14 47 26 42 31 C38 35 32 33 32 27 L32 8 " +
+  "C32 4 29 2 25 2 L22 2 C20 2 19 4 19 8 L19 14 C19 19 16 21 11 21 L-11 21 C-16 21 -19 19 -19 14 L-19 8 " +
+  "C-19 4 -20 2 -22 2 L-25 2 C-29 2 -32 4 -32 8 L-32 27 C-32 33 -38 35 -42 31 C-47 26 -48 14 -48 -2 " +
+  "L-48 -14 C-47 -24 -42 -30 -30 -30 Z " +
+  // screen
+  "M-12 -24 L12 -24 L12 -3 L-12 -3 Z " +
+  // three buttons
+  "M-12.2 11 a3.2 3.2 0 1 0 6.4 0 a3.2 3.2 0 1 0 -6.4 0 Z M-3.2 11 a3.2 3.2 0 1 0 6.4 0 a3.2 3.2 0 1 0 -6.4 0 Z " +
+  "M5.8 11 a3.2 3.2 0 1 0 6.4 0 a3.2 3.2 0 1 0 -6.4 0 Z " +
+  // grip slots
+  "M-38 -22 L-30 -24 L-30 -20 L-38 -18 Z M38 -22 L30 -24 L30 -20 L38 -18 Z";
+/** LED slots either side of the screen, bottom to top; they light up with the car's rev lights. */
+const LEDS = [-7, -11, -15, -19, -23];
+const LED_COLOURS = ["#38d97a", "#38d97a", "#f2c230", "#ff4a4a", "#b46cff"];
+
+/** A formula-style steering wheel that turns with the driver's input: rev LEDs, the gear on its screen, and
+ *  the angle in degrees under it. */
+export function SteeringWheel({ store, rigId, frameHz, rotationDeg, frame }: {
+  store: DashboardStore; rigId: string; frameHz: number; rotationDeg: number; frame?: RigFrame;
 }) {
   const wheel = useRef<SVGGElement>(null);
   const label = useRef<HTMLSpanElement>(null);
@@ -109,15 +128,21 @@ export function SteeringWheel({ store, rigId, frameHz, rotationDeg }: {
       if (label.current.textContent !== text) label.current.textContent = text;
     }
   });
+  const driving = frame?.state === "driving";
+  const revs = driving ? frame?.car?.rev_lights_pct ?? null : null;
+  const lit = revs == null ? 0 : Math.round((Math.max(0, Math.min(100, revs)) / 100) * LEDS.length);
+  const gear = driving ? formatGear(frame?.gear) : "";
   return (
     <div className="wheel">
       <svg className="wheel__svg" viewBox="-50 -50 100 100" aria-hidden="true">
         <g ref={wheel} className="wheel__turn">
-          <path className="wheel__rim"
-                d="M-46 -12 Q-46 -26 -34 -26 L34 -26 Q46 -26 46 -12 L46 14 Q46 26 34 26 L-34 26 Q-46 26 -46 14 Z" />
-          <path className="wheel__spoke" d="M-46 2 L-14 2 M46 2 L14 2 M0 14 L0 26" />
-          <circle className="wheel__hub" r="11" />
-          <rect className="wheel__mark" x="-2.5" y="-33" width="5" height="12" />
+          <path className="wheel__body" d={WHEEL_BODY} fillRule="evenodd" />
+          {LEDS.map((y, i) => [-21, 17].map((x) => (
+            <rect key={`${x}${y}`} className="wheel__led" x={x} y={y} width="4" height="2.6" rx="0.6"
+                  style={i < lit ? { fill: LED_COLOURS[i] } : undefined} />
+          )))}
+          <text className="wheel__gear" x="0" y="-8.5" textAnchor="middle">{gear}</text>
+          <rect className="wheel__mark" x="-2.5" y="-35" width="5" height="6" />
         </g>
       </svg>
       <span ref={label} className="wheel__deg">0°</span>
@@ -252,7 +277,8 @@ function RigCard({ store, state, rig, size, selected }: {
       <div className="rcard__time"><LapClock frame={frame} /></div>
       <div className="rcard__delta"><Delta store={store} rigId={rig.rig_id} /></div>
       <div className="rcard__spg"><SpeedGear frame={frame} /></div>
-      <SteeringWheel store={store} rigId={rig.rig_id} frameHz={state.frameHz} rotationDeg={state.steeringRotationDeg} />
+      <SteeringWheel store={store} rigId={rig.rig_id} frameHz={state.frameHz} rotationDeg={state.steeringRotationDeg}
+                     frame={frame} />
       <PedalBars store={store} rigId={rig.rig_id} frameHz={state.frameHz} />
       <TyreBlocks frame={frame} />
     </article>
@@ -449,7 +475,7 @@ function Tile({ store, state, rig, trackKey }: { store: DashboardStore; state: D
           <div className="tile__spg"><SpeedGear frame={frame} /></div>
           <div className="tile__ctl">
             <SteeringWheel store={store} rigId={rig.rig_id} frameHz={state.frameHz}
-                           rotationDeg={state.steeringRotationDeg} />
+                           rotationDeg={state.steeringRotationDeg} frame={frame} />
             <PedalBars store={store} rigId={rig.rig_id} frameHz={state.frameHz} />
           </div>
         </div>

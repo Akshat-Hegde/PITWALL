@@ -1013,10 +1013,8 @@ ul {
   pointer-events: none;
 }
 
-.stripes path {
-  fill: none;
-  stroke-width: 4;
-  stroke-linecap: round;
+.stripes__block {
+  fill: currentColor;
 }
 
 .stripes--top-right {
@@ -2738,6 +2736,8 @@ html:has(.tvstage) {
   --delta-ahead: #38d97a;
   --delta-behind: #ff5a4f;
   --tyre-ok: #2f9e5a;
+  /* Numerals font (speed, gear, delta, lap time): one place to change it. */
+  --font-num: var(--font-body);
 }
 
 .tvstage .app {
@@ -2779,7 +2779,7 @@ html:has(.tvstage) {
 .delta,
 .spg__speed,
 .spg__gear {
-  font-family: var(--font-body);
+  font-family: var(--font-num);
   font-stretch: 125%;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
@@ -2810,23 +2810,20 @@ html:has(.tvstage) {
   transform-box: initial;
 }
 
-.wheel__rim {
-  fill: none;
-  stroke: var(--text);
-  stroke-width: 6;
+.wheel__body {
+  fill: #e9eaee;
 }
 
-.wheel__spoke {
-  fill: none;
-  stroke: var(--text-2);
-  stroke-width: 5;
-  stroke-linecap: round;
+.wheel__led {
+  fill: #2a2b33;
 }
 
-.wheel__hub {
-  fill: var(--panel-2);
-  stroke: var(--text-2);
-  stroke-width: 3;
+.wheel__gear {
+  fill: var(--text);
+  font-family: var(--font-num);
+  font-size: 15px;
+  font-stretch: 125%;
+  font-weight: 800;
 }
 
 .wheel__mark {
@@ -3291,4 +3288,57 @@ html:has(.tvstage) {
 
 .wheel__deg {
   min-width: 3.4em;
+}
+
+/* ---- Racing look: near-black page, sharp hairline cards, slanted blocks over halftone ---- */
+
+:root {
+  --bg: #050506;
+  --panel: #101014;
+  --panel-2: #18181e;
+  --edge: #24242c;
+}
+
+/* The slanted-block motif is bold now: full colour, the halftone under it faint. */
+.stripes {
+  opacity: 1;
+}
+
+.stripes__block--thin {
+  opacity: 0.85;
+}
+
+.stripes__block--short {
+  opacity: 0.6;
+}
+
+.stripes__dots {
+  opacity: 0.45;
+}
+
+.tvstage .header {
+  grid-template-columns: max-content minmax(0, 1fr) max-content 7.5rem;
+  padding-right: 0;
+  background: #000;
+}
+
+.header__slash {
+  align-self: stretch;
+  width: 7.5rem;
+  height: 100%;
+  color: var(--brand-accent);
+}
+
+.slashmark__dots {
+  opacity: 0.35;
+}
+
+.rcard,
+.tile {
+  border: 1px solid var(--edge);
+  border-left: var(--stripe) solid var(--rig-colour);
+}
+
+:root {
+  --map-track: #3a3b45;
 }

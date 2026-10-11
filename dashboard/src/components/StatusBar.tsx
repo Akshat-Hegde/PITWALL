@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { DashboardState } from "../state/reducer";
+import { SlashMark } from "./Motifs";
 
 const LINK_TEXT: Record<DashboardState["link"], string> = {
   connecting: "Connecting to hub",
@@ -22,7 +23,6 @@ export function StatusBar({ state }: Props) {
   return (
     <>
       <header className="header">
-        <span className="kerb header__kerb" aria-hidden="true" />
         <div className="header__brand">
           <span className="header__mark" aria-hidden="true" />
           {state.cafe.name || "Live timing"}
@@ -40,6 +40,7 @@ export function StatusBar({ state }: Props) {
           </span>
           <Clock />
         </div>
+        <SlashMark className="header__slash" />
       </header>
     </>
   );

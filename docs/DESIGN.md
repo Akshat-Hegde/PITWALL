@@ -18,8 +18,8 @@ can override `--brand-accent` (and any other token) from `[cafe.branding]` in th
 
 | Token | Value | Use |
 |---|---|---|
-| `--bg` | `#0C0D11` | Page background. Flat; only the stripe-bundle motif may sit on it, never behind data. |
-| `--panel` | `#14151B` | Cards (cut-corner). One level only: no card inside a card. |
+| `--bg` | `#050506` (TV) | Page background. Flat; only the stripe-bundle motif may sit on it, never behind data. |
+| `--panel` | `#101014` (TV) | Cards: sharp corners, 1 px `--edge` hairline, 3 px rig-colour left edge. One level only. |
 | `--panel-2` | `#1B1C24` | Inset areas inside a card: bar tracks, the map well of the track card. |
 | `--edge` | `#262731` | Card outline (1 px), so cards read without shadows. |
 | `--line` | `rgba(255,255,255,0.08)` | Hairline dividers between rows and sections. |
@@ -98,7 +98,7 @@ Each motif is drawn by us; references are for style only.
 
 | # | Motif | From | How we build it | Allowed | Banned |
 |---|---|---|---|---|---|
-| 1 | **Stripe bundle**: 5 parallel thin lines that run in from a screen edge, bend 45° with a rounded corner and fade out at one end | Group_58 (corner bundles on every page, behind the posters) | One inline SVG (`<StripeBundle corner>`): 5 paths, 6 px apart at 1080p, `--brand-accent` at 22 % opacity, a linear-gradient mask for the fade | One per view, in a corner or edge that holds no data (the empty corner of the map, the attract / moment screens, the story card). View wipes. | Behind any number, name, table or map line; more than one per view; in other colours than the accent. |
+| 1 | **Slanted blocks over halftone**: three bold parallelograms (thick, thin, short) running in from a corner at ~50°, over a field of small dots that fades away from the corner | Racing promo posters (style only) | One inline SVG (`<StripeBundle corner>`): filled paths in `--brand-accent`, a rotated dot `<pattern>` masked by a radial fade; on LIVE / MULTIVIEW a compact version (`<SlashMark>`) closes the header on the right | One per view, in a corner or edge that holds no data (the empty corner of the map, the attract / moment screens, the story card). View wipes. | Behind any number, name, table or map line; more than one per view; in other colours than the accent. |
 | 2 | **Double slanted bar**: two parallel bars, the lower one darker, both ending in a 60° cut, a separate slanted cap after a small gap | User screenshot "slanted bars" | `<SlantBar value>`: two 3 px divs (accent / accent-2, or white / grey for throttle) with `clip-path` cut ends + a cap parallelogram | Throttle / brake, lap progress, sector progress, ERS / fuel, section dividers under titles | As decoration with no value; thicker than 4 px per bar. |
 | 3 | **Diagonal light streaks**: 3–5 soft wide diagonal bands, a few % white | User screenshot "streak header", Group_58 posters | CSS `repeating-linear-gradient(115deg, …)` on a pseudo-element, masked to fade out | The top-left corner of moment cards and the attract/portrait hero | Over tables, timing or maps. |
 | 4 | **Barcode meter**: a row of thin vertical ticks, lit ticks white, the rest `--line-strong`; ticks get taller toward the top end | User screenshot "broadcast card" (speed meter) | `<Barcode value max ticks>`: SVG rects; lit count rounded, no animation between ticks | Speed (instead of a round dial), revs, session timer, record "gap" meter | Any round dial or arc gauge. |
@@ -114,8 +114,8 @@ Each motif is drawn by us; references are for style only.
 - **Fewer boxes**: sections are separated by space and hairlines. Only rig cards (and MULTIVIEW tiles, which
   are rig cards) are boxed.
 - **One stripe motif per page**, never under data, nothing decorative in the map area. On LIVE and
-  MULTIVIEW that motif is the kerb strip on the header's top edge.
-- **Header** (2.6rem): kerb strip, cafe name left, link state and clock right. No view tabs (pages are
+  MULTIVIEW that motif is the slash mark closing the header on the right.
+- **Header** (2.6rem, black): cafe name left, link state and clock right, slash mark at the right edge. No view tabs (pages are
   switched from `/staff` or keys 1 / 2), no track (it is in the map corner), no warnings (staff only).
 - Motion: car dots, the steering wheel and pedal bars are interpolated at display rate (60 fps) between the
   15 Hz frames; numerals are tabular with fixed widths so nothing beside them moves.
@@ -131,8 +131,10 @@ small grey "Invalid" tag sits by the lap number (the numerals stay readable).
 **Delta**: the current lap against the driver's own best at the same lap distance, hero numerals, two
 decimals, green ahead / red behind, a dash until the driver has a full lap the page saw.
 
-**Steering wheel**: a generic yoke outline that turns with the input (steer x `steering_rotation_deg` / 2),
-a rig-colour mark at the top, the angle in degrees under it.
+**Steering wheel**: our own formula-style wheel (wide body, two grips, centre screen, three buttons, LED
+slots each side), light grey with the cut-outs showing the page. It turns with the input (steer x
+`steering_rotation_deg` / 2) about its centre; the screen shows the gear, the LEDs light green / yellow / red
+/ purple with the car's rev lights, a rig-colour mark sits on top, the angle in degrees under it.
 
 **Pedal bars**: two thin (8 px) vertical bars, throttle green and brake red, filling from the bottom.
 
@@ -144,9 +146,14 @@ lines under the sector times; done ones purple / green / yellow, the rest `--lin
 
 **Speed and gear**: display numerals, `KM/H` unit label between them.
 
-**Track map**: thin neutral line, no glow or casing; each of 24 mini-sectors in the colour of the rig with the
-fastest time through it; sector ticks with S2 / S3; start/finish a short white tick; small dots with name
-labels off the track on thin leader lines. Mini maps (MULTIVIEW) show one car and no labels.
+**Track map** (broadcast style): a thick band (0.55rem) on a black casing, neutral grey; each of 24
+mini-sectors painted in the colour of the rig with the fastest time through it (clean laps, valid or not);
+LOW / MEDIUM / HIGH SPEED labels off the track at the corners (from a traced lap's speed); sector ticks with
+S2 / S3; start/finish a white tick; car dots with name labels on thin leader lines, placed clear of the corner
+labels. Mini maps (MULTIVIEW) show a thinner band, one car, no labels.
+
+**Numerals**: speed, gear, delta and lap time use the `--font-num` token (Saira 125 % / 800 by default), so a
+font the cafe licenses can be dropped in. Only fonts we may bundle (SIL OFL or bought for the venue) go in.
 
 **Leaderboard (tower)**: tab head with the period and track; rows: pos · stripe · name · lap time · gap ·
 class (PRO / OPEN); hairlines; P1's time purple and the P1 row gets the chequered edge.

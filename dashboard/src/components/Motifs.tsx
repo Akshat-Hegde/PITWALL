@@ -8,24 +8,44 @@ type Corner = "top-right" | "bottom-left" | "top-left" | "bottom-right";
  * One per view, in the empty title row; aria-hidden decoration.
  */
 export function StripeBundle({ corner = "top-right", className = "" }: { corner?: Corner; className?: string }) {
-  const id = `stripe-fade-${corner}`;
+  // Drawn for the top-left corner; CSS mirrors it into the other corners. Bold slanted blocks over a halftone
+  // dot field that fades away from the corner (our own drawing, racing-poster style).
+  const id = `halftone-${corner}`;
   return (
-    <svg className={`stripes stripes--${corner} ${className}`} viewBox="0 0 440 110" aria-hidden="true">
+    <svg className={`stripes stripes--${corner} ${className}`} viewBox="0 0 440 330" aria-hidden="true">
       <defs>
-        <linearGradient id={id} gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="260" y2="0">
-          <stop offset="0" stopColor="currentColor" stopOpacity="0" />
-          <stop offset="1" stopColor="currentColor" stopOpacity="1" />
-        </linearGradient>
+        <pattern id={`${id}-dots`} width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <circle cx="4.5" cy="4.5" r="1.6" fill="currentColor" />
+        </pattern>
+        <radialGradient id={`${id}-fade`} cx="0" cy="0" r="1" gradientUnits="objectBoundingBox">
+          <stop offset="0" stopColor="#fff" stopOpacity="0.9" />
+          <stop offset="0.75" stopColor="#fff" stopOpacity="0" />
+        </radialGradient>
+        <mask id={`${id}-mask`}>
+          <rect width="440" height="330" fill={`url(#${id}-fade)`} />
+        </mask>
       </defs>
-      {[0, 1, 2, 3, 4].map((i) => {
-        const y = 46 + i * 14; // horizontal run, then a rounded 45° bend up and out of the top edge
-        const x = 250 + i * 14 * 0.414;
-        const r = 18;
-        return (
-          <path key={i} stroke={`url(#${id})`}
-                d={`M0 ${y} L${x} ${y} Q${x + r} ${y} ${x + r * 1.7} ${y - r * 0.7} L${x + r * 1.7 + y} ${-r * 0.7 - 2}`} />
-        );
-      })}
+      <rect className="stripes__dots" width="440" height="330" fill={`url(#${id}-dots)`} mask={`url(#${id}-mask)`} />
+      <path className="stripes__block" d="M118 0 L196 0 L0 236 L0 142 Z" />
+      <path className="stripes__block stripes__block--thin" d="M236 0 L262 0 L44 262 L18 262 Z" />
+      <path className="stripes__block stripes__block--short" d="M300 0 L334 0 L254 96 L220 96 Z" />
+    </svg>
+  );
+}
+
+/** The same motif small, for the header band of the TV pages: three slanted blocks and a few dots. */
+export function SlashMark({ className = "" }: { className?: string }) {
+  return (
+    <svg className={`slashmark ${className}`} viewBox="0 0 120 52" preserveAspectRatio="xMaxYMid meet" aria-hidden="true">
+      <defs>
+        <pattern id="slash-dots" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <circle cx="3" cy="3" r="1.1" fill="currentColor" />
+        </pattern>
+      </defs>
+      <rect className="slashmark__dots" x="0" width="70" height="52" fill="url(#slash-dots)" />
+      <path className="stripes__block" d="M78 0 L98 0 L74 52 L54 52 Z" />
+      <path className="stripes__block stripes__block--thin" d="M104 0 L112 0 L88 52 L80 52 Z" />
+      <path className="stripes__block" d="M116 0 L120 0 L120 52 L96 52 Z" />
     </svg>
   );
 }

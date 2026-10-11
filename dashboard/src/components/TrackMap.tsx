@@ -11,7 +11,7 @@ import {
   type Bounds,
   type Display,
 } from "../map/geometry";
-import { MINI_SECTORS } from "../state/laptrace";
+import { MINI_SECTORS, speedZones, type SpeedZone } from "../state/laptrace";
 import type { DashboardState } from "../state/reducer";
 import type { DashboardStore } from "../state/store";
 import { Waiting } from "./Waiting";
@@ -63,7 +63,7 @@ export function TrackMap({ store, state, trackKey, displayOverride, variant = "l
     let width = 0;
     let height = 0;
     let rem = 20;
-    let c = { track: "", text: "", text3: "", bg: "", purple: "", green: "", yellow: "", font: "sans-serif" };
+    let c = { track: "", text: "", text2: "", text3: "", bg: "", purple: "", green: "", yellow: "", font: "sans-serif" };
 
     const resize = () => {
       // Draw in layout pixels (the 1920 x 1080 canvas); the backing store matches the screen, so a 4K TV
@@ -80,6 +80,7 @@ export function TrackMap({ store, state, trackKey, displayOverride, variant = "l
         track: cssVar("--map-track"),
         text: cssVar("--text"),
         text3: cssVar("--text-3"),
+        text2: cssVar("--text-2"),
         bg: cssVar("--bg"),
         purple: cssVar("--timing-purple"),
         green: cssVar("--timing-green"),
@@ -137,17 +138,23 @@ export function TrackMap({ store, state, trackKey, displayOverride, variant = "l
         const [px, py] = toMapPlane(x, z, display);
         return project(fit, px, py);
       };
-      const lineW = mini ? rem * 0.14 : rem * 0.18;
+      // A thick track band on a dark casing (broadcast style); thinner on mini maps.
+      const lineW = mini ? rem * 0.3 : rem * 0.55;
+      const casing = lineW + (mini ? rem * 0.12 : rem * 0.2);
       ctx.lineJoin = "round";
       ctx.lineCap = "round";
 
       let centre: [number, number] = [width / 2, height / 2];
+      const zoneBoxes: { x: number; y: number; w: number; h: number }[] = [];
       if (outline && outline.points.length > 2) {
         const pts = outline.points.map(([x, z]) => toScreen(x, z));
         centre = [pts.reduce((a, p) => a + p[0], 0) / pts.length, pts.reduce((a, p) => a + p[1], 0) / pts.length];
         ctx.beginPath();
         pts.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
         ctx.closePath();
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = casing;
+        ctx.stroke();
         ctx.strokeStyle = c.track;
         ctx.lineWidth = lineW;
         ctx.stroke();
@@ -168,8 +175,30 @@ export function TrackMap({ store, state, trackKey, displayOverride, variant = "l
             }
             ctx.strokeStyle = colours.get(rigId) ?? c.track;
             ctx.lineWidth = lineW;
+            ctx.lineCap = "butt";
             ctx.stroke();
+            ctx.lineCap = "round";
           });
+        }
+
+        // Corner speed labels (LOW / MEDIUM / HIGH SPEED) from a lap's speed trace, off the track.
+        if (!mini && key) {
+          const zones = zonesFor(store, s.rigs.map((r) => r.rig_id), key);
+          ctx.font = `700 ${rem * 0.62}px ${c.font}`;
+          ctx.textBaseline = "middle";
+          ctx.fillStyle = c.text2;
+          for (const z of zones) {
+            const i = Math.floor(z.at * pts.length) % pts.length;
+            const [x, y] = pts[i]!;
+            const [dx, dy] = away(centre, x, y);
+            const text = `${z.kind.toUpperCase()} SPEED`;
+            const w = ctx.measureText(text).width;
+            const lx = x + dx * rem * 1.9 - (dx < 0 ? w : 0);
+            const ly = y + dy * rem * 1.9;
+            ctx.textAlign = "left";
+            ctx.fillText(text, lx, ly);
+            zoneBoxes.push({ x: lx, y: ly - rem * 0.35, w, h: rem * 0.7 });
+          }
         }
 
         // Start/finish: a short white tick across the track. Sector lines: grey ticks with S2 / S3.
@@ -207,7 +236,7 @@ export function TrackMap({ store, state, trackKey, displayOverride, variant = "l
 
       // The dots and labels on top.
       const rigs = onlyRef.current ? s.rigs.filter((r) => r.rig_id === onlyRef.current) : s.rigs;
-      const placed: { x: number; y: number; w: number; h: number }[] = [];
+      const placed: { x: number; y: number; w: number; h: number }[] = [...zoneBoxes];
       const fontPx = rem * 0.75;
       const r = rem * 0.32;
       for (const rig of rigs) {
@@ -338,4 +367,13 @@ function tick(ctx: CanvasRenderingContext2D, pts: [number, number][], i: number,
   ctx.lineTo(ax + nx * half, ay + ny * half);
   ctx.stroke();
   ctx.lineCap = "round";
+}
+
+/** Corners on a track from any rig's traced lap (best first): the slowest points, classed by speed. */
+function zonesFor(store: DashboardStore, rigIds: string[], trackKey: string): SpeedZone[] {
+  for (const id of rigIds) {
+    const lap = store.laps.bestLap(id, trackKey) ?? store.laps.lastLap(id, trackKey);
+    if (lap) return speedZones(lap.speed, 7);
+  }
+  return [];
 }
