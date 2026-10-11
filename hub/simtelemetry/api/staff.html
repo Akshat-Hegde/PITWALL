@@ -129,6 +129,7 @@
     <button type="button" role="tab" data-tab="queue" aria-selected="false">Queue <span class="badge" id="queue-count" hidden></span></button>
     <button type="button" role="tab" data-tab="drivers" aria-selected="false">Drivers</button>
     <button type="button" role="tab" data-tab="compete" aria-selected="false">Compete</button>
+    <button type="button" role="tab" data-tab="health" aria-selected="false">Health <span class="badge" id="health-count" hidden></span></button>
   </nav>
 </header>
 
@@ -167,6 +168,27 @@
   </section>
 
   <section id="tab-rigs" role="tabpanel"><div id="rigs"></div></section>
+
+  <section id="tab-health" role="tabpanel" hidden>
+    <section class="panel">
+      <div class="row"><span class="title">Warnings</span><span class="faint">Staff only: never shown on the TV</span></div>
+      <ul class="list" id="health-warnings"></ul>
+    </section>
+    <section class="panel">
+      <div class="title">Rigs</div>
+      <table><thead><tr><th>Rig</th><th>Address</th><th>State</th><th class="r">Packets/s</th><th class="r">Last seen</th></tr></thead>
+        <tbody id="health-rigs"></tbody></table>
+    </section>
+    <section class="panel">
+      <div class="title">Game setup</div>
+      <p class="muted">In F1 25 on each rig: Settings, Telemetry Settings. UDP Telemetry On, Broadcast Mode Off,
+        UDP Format 2025 on every rig.</p>
+      <table><tbody>
+        <tr><td>UDP IP Address</td><td class="r" id="health-ip">-</td></tr>
+        <tr><td>UDP Port</td><td class="r" id="health-port">-</td></tr>
+      </tbody></table>
+    </section>
+  </section>
 
   <section id="tab-queue" role="tabpanel" hidden>
     <form class="panel" id="queue-form">
@@ -352,7 +374,7 @@
     document.querySelectorAll("[role=tabpanel]").forEach((p) => (p.hidden = p.id !== "tab-" + tab));
   }
   document.querySelectorAll("nav.tabs button").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
-  if (["rigs", "queue", "drivers", "compete"].includes(location.hash.slice(1))) showTab(location.hash.slice(1)); // e.g. /staff#queue
+  if (["rigs", "queue", "drivers", "compete", "health"].includes(location.hash.slice(1))) showTab(location.hash.slice(1)); // e.g. /staff#queue
   document.querySelector('[data-tab="compete"]').addEventListener("click", () => loadCompete());
 
   // --- time ----------------------------------------------------------------------------------
@@ -747,6 +769,39 @@
     } catch (err) { fail($("director-msg"), err); }
   }));
 
+  // --- health (diagnostics: addresses and warnings stay on this page and in the logs) ------------
+  function cell(text, cls) { const td = document.createElement("td"); td.textContent = text; if (cls) td.className = cls; return td; }
+  async function loadHealth() {
+    let h;
+    try { h = await api("GET", "/api/staff/health"); } catch { return; }
+    const count = $("health-count");
+    count.hidden = h.warnings.length === 0;
+    count.textContent = String(h.warnings.length);
+    const list = $("health-warnings");
+    list.textContent = "";
+    for (const w of h.warnings) {
+      const li = document.createElement("li");
+      li.textContent = w.message;
+      list.appendChild(li);
+    }
+    if (!h.warnings.length) {
+      const li = document.createElement("li");
+      li.className = "faint";
+      li.textContent = "All good.";
+      list.appendChild(li);
+    }
+    const body = $("health-rigs");
+    body.textContent = "";
+    for (const r of h.rigs) {
+      const tr = document.createElement("tr");
+      tr.append(cell(r.name), cell(r.ip), cell(r.state.replace(/_/g, " ")), cell(String(r.packets_per_s), "r"),
+                cell(r.last_seen_s_ago == null ? "never" : `${Math.round(r.last_seen_s_ago)} s ago`, "r"));
+      body.appendChild(tr);
+    }
+    $("health-ip").textContent = h.target.address || "this PC's IP address";
+    $("health-port").textContent = String(h.target.port);
+  }
+
   // --- podium --------------------------------------------------------------------------------
   $("podium-btn").addEventListener("click", async () => {
     try { await api("POST", "/api/staff/podium"); say($("top-msg"), "The TV is showing today's podium.", "ok"); }
@@ -763,6 +818,7 @@
       $("director-btn").hidden = !state.demo;
       renderRigs();
       renderQueue();
+      loadHealth();
       if (currentTab === "compete" && !compete) loadCompete();
     } catch (err) {
       if (err.message === "locked") return;

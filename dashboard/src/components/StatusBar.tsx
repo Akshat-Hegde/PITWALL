@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { DashboardState } from "../state/reducer";
-import type { View } from "../views";
+import { FitText } from "./Stage";
 
 const LINK_TEXT: Record<DashboardState["link"], string> = {
   connecting: "Connecting to hub",
@@ -9,26 +9,16 @@ const LINK_TEXT: Record<DashboardState["link"], string> = {
   version_mismatch: "Version mismatch",
 };
 
-const VIEW_TEXT: [View, string][] = [
-  ["race", "Race"],
-  ["board", "Leaderboard"],
-  ["analysis", "Head to head"],
-  ["onboard", "Onboard"],
-  ["attract", "Welcome"],
-  ["teams", "Teams"],
-];
-
 interface Props {
   state: DashboardState;
   trackKey: string | null;
-  view: View;
-  /** "Auto", "Attract" or "Fixed". */
-  modeNote: string;
 }
 
-/** Thin header: cafe left, session and track centre, views, link and clock right. Warnings in a line below. */
-export function StatusBar({ state, trackKey, view, modeNote }: Props) {
-  const warnings = state.status?.warnings ?? [];
+/**
+ * Thin header: cafe left, session and track centre, link and clock right. Technical warnings (ports, addresses)
+ * never show on the TV: they are on the staff page's Health tab and in the hub log.
+ */
+export function StatusBar({ state, trackKey }: Props) {
   const event = state.features.events ? state.competition.event : null;
   const session = Object.values(state.frames).find((f) => f.session.track_key === trackKey)?.session;
   const track = session?.track_name ?? state.leaderboards.today?.track_name ?? null;
@@ -49,29 +39,16 @@ export function StatusBar({ state, trackKey, view, modeNote }: Props) {
         </div>
         <div className="header__session">
           {session?.session_type && <span className="t2">{session.session_type}</span>}
-          {track && <span className="header__track">{track}</span>}
+          {track && <FitText className="header__track" text={track} />}
           {length && <span className="t2">{length}</span>}
         </div>
         <div className="header__right">
-          <nav className="tabs" aria-label="Views">
-            {VIEW_TEXT.filter(([v]) => v !== "teams" || event || view === "teams").map(([v, text]) => (
-              <span key={v} className={`tab${v === view ? " is-active" : ""}`}>{text}</span>
-            ))}
-            <span className="tab tab--mode">{modeNote}</span>
-          </nav>
           <span className={`header__link link--${state.link}`}>
             {state.source === "mock" && state.link === "live" ? "Mock data" : LINK_TEXT[state.link]}
           </span>
           <Clock />
         </div>
       </header>
-      {warnings.length > 0 && (
-        <ul className="warnings" role="status">
-          {warnings.map((w) => (
-            <li key={`${w.code}-${w.rig_id ?? ""}`}>{w.message}</li>
-          ))}
-        </ul>
-      )}
     </>
   );
 }

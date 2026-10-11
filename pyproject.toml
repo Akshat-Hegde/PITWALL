@@ -29,7 +29,7 @@ simtelemetry = "simtelemetry.__main__:main"
 where = ["hub"]
 
 [tool.setuptools.package-data]
-simtelemetry = ["api/*.html"]
+simtelemetry = ["api/*.html", "tracks/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["hub/tests"]

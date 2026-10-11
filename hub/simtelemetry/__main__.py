@@ -97,15 +97,21 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--data-dir", type=Path, default=Path("data-demo"),
                    help="demo data folder (default data-demo); must be empty or made by seed-demo before")
     p.add_argument("--days", type=int, default=60, help="days of history (default 60)")
+
+    p = sub.add_parser("save-outline", help="save a track outline the hub learned as a bundled track file")
+    p.add_argument("track", nargs="?", help="track key (e.g. F1:7) or name; omit to list the learned outlines")
+    p.add_argument("--config", type=Path, default=None, help="TOML config (default: config/hub.toml if present)")
+    p.add_argument("--data-dir", type=Path, default=None, help="override data_dir from config")
+    p.add_argument("--out", type=Path, default=None, help="folder to write to (default: the hub's bundled tracks)")
     return parser
 
 
 def apply_overrides(config: AppConfig, args: argparse.Namespace) -> AppConfig:
     if args.data_dir is not None:
         config.data_dir = args.data_dir
-    if args.port is not None:
+    if getattr(args, "port", None) is not None:
         config.network.udp_port = args.port
-    if args.http_port is not None:
+    if getattr(args, "http_port", None) is not None:
         config.network.http_port = args.http_port
     if getattr(args, "owner_pin", None):
         config.owner.pin = args.owner_pin
@@ -249,6 +255,8 @@ def main(argv: list[str] | None = None) -> int:
     except ConfigError as exc:
         print(f"\nERROR: {exc}\n", file=sys.stderr)
         return 2
+    if args.command == "save-outline":
+        return save_outline(args, config)
     lap_log = setup_logging(config.data_dir / "logs", args.verbose, args.lap_debug)
     if lap_log is not None:
         log.info("Lap debug log: %s", lap_log)
@@ -256,6 +264,36 @@ def main(argv: list[str] | None = None) -> int:
         return run_command(args, config)
     finally:
         teardown_logging()  # main() may be called again in-process (tests); don't leave handlers behind
+
+
+def save_outline(args: argparse.Namespace, config: AppConfig) -> int:
+    """`save-outline`: copy a learned outline from the lap database into a bundled track file."""
+    from .core.tracks import BUNDLED_DIR, save_bundled
+    db = config.data_dir / "laps.db"
+    if not db.exists():
+        print(f"ERROR: no lap database at {db}", file=sys.stderr)
+        return 2
+    store = LapStore(db)
+    try:
+        outlines = store.outlines()
+    finally:
+        store.close()
+    if not args.track:
+        if not outlines:
+            print("No learned outlines yet: drive a full lap first.")
+        for key, o in sorted(outlines.items()):
+            print(f"{key:10} {o.get('track_name') or '':24} {len(o['points']):5} points, "
+                  f"{o.get('laps', 1)} lap(s), source {o.get('source')}")
+        return 0
+    want = args.track.casefold()
+    match = [o for k, o in outlines.items() if k.casefold() == want or (o.get("track_name") or "").casefold() == want]
+    if not match:
+        print(f"ERROR: no learned outline for '{args.track}'. Known: {', '.join(sorted(outlines)) or 'none'}",
+              file=sys.stderr)
+        return 2
+    path = save_bundled(match[0], args.out or BUNDLED_DIR)
+    print(f"Saved {match[0]['track_key']} ({match[0].get('track_name')}) to {path}")
+    return 0
 
 
 def prepare_demo(args: argparse.Namespace, config: AppConfig) -> None:
@@ -291,7 +329,9 @@ def run_command(args: argparse.Namespace, config: AppConfig) -> int:
     # Replays keep their laps in memory unless asked, so old captures don't change the real boards.
     save_laps = args.command != "replay" or args.save_laps
     store = LapStore(config.data_dir / "laps.db" if save_laps else None)
-    hub = Hub(config, F1Adapter(config.track_names), registry, recorder, store)
+    from .core.tracks import load_bundled
+    bundled = None if getattr(args, "demo", False) else load_bundled()  # the demo circuit is made up
+    hub = Hub(config, F1Adapter(config.track_names), registry, recorder, store, bundled)
 
     selection = SourceSelection()
     if args.command == "replay":

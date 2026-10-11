@@ -71,7 +71,7 @@
 
 html {
   /* 1rem = 1.85 % of the screen height: 20 px at 1080p, 40 px at 4K. */
-  font-size: clamp(12px, 1.85vh, 48px);
+  font-size: clamp(12px, 1.85vh, 48px); /* /card and other pages; the TV canvas fixes 20px below */
 }
 
 body {
@@ -2444,7 +2444,7 @@ ul {
   display: flex;
   flex-direction: column;
   gap: var(--s6);
-  width: min(62rem, 88vw);
+  width: min(62rem, 88%);
   padding: var(--s7) var(--s7) var(--s6);
   background: var(--panel);
   border-left: 4px solid var(--rig-colour);
@@ -3448,4 +3448,80 @@ html:has(.cardpage) {
   .obcar__systems {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+/* ==== Cleanup round: fixed TV canvas, one view at a time, header without tabs ==================== */
+
+/* The TV is a 1920 x 1080 design canvas scaled to the screen (letterboxed): nothing can overflow at any size. */
+html:has(.tvstage) {
+  font-size: 20px;
+}
+
+.tvstage {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #000;
+}
+
+.tvstage__canvas {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  overflow: hidden;
+  background: var(--bg);
+  transform-origin: center;
+}
+
+.tvstage .app {
+  height: 100%;
+}
+
+/* position: fixed inside the scaled canvas is relative to the canvas, so overlays scale with it. */
+.app__view {
+  overflow: hidden;
+  contain: paint;
+}
+
+.wipe__panel {
+  width: 140%;
+  transform: translateX(-100%);
+}
+
+@keyframes wipe-sweep {
+  to { transform: translateX(75%); }
+}
+
+.header {
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+}
+
+.header__brand {
+  overflow: visible;
+}
+
+.header__session {
+  justify-content: center;
+  min-width: 0;
+}
+
+.header__session > * {
+  flex: none;
+}
+
+.header__session > .header__track {
+  flex: 0 1 auto;
+}
+
+/* Text that shrinks to fit before it is ever truncated (FitText). */
+.fit {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.who__text {
+  min-width: 0;
 }

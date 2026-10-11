@@ -166,3 +166,16 @@ async def test_staff_pin(tmp_path):
         assert client.get("/api/staff/rigs", headers={"X-Staff-Pin": "0000"}).json()["detail"] == "Wrong PIN."
     locked = client.get("/api/staff/rigs", headers={"X-Staff-Pin": "4821"})
     assert locked.status_code == 429 and "Wait a minute" in locked.json()["detail"]
+
+
+async def test_staff_health_has_the_diagnostics_the_tv_never_shows(tmp_path):
+    hub, client = await client_with_rig(tmp_path)
+    hub.port_shadows = ["simpro3.exe also listens on 127.0.0.1:20777"]
+    hub.registry.see("192.168.1.99", 0.0, None, None)              # a rig the hub has no data from
+    h = client.get("/api/staff/health").json()
+    assert {r["ip"] for r in h["rigs"]} >= {RIG}
+    codes = [w["code"] for w in h["warnings"]]
+    assert "port_shadowed" in codes
+    assert any(w["code"] == "no_data" and "192.168.1.99" in w["message"] for w in h["warnings"])
+    assert h["target"]["port"] == hub.config.network.udp_port
+    assert "tab-health" in client.get("/staff").text

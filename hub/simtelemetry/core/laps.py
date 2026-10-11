@@ -22,6 +22,7 @@ import datetime as dt
 import itertools
 import json
 import logging
+import math
 from collections import deque
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -35,12 +36,15 @@ lap_debug = logging.getLogger("simtelemetry.lapdebug")  # enabled by --lap-debug
 RECENT_LAPS_MAX = 20
 EVENT_LOG_MAX = 200           # lap_completed / track_outline messages kept for dashboard connections
 
-# A lap trace becomes the track outline only if it covers the whole lap without gaps.
+# A lap's path (valid or not) becomes the track outline only if it covers the whole lap without gaps and had no
+# flashback. Later laps refine it: each is resampled by lap distance and averaged in, up to OUTLINE_MAX_LAPS laps.
 OUTLINE_START_MAX_M = 40      # first point within this distance of the line
 OUTLINE_END_MARGIN_M = 80     # last point within this distance of the track length
 OUTLINE_MAX_GAP_M = 120       # no bigger gap between consecutive points
 OUTLINE_MIN_POINTS = 50
-OUTLINE_STEP_M = 6            # outline point spacing
+OUTLINE_STEP_M = 6            # outline point spacing (by lap distance)
+OUTLINE_MAX_LAPS = 5          # laps averaged into a learned outline; later laps leave it alone
+OUTLINE_MAX_DEVIATION_M = 40  # a lap this far from the outline anywhere (spin, cut, wrong way) isn't averaged in
 MINI_SECTORS = 24             # per lap, by distance (story cards; the dashboard uses the same count)
 SPEED_BINS = 200              # speed trace resolution for head to head (one value per 0.5 % of the lap)
 FULL_THROTTLE = 0.98          # lap share thresholds, the same as the dashboard's
@@ -182,6 +186,7 @@ class Trace:
     thr: list[float | None] = field(default_factory=list)
     brk: list[float | None] = field(default_factory=list)
     glat: list[float | None] = field(default_factory=list)
+    flashback: bool = False  # cut by a flashback: the path may jump, so it never shapes the outline
 
     def add(self, d: float, t: int, x: float, z: float, thr: float | None = None, brk: float | None = None,
             glat: float | None = None) -> None:
@@ -197,6 +202,7 @@ class Trace:
 
     def cut_to(self, d: float) -> None:
         """Flashback: forget everything driven after distance d."""
+        self.flashback = True
         keep = bisect.bisect_right(self.d, d)
         del self.d[keep:], self.t[keep:], self.x[keep:], self.z[keep:]
         del self.thr[keep:], self.brk[keep:], self.glat[keep:]
@@ -210,6 +216,17 @@ class Trace:
             return float(self.t[-1])
         d0, d1, t0, t1 = self.d[i - 1], self.d[i], self.t[i - 1], self.t[i]
         return t0 + (t1 - t0) * (d - d0) / (d1 - d0)
+
+    def position_at(self, d: float) -> tuple[float, float]:
+        """World (x, z) at a lap distance, interpolated (clamped to the ends of the trace)."""
+        i = bisect.bisect_right(self.d, d)
+        if i <= 0:
+            return self.x[0], self.z[0]
+        if i >= len(self.d):
+            return self.x[-1], self.z[-1]
+        d0, d1 = self.d[i - 1], self.d[i]
+        f = (d - d0) / (d1 - d0)
+        return self.x[i - 1] + (self.x[i] - self.x[i - 1]) * f, self.z[i - 1] + (self.z[i] - self.z[i - 1]) * f
 
     def complete(self, track_length: float | None) -> bool:
         if len(self.d) < OUTLINE_MIN_POINTS or self.d[0] > OUTLINE_START_MAX_M:
@@ -306,7 +323,7 @@ class RigLaps:
 
 class LapBook:
     def __init__(self, clock=None, outline_display: dict[str, Any] | None = None, store: LapStore | None = None,
-                 day_start_hour: int = 0) -> None:
+                 day_start_hour: int = 0, bundled_outlines: dict[str, dict[str, Any]] | None = None) -> None:
         import time
         self._clock = clock or time.time
         self.store = store
@@ -314,9 +331,10 @@ class LapBook:
         self.outline_display = outline_display or {"flip_x": False, "flip_z": False, "rotate_deg": 0}
         self.outlines: dict[str, dict[str, Any]] = {}          # track_key -> schema TrackOutline
         if store is not None:
-            for key, outline in store.outlines().items():
-                outline["display"] = dict(self.outline_display)  # the current config wins
-                self.outlines[key] = outline
+            self.outlines.update(store.outlines())
+        self.outlines.update(bundled_outlines or {})  # a bundled track file wins over a learned outline
+        for outline in self.outlines.values():
+            outline["display"] = dict(self.outline_display)  # the current config wins
         self.messages: deque[tuple[int, str, dict[str, Any]]] = deque(maxlen=EVENT_LOG_MAX)
         self._message_ids = itertools.count(1)
         self.board_version: dict[str, int] = {}                # track_key -> bumps when its board may change
@@ -456,8 +474,7 @@ class LapBook:
             self._bump_board(record.track_key)
             if record.minis and record.analysis:
                 self._keep_analysis(record)
-            if record.track_key not in self.outlines:
-                self._make_outline(record, ctx)
+        self._learn_outline(record, ctx)
         if rig.best.get(record.track_key) is not record:
             record.trace = None  # only a rig's best lap keeps its trace (live deltas)
         return record
@@ -584,28 +601,50 @@ class LapBook:
 
     # --- track outline -----------------------------------------------------------------------
 
-    def _make_outline(self, record: LapRecord, ctx: LapContext) -> None:
-        trace = record.trace
-        if trace is None or not trace.complete(ctx.track_length_m):
-            span = f"{len(trace.d)} points, {trace.d[0]:.0f}-{trace.d[-1]:.0f} m" if trace and trace.d else "empty"
-            lap_debug.info("rig=%s lap=%d not used for the track outline (trace %s)", record.rig_id,
-                           record.lap_number, span)
+    def _learn_outline(self, record: LapRecord, ctx: LapContext) -> None:
+        """Build the outline from any complete lap path (valid or not) and refine it with the next few."""
+        current = self.outlines.get(record.track_key)
+        if current is not None and current.get("source") == "bundled":
+            return  # a bundled track file is the curated shape
+        learned = current is not None and current.get("step_m") == OUTLINE_STEP_M
+        laps = int(current.get("laps", 1)) if learned and current else 0
+        if laps >= OUTLINE_MAX_LAPS:
             return
-        points: list[list[float]] = []
-        dists: list[float] = []
-        for d, x, z in zip(trace.d, trace.x, trace.z):
-            if not dists or d - dists[-1] >= OUTLINE_STEP_M:
-                points.append([round(x, 1), round(z, 1)])
-                dists.append(d)
+        trace = record.trace
+        why = None
+        if trace is None or not trace.d:
+            why = "no trace"
+        elif trace.flashback:
+            why = "flashback during the lap"
+        elif not trace.complete(ctx.track_length_m):
+            why = f"trace {len(trace.d)} points, {trace.d[0]:.0f}-{trace.d[-1]:.0f} m"
+        if why or trace is None:
+            lap_debug.info("rig=%s lap=%d not used for the track outline (%s)", record.rig_id, record.lap_number, why)
+            return
+        length = ctx.track_length_m or trace.d[-1]
+        count = max(OUTLINE_MIN_POINTS, round(length / OUTLINE_STEP_M))
+        path = [trace.position_at(k * length / count) for k in range(count)]
+        if learned and current is not None and len(current["points"]) == count:
+            old = current["points"]
+            worst = max(math.hypot(x - ox, z - oz) for (x, z), (ox, oz) in zip(path, old))
+            if worst > OUTLINE_MAX_DEVIATION_M:
+                lap_debug.info("rig=%s lap=%d not used for the track outline (%.0f m off the outline)",
+                               record.rig_id, record.lap_number, worst)
+                return
+            path = [((ox * laps + x) / (laps + 1), (oz * laps + z) / (laps + 1)) for (x, z), (ox, oz) in zip(path, old)]
+        else:
+            laps = 0  # first lap, or an outline from an older hub version: start again from this lap
         sector_starts = None
         if ctx.sector_starts_m:
-            sector_starts = [0] + [bisect.bisect_left(dists, start) for start in ctx.sector_starts_m[1:]]
-            sector_starts = [min(i, len(points) - 1) for i in sector_starts]
+            sector_starts = [0] + [min(count - 1, round(start * count / length)) for start in ctx.sector_starts_m[1:]]
         outline = {
             "track_key": record.track_key,
             "track_name": record.track_name,
-            "points": points,
-            "source": "first_valid_lap",
+            "points": [[round(x, 1), round(z, 1)] for x, z in path],
+            "source": "laps",
+            "laps": laps + 1,
+            "step_m": OUTLINE_STEP_M,
+            "length_m": round(length, 1),
             "sector_starts": sector_starts,
             "display": dict(self.outline_display),
         }
@@ -613,8 +652,8 @@ class LapBook:
         if self.store is not None:
             self.store.save_outline(outline, record.completed_at)
         self._publish("track_outline", {"outline": outline})
-        lap_debug.info("rig=%s lap=%d became the outline of %s (%d points)", record.rig_id, record.lap_number,
-                       record.track_key, len(points))
+        lap_debug.info("rig=%s lap=%d %s the outline of %s (%d points, %d laps)", record.rig_id, record.lap_number,
+                       "started" if laps == 0 else "refined", record.track_key, count, laps + 1)
 
     # --- comparison --------------------------------------------------------------------------
 

@@ -24,14 +24,15 @@ DROP_QUEUE_FULL = "queue_full"
 
 class Hub:
     def __init__(self, config: AppConfig, adapter: GameAdapter, registry: RigRegistry,
-                 recorder: Recorder | None = None, store: LapStore | None = None) -> None:
+                 recorder: Recorder | None = None, store: LapStore | None = None,
+                 bundled_outlines: dict[str, dict[str, Any]] | None = None) -> None:
         self.config = config
         self.adapter = adapter
         self.registry = registry
         self.health = HealthMonitor(config.health)
         self.recorder = recorder
         self.laps = LapBook(outline_display=config.map.model_dump(), store=store,
-                            day_start_hour=config.leaderboard.day_start_hour)
+                            day_start_hour=config.leaderboard.day_start_hour, bundled_outlines=bundled_outlines)
         self.drivers = DriverRegistry(store)
         from .core.competitions import Competitions
         self.competitions = Competitions(self.drivers.store, config.data_dir, config.leaderboard.day_start_hour)

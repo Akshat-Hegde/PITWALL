@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnalysisView, chooseDuel } from "./components/Analysis";
 import { AttractView, PortraitView } from "./components/Attract";
 import { CardQr } from "./components/CardQr";
@@ -6,6 +6,7 @@ import { BracketPreview, TeamsView } from "./components/Competition";
 import { BattlePopups, MomentLayer } from "./components/Moments";
 import { KineticType } from "./components/Motifs";
 import { OnboardView, onboardRigs } from "./components/Onboard";
+import { TvStage } from "./components/Stage";
 import { StatusBar } from "./components/StatusBar";
 import { BoardView, RaceView } from "./components/Views";
 import type { Display } from "./map/geometry";
@@ -90,10 +91,29 @@ const VIEW_NAME: Record<string, string> = {
   teams: "Teams", bracket: "Hotlap cup",
 };
 
+/** How long the wipe overlay stays mounted (its CSS animation is 420 ms). */
+export const WIPE_MS = 600;
+
+/** The view the wipe is showing, for WIPE_MS after each change (none when the page first loads). */
+function useWipe(view: string): string | null {
+  const [wipe, setWipe] = useState<string | null>(null);
+  const mounted = useRef(false);
+  useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
+    setWipe(view);
+    const timer = setTimeout(() => setWipe(null), WIPE_MS);
+    return () => clearTimeout(timer);
+  }, [view]);
+  return wipe;
+}
+
 /** Broadcast wipe between views (~400 ms): accent panel with speed lines and the next view's name. */
 function ViewWipe({ view }: { view: string }) {
   return (
-    <div className="wipe" key={view} aria-hidden="true">
+    <div className="wipe" aria-hidden="true">
       <span className="wipe__panel" />
       <KineticType words={[VIEW_NAME[view] ?? view]} rows={1} className="wipe__word" />
     </div>
@@ -120,10 +140,8 @@ export function App({ store, mapDisplay = null, viewMode = "auto", layout = "tv"
   };
   const event = f.events ? state.competition.event : null;
   useEventAccent(event?.accent ?? null);
-  const { view, mode, attract } = useView(viewMode, anyDriving || nothingYet, available);
-  const firstView = useRef(view);
-  const viewChanged = useRef(false);
-  if (view !== firstView.current) viewChanged.current = true; // no wipe when the page first loads
+  const { view } = useView(viewMode, anyDriving || nothingYet, available);
+  const wipe = useWipe(view);
 
   if (state.link === "version_mismatch") {
     return (
@@ -139,21 +157,24 @@ export function App({ store, mapDisplay = null, viewMode = "auto", layout = "tv"
 
   if (layout === "portrait") {
     return (
-      <div className="app app--portrait">
-        {f.portrait ? <PortraitView state={state} /> : (
-          <div className="fullscreen-message"><h1>Portrait screen is switched off</h1></div>
-        )}
-        <CardQr state={state} />
-        <MomentLayer store={store} state={state} />
-      </div>
+      <TvStage width={1080} height={1920}>
+        <div className="app app--portrait">
+          {f.portrait ? <PortraitView state={state} /> : (
+            <div className="fullscreen-message"><h1>Portrait screen is switched off</h1></div>
+          )}
+          <CardQr state={state} />
+          <MomentLayer store={store} state={state} />
+        </div>
+      </TvStage>
     );
   }
 
   return (
+    <TvStage>
     <div className={`app app--${view}`}>
-      <StatusBar state={state} trackKey={trackKey} view={view}
-                 modeNote={mode !== "auto" ? "Fixed" : attract ? "Attract" : "Auto"} />
-      <div className="app__view" key={view}>
+      <StatusBar state={state} trackKey={trackKey} />
+      {/* Keys are unique among siblings: one view is mounted at a time, whatever the transition. */}
+      <div className="app__view" key={`view:${view}`}>
         {view === "race" && (
           <RaceView store={store} state={state} trackKey={trackKey} mapDisplay={mapDisplay}
                     sessionBestMs={sessionBest(state, trackKey)} />
@@ -165,10 +186,11 @@ export function App({ store, mapDisplay = null, viewMode = "auto", layout = "tv"
         {view === "teams" && <TeamsView state={state} />}
         {view === "bracket" && <BracketPreview />}
       </div>
-      {viewChanged.current && <ViewWipe key={view} view={view} />}
+      {wipe && <ViewWipe key={`wipe:${wipe}`} view={wipe} />}
       {view !== "attract" && <BattlePopups state={state} trackKey={trackKey} />}
       <CardQr state={state} />
       <MomentLayer store={store} state={state} />
     </div>
+    </TvStage>
   );
 }

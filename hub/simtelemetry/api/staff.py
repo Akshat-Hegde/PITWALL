@@ -16,6 +16,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
 from ..core.drivers import EXTEND_PROMPT_MS, DriverError
+from ..core.feed import FeedBuilder, lan_address
 from ..core.health import RigState
 
 if TYPE_CHECKING:
@@ -96,6 +97,23 @@ def staff_router(hub: Hub) -> APIRouter:
         now = time.monotonic()
         return {"cafe": hub.config.cafe.name, "rigs": [rig_row(r, now) for r in hub.registry.all()],
                 "queue": drivers.queue(), "features": hub.config.features.model_dump(), "demo": hub.demo is not None}
+
+    status_builder = FeedBuilder(hub)
+
+    @router.get("/api/staff/health", dependencies=[Depends(guard)])
+    def health() -> dict[str, Any]:
+        """Technical diagnostics for staff only (addresses, warnings, packet rates). The TV never shows these."""
+        now = time.monotonic()
+        snapshot = hub.health_snapshot()
+        warnings = list(status_builder.status(now)["warnings"])
+        for rig in snapshot["rigs"]:
+            if rig["state"] == RigState.NO_DATA.value:
+                warnings.append({"code": "no_data", "rig_id": rig["ip"],
+                                 "message": f"Nothing from {rig['name']} ({rig['ip']}). In F1 25 turn UDP telemetry "
+                                            f"on and drive out in Time Trial."})
+        return {"warnings": warnings, "rigs": snapshot["rigs"], "uptime_s": snapshot["uptime_s"],
+                "recorder": snapshot.get("recorder"),
+                "target": {"address": lan_address(), "port": hub.config.network.udp_port}}
 
     @router.post("/api/staff/demo/{action}", dependencies=[Depends(guard)])
     def demo(action: str, body: dict[str, Any] = Body(default={})) -> dict[str, Any]:

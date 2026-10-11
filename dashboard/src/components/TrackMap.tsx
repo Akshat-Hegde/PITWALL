@@ -63,13 +63,15 @@ export function TrackMap({ store, state, trackKey, displayOverride, focusRigId =
     let c = { track: "", text: "", text3: "", bg: "", purple: "", green: "", yellow: "", font: "sans-serif" };
 
     const resize = () => {
+      // Draw in layout pixels (the 1920 x 1080 canvas); the backing store matches the screen, so a 4K TV
+      // (canvas scaled 2x) gets a sharp map.
       const rect = canvas.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-      width = rect.width;
-      height = rect.height;
-      canvas.width = Math.round(width * dpr);
-      canvas.height = Math.round(height * dpr);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      width = canvas.clientWidth || rect.width;
+      height = canvas.clientHeight || rect.height;
+      const k = (window.devicePixelRatio || 1) * (width ? rect.width / width : 1);
+      canvas.width = Math.round(width * k);
+      canvas.height = Math.round(height * k);
+      ctx.setTransform(k, 0, 0, k, 0, 0);
       rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 20;
       c = {
         track: cssVar("--map-track"),
@@ -84,6 +86,7 @@ export function TrackMap({ store, state, trackKey, displayOverride, focusRigId =
     };
     const observer = new ResizeObserver(resize);
     observer.observe(canvas);
+    window.addEventListener("resize", resize); // the stage scale changes without the canvas box changing
     resize();
 
     const draw = () => {
@@ -294,6 +297,7 @@ export function TrackMap({ store, state, trackKey, displayOverride, focusRigId =
     return () => {
       cancelAnimationFrame(raf);
       observer.disconnect();
+      window.removeEventListener("resize", resize);
     };
   }, [store]);
 

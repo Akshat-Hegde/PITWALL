@@ -3,6 +3,7 @@ import type { ComparisonEntry, RigFrame, RigInfo, SectorTime } from "../schema";
 import { MINI_SECTORS, type MiniRating } from "../state/laptrace";
 import type { DashboardState } from "../state/reducer";
 import type { DashboardStore } from "../state/store";
+import { FitText } from "./Stage";
 import { Avatar, Barcode, SlantBar, Tab } from "./Motifs";
 
 /** Cards (two lines of detail per car) up to this many rigs; a one-line-per-car tower above it. */
@@ -84,7 +85,7 @@ function Card({ rig, position, frame, delta, sessionBestMs, minis }: RowProps) {
       </header>
       {state === "no_data" ? (
         <p className="card__hint">
-          Nothing from {rig.address}. In F1 25 turn UDP telemetry on and drive out in Time Trial.
+          Waiting for this rig. Its car appears here when it drives out.
         </p>
       ) : (
         <div className="card__body">
@@ -178,7 +179,7 @@ export function DriverName({ rig, frame, sub = true }: { rig: RigInfo; frame: Ri
     <span className="who">
       <span className="stripe" aria-hidden="true" />
       <span className="who__text">
-        <span className="who__name">{frame?.driver ?? rig.name}</span>
+        <FitText className="who__name" text={frame?.driver ?? rig.name} />
         {sub && (
           <span className="who__sub">
             {rig.name}

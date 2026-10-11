@@ -391,8 +391,8 @@ async def test_lap_side_of_the_feed(tmp_path):
     assert (lap["rig_id"], lap["lap_number"], lap["lap_ms"], lap["valid"], lap["session_best"]) == \
         (RIG_A, 1, 88123, True, True)
     outline = msgs[1]["outline"]
-    assert outline["track_key"] == "F1:7" and outline["source"] == "first_valid_lap"
-    assert len(outline["points"]) == 301                  # one per input point (~20 m apart, > 6 m step)
+    assert outline["track_key"] == "F1:7" and (outline["source"], outline["laps"]) == ("laps", 1)
+    assert len(outline["points"]) == round(5891 / 6)      # resampled every ~6 m of lap distance
     assert outline["sector_starts"] is None or outline["sector_starts"][0] == 0
     assert outline["display"] == {"flip_x": False, "flip_z": True, "rotate_deg": 0.0}
     assert [(m["leaderboard"]["period"], m["leaderboard"]["lap_class"]) for m in msgs[2:8]] == \
@@ -412,7 +412,7 @@ async def test_lap_side_of_the_feed(tmp_path):
                      (RIG_B, lap_data_bytes(2025, 0x11, 300.0, 2, 2945.5, 44_500))])  # A passed here at 44062 ms
     msgs = conn.tick(last_seen(hub))
     assert [m["type"] for m in msgs if m["type"] in ("lap_completed", "track_outline", "leaderboard")] == \
-        ["lap_completed"] + ["leaderboard"] * 6           # one outline per track; Open and Pro boards
+        ["lap_completed", "track_outline"] + ["leaderboard"] * 6   # the second lap refines the outline
     comparison = next(m for m in msgs if m["type"] == "frame")["comparison"]
     by_rig = {e["rig_id"]: e for e in comparison["rigs"]}
     assert by_rig[RIG_B]["reference_rig_id"] == RIG_A and by_rig[RIG_B]["best_gap_ms"] == 1500
@@ -424,4 +424,5 @@ async def test_lap_side_of_the_feed(tmp_path):
     # A new connection gets all of it in the snapshot.
     snap = FeedConnection(FeedBuilder(hub)).start(last_seen(hub))
     assert len(snap["outlines"]) == 1 and len(snap["leaderboards"][0]["entries"]) == 2
+    assert snap["outlines"][0]["laps"] == 2
     assert [l["driver"] for l in snap["recent_laps"]] == ["Guest", "Akshat"]
