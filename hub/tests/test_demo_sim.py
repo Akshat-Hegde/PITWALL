@@ -78,3 +78,19 @@ async def test_demo_director_triggers_every_moment(tmp_path):
     (record,) = [b["moment"] for _, t, b in hub.laps.messages_after(before) if t == "moment"]
     assert [(r["period"], r["lap_class"]) for r in record["records"]] == [("all_time", "pro"), ("today", "pro")]
     assert client.post("/api/staff/demo/fireworks").status_code == 400
+
+
+def test_run_demo_is_one_command(tmp_path):
+    import socket
+    from simtelemetry.__main__ import main
+    from simtelemetry.core.store import LapStore
+
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    demo = tmp_path / "demo"
+    assert main(["run", "--demo", "--data-dir", str(demo), "--http-port", str(port), "--duration", "3"]) == 0
+    store = LapStore(demo / "laps.db")
+    assert store.count() > 1000 and store.outlines() and store.queue()      # seeded history, outline, queue
+    assert (demo / ".simtelemetry-demo").exists()
+    store.close()

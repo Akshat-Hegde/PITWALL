@@ -38,7 +38,7 @@ def add_record_flags(p: argparse.ArgumentParser) -> None:
 def should_record(args: argparse.Namespace, config: AppConfig) -> bool:
     if args.command == "record":
         return True
-    if args.command == "replay":
+    if args.command == "replay" or getattr(args, "demo", False):
         return False
     if args.record is not None:
         return args.record
@@ -62,6 +62,9 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("run", parents=[common], help="hub + TV dashboard and API")
     add_record_flags(p)
     p.add_argument("--owner-pin", help="PIN for the /owner page (overrides [owner] pin; handy for demos)")
+    p.add_argument("--demo", action="store_true",
+                   help="demo: fresh demo data in data-demo/ (or --data-dir), six simulated rigs, the Director "
+                        "panel on /staff; owner PIN 0000 unless set. Doesn't listen for real rigs.")
     p.add_argument("--duration", type=float, help="stop after this many seconds")
 
     p = sub.add_parser("listen", parents=[common], help="debug: no API, one status line per rig per second")
@@ -150,7 +153,8 @@ async def run_hub(args: argparse.Namespace, hub: Hub, selection: SourceSelection
     cmd = args.command
     net = hub.config.network
     is_replay = cmd == "replay"
-    live = not is_replay or args.live
+    demo = getattr(args, "demo", False)
+    live = (not is_replay or args.live) and not demo  # the demo's rigs are simulated; leave the UDP port free
     serve_api = cmd == "run" or (is_replay and not args.no_api)
     print_lines = cmd == "listen" or (is_replay and not args.quiet)
 
@@ -176,6 +180,13 @@ async def run_hub(args: argparse.Namespace, hub: Hub, selection: SourceSelection
              asyncio.create_task(hub.tick_podium()), asyncio.create_task(hub.tick_competitions())]
     if print_lines:
         tasks.append(asyncio.create_task(print_status_lines(hub)))
+    if demo:
+        from .tools.demo_director import DemoDirector
+        from .tools.demo_sim import DemoSimulator
+        sim = DemoSimulator(hub)
+        hub.demo = DemoDirector(hub, sim)
+        hub.demo.start_sessions()
+        tasks.append(asyncio.create_task(sim.run()))
     server = server_task = None
     if http_sock is not None:
         # Open dashboard WebSockets would otherwise hold up shutdown.
@@ -247,7 +258,28 @@ def main(argv: list[str] | None = None) -> int:
         teardown_logging()  # main() may be called again in-process (tests); don't leave handlers behind
 
 
+def prepare_demo(args: argparse.Namespace, config: AppConfig) -> None:
+    """`run --demo`: re-seed the demo folder (dates move with today) and set demo-friendly settings."""
+    from .tools.demo_sim import DEMO_TRACK_NAME, TRACK_ID
+    from .tools.seed_demo import seed
+    if args.data_dir is None:
+        config.data_dir = Path("data-demo")
+    counts = seed(config.data_dir)
+    config.track_names[TRACK_ID] = DEMO_TRACK_NAME
+    if not config.owner.pin:
+        config.owner.pin = "0000"
+    log.info("Demo: %d sessions and %d laps of history in %s; six simulated rigs; owner PIN %s; "
+             "Director panel on /staff", counts["sessions"], counts["laps"], config.data_dir, config.owner.pin)
+
+
 def run_command(args: argparse.Namespace, config: AppConfig) -> int:
+    if getattr(args, "demo", False):
+        from .tools.seed_demo import DemoTargetError
+        try:
+            prepare_demo(args, config)
+        except DemoTargetError as exc:
+            print(f"\nERROR: {exc}\n", file=sys.stderr)
+            return 2
     registry = RigRegistry(config, config.data_dir / "rigs.json")
     recorder = None
     if should_record(args, config):

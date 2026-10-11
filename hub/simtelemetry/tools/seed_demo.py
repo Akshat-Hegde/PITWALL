@@ -4,8 +4,7 @@
 profiles (fictional names, UK drama phone numbers 07700 900xxx that are never assigned), a running weekly
 challenge and a short queue. Use it to demo the staff and owner pages:
 
-    python -m simtelemetry seed-demo                       # writes data-demo/
-    python -m simtelemetry run --data-dir data-demo --owner-pin 0000
+    python -m simtelemetry run --demo                      # seeds data-demo/ and runs the hub on it
 
 It never touches the real data folder: the target must be empty or a folder it created before.
 """
@@ -20,10 +19,11 @@ from pathlib import Path
 from ..core.drivers import Assignment
 from ..core.laps import LapRecord
 from ..core.store import LapStore
+from .demo_sim import DEMO_TRACK_NAME, TRACK_ID, Circuit, rig_ip
 
 MARKER = ".simtelemetry-demo"
-RIGS = ["Rig 1", "Rig 2", "Rig 3", "Rig 4"]
-TRACKS = [("F1:7", "Silverstone", 88_000), ("F1:10", "Spa-Francorchamps", 104_000), ("F1:11", "Monza", 81_500),
+RIGS = [rig_ip(n) for n in range(1, 5)]   # the same rigs the demo simulator drives
+TRACKS = [(f"F1:{TRACK_ID}", DEMO_TRACK_NAME, 88_000), ("F1:10", "Spa-Francorchamps", 104_000), ("F1:11", "Monza", 81_500),
           ("F1:13", "Suzuka", 90_500)]
 FIRST = ["Maya", "Kofi", "Rosa", "Diego", "Hana", "Ollie", "Priya", "Sam", "Leni", "Arjun", "Tom", "Nico", "Zara",
          "Jonas", "Aiko", "Ben", "Chloe", "Dev", "Elif", "Finn", "Gita", "Hugo", "Isla", "Jay", "Kim", "Luca",
@@ -40,7 +40,9 @@ class DemoTargetError(Exception):
 
 def seed(data_dir: Path, days: int = 60, seed_value: int = 7, now: float | None = None) -> dict[str, int]:
     data_dir = Path(data_dir)
-    if data_dir.exists() and any(data_dir.iterdir()) and not (data_dir / MARKER).exists():
+    # The hub's own logs/ and rigs.json may already be there (`run --demo` starts logging first).
+    others = [p for p in data_dir.iterdir() if p.name not in ("logs", "rigs.json")] if data_dir.exists() else []
+    if others and not (data_dir / MARKER).exists():
         raise DemoTargetError(f"{data_dir} has other files in it. seed-demo only writes to an empty folder "
                               f"(or one it made before), so your real data is never touched.")
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -100,7 +102,7 @@ def seed(data_dir: Path, days: int = 60, seed_value: int = 7, now: float | None 
                     s1 = round(lap_ms * 0.32)
                     s2 = round(lap_ms * 0.36)
                     store.add(LapRecord(
-                        rig_id=rig, rig_name=rig, driver=d["name"], track_key=track_key, track_name=track_name,
+                        rig_id=rig, rig_name=f"Rig {RIGS.index(rig) + 1}", driver=d["name"], track_key=track_key, track_name=track_name,
                         session_id=f"demo-{sessions}", lap_number=lap_no, lap_ms=lap_ms,
                         sectors_ms=(s1, s2, lap_ms - s1 - s2), valid=valid, out_lap=lap_no == 1, tyre=None,
                         personal_best=False, session_best=False, completed_at=round(t.timestamp() * 1000),
@@ -109,7 +111,14 @@ def seed(data_dir: Path, days: int = 60, seed_value: int = 7, now: float | None 
                     laps += 1
                 hour += minutes / 60 + 0.25
     week_start = today - dt.timedelta(days=today.weekday())
-    store.create_challenge(title="Silverstone Pro week", track_key="F1:7", track_name="Silverstone", lap_class="pro",
+    circuit = Circuit.build()
+    n = len(circuit.points)
+    store.save_outline({"track_key": f"F1:{TRACK_ID}", "track_name": DEMO_TRACK_NAME,
+                        "points": [[round(x, 1), round(z, 1)] for x, z in circuit.points], "source": "bundled",
+                        "sector_starts": [0, n // 3, 2 * n // 3],
+                        "display": {"flip_x": False, "flip_z": False, "rotate_deg": 0}}, round(now_ts * 1000))
+    store.create_challenge(title=f"{DEMO_TRACK_NAME} Pro week", track_key=f"F1:{TRACK_ID}", track_name=DEMO_TRACK_NAME,
+                           lap_class="pro",
                            starts_at=round(week_start.timestamp() * 1000),
                            ends_at=round((week_start + dt.timedelta(days=7)).timestamp() * 1000),
                            prize="Free hour for the fastest Pro lap", created_at=round(now_ts * 1000))

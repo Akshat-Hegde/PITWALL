@@ -248,12 +248,24 @@ full leaderboard with Pro and Open boards, a weekly challenge, a corporate event
 every three minutes and a scripted loop of moments (now driving, a story card QR, a record, a challenge
 winner), plus the tournament preview in the rotation. `/card/demo` shows a sample story card.
 
-For the staff and owner pages, fill a separate demo folder and run the hub on it:
+**The whole product, one command** (no rigs, no game):
 
 ```
-python -m simtelemetry seed-demo                         # 60 days of a busy cafe in data-demopython -m simtelemetry run --data-dir data-demo --owner-pin 0000
+python -m simtelemetry run --demo
 ```
 
+This re-seeds `data-demo\` with 60 days of a busy cafe (sessions, laps, driver profiles, a weekly challenge, a
+queue) and starts the hub on it with six **simulated rigs** that send real F1 25 packets through the hub's
+normal pipeline: live cars on the map, laps, records, head to head, booking timers and story cards all work as
+they would in the cafe. Open the TV at `http://localhost:8000/`, the staff page at `/staff`, and the owner page
+at `/owner` (PIN `0000` unless `[owner] pin` is set). It doesn't listen for real rigs, so stop the normal hub
+first (or give the demo another `--http-port`).
+
+**Demo director (for filming):** on `/staff` in demo mode, press **Director** (top right) for buttons that put
+each moment on the TV now: now driving, record (today or all time, Pro or Open), battle, podium, challenge
+winner and a story card QR (from a real session with a clean lap, so give the rigs two or three minutes).
+
+`python -m simtelemetry seed-demo` only fills the folder, without running anything.
 `seed-demo` only writes to an empty folder (or one it made before), never to your real `data\`.
 
 ## Sharing: session story cards
