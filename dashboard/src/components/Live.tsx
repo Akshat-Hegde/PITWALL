@@ -86,9 +86,11 @@ function LapClock({ frame }: { frame: RigFrame | undefined }) {
   const lap = frame?.lap;
   const driving = frame?.state === "driving";
   return (
-    <span className={`lapclock${lap && !lap.valid ? " is-invalid" : ""}`}>
-      {driving && lap ? formatLapTime(lap.current_ms) : STATE_TEXT[frame?.state ?? "no_data"] ?? "–"}
-    </span>
+    driving && lap ? (
+      <span className={`lapclock${!lap.valid ? " is-invalid" : ""}`}>{formatLapTime(lap.current_ms)}</span>
+    ) : (
+      <span className="lapclock lapclock--state">{STATE_TEXT[frame?.state ?? "no_data"] ?? "–"}</span>
+    )
   );
 }
 

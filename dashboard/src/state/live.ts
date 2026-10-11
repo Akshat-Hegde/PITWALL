@@ -10,7 +10,8 @@ import type { RigFrame } from "../schema";
 
 export const PEDAL_WINDOW_MS = 10_000;
 const KEEP_INPUT_MS = PEDAL_WINDOW_MS + 2_000;
-const START_M = 60; // a lap must be picked up this close to the line to become a reference
+const START_M = 60;
+const MAX_DELTA_MS = 60_000; // larger (or over a quarter of the lap): lap number and distance disagree // a lap must be picked up this close to the line to become a reference
 const MAX_STEP_FRACTION = 0.05; // a jump of more than 5 % of the lap between frames: not a clean lap
 
 export interface InputSample {
@@ -142,7 +143,10 @@ export class LiveTelemetry {
     }
     const ref = this.best.get(rigId);
     const refT = ref ? timeAt(ref.trace, d) : null;
-    this.deltas.set(rigId, refT == null ? null : Math.round(lap.current_ms - refT));
+    const delta = refT == null ? null : Math.round(lap.current_ms - refT);
+    // At the line the game can send the new lap number with the old lap's distance for a frame: no delta then.
+    const limit = ref ? Math.min(MAX_DELTA_MS, ref.lapMs * 0.25) : 0;
+    this.deltas.set(rigId, delta == null || Math.abs(delta) > limit ? null : delta);
   }
 
   private finish(rigId: string, cur: Current, lapMs: number | null): void {

@@ -3342,3 +3342,16 @@ html:has(.tvstage) {
 :root {
   --map-track: #3a3b45;
 }
+
+/* Not driving: the state in words, label-sized, not in hero numerals. */
+.lapclock.lapclock--state,
+.rcard--compact .rcard__head .lapclock--state,
+.tile__head .lapclock--state {
+  color: var(--text-3);
+  font-family: var(--font-cond);
+  font-size: var(--fs-value);
+  font-stretch: normal;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}

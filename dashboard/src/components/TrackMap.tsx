@@ -193,8 +193,8 @@ export function TrackMap({ store, state, trackKey, displayOverride, variant = "l
             const [dx, dy] = away(centre, x, y);
             const text = `${z.kind.toUpperCase()} SPEED`;
             const w = ctx.measureText(text).width;
-            const lx = x + dx * rem * 1.9 - (dx < 0 ? w : 0);
-            const ly = y + dy * rem * 1.9;
+            const lx = Math.max(2, Math.min(width - w - 2, x + dx * rem * 1.9 - (dx < 0 ? w : 0)));
+            const ly = Math.max(rem * 0.4, Math.min(height - rem * 0.4, y + dy * rem * 1.9));
             ctx.textAlign = "left";
             ctx.fillText(text, lx, ly);
             zoneBoxes.push({ x: lx, y: ly - rem * 0.35, w, h: rem * 0.7 });

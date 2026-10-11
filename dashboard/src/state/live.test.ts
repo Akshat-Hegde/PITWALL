@@ -58,3 +58,13 @@ describe("live telemetry", () => {
     expect(s).toMatchObject({ thr: 0.25, brk: 0.75, steer: -0.5, speed: 125 });
   });
 });
+
+describe("lap rollover", () => {
+  test("no delta while the new lap number arrives with the old lap's distance", () => {
+    const live = new LiveTelemetry();
+    driveLap(live, 1, 60_000);
+    live.add(frame(2, 0, 0, { lastMs: 60_000 }), 1);
+    live.add(frame(2, 990, 0), 2);                               // lap 2, distance not reset yet
+    expect(live.deltaToBest("r1")).toBeNull();
+  });
+});
