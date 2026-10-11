@@ -44,11 +44,13 @@ interface Props {
   slots?: number;
   /** Show only the first `slots` entries, never page (e.g. "fastest today" in the race view). */
   top?: boolean;
+  /** Show empty positions as open slots, so the board always fills its height (portrait, welcome). */
+  fill?: boolean;
   className?: string;
 }
 
 export function LeaderboardPanel({ leaderboard, rigs, title, showTrack = true, slots = BOARD_PAGE_SIZE, top = false,
-                                   className = "" }: Props) {
+                                   fill = false, className = "" }: Props) {
   const colour = new Map(rigs.map((r) => [r.rig_id, r.colour]));
   const entries = leaderboard?.entries ?? [];
   const page = usePage(top ? 0 : entries.length, slots);
@@ -74,12 +76,23 @@ export function LeaderboardPanel({ leaderboard, rigs, title, showTrack = true, s
         <span className="r">Time</span>
         <span className="r">Gap</span>
       </div>
-      {entries.length === 0 ? (
+      {entries.length === 0 && !fill ? (
         <p className="lbcol__empty t2">No valid laps yet. Times appear here after a clean lap.</p>
       ) : (
-        <ol className="lb" start={first} style={{ "--slots": slots } as React.CSSProperties}>
+        <ol className="lb" start={first || 1} style={{ "--slots": slots } as React.CSSProperties}>
           {items.map((e) => (
             <BoardRow key={`${e.rig_id}-${e.driver ?? ""}-${e.rank}`} entry={e} colour={colour.get(e.rig_id)} />
+          ))}
+          {fill && Array.from({ length: Math.max(0, slots - items.length) }, (_, i) => (
+            <li key={`open-${i}`} className="lb__row lb__row--open">
+              <span className="pos">{items.length + i + 1}</span>
+              <span className="stripe" aria-hidden="true" />
+              <span className="who__text">
+                <span className="who__name">{items.length + i === 0 ? "Open: set the first lap" : "Open"}</span>
+              </span>
+              <span className="lb__time r">–:––.–––</span>
+              <span className="lb__gap r" />
+            </li>
           ))}
         </ol>
       )}

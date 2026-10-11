@@ -347,7 +347,7 @@
          (wd, h, v) => `${wd} ${h}:00\n${v.toFixed(1)} rigs in use on average`, 2);
     $("util-sub").textContent = `Share of opening hours each rig was booked (${open}:00–${close}:00)`;
     if (d.utilisation.length) {
-      heat($("util"), d.utilisation.map((u) => u.rig_id), d.daily.map((r) => shortDate(r.date)),
+      heat($("util"), d.utilisation.map((u) => u.rig_name), d.daily.map((r) => shortDate(r.date)),
            d.utilisation.map((u) => u.days), (rig, day, v) => `${rig} · ${day}\n${v}% booked`, Math.ceil(d.daily.length / 10));
     } else {
       $("util").innerHTML = '<p class="empty">No sessions in this period yet</p>';

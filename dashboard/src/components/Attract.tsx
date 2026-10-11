@@ -64,7 +64,7 @@ export function AttractView({ state }: { state: DashboardState }) {
         <RecordHolder state={state} />
       </section>
       <LeaderboardPanel title="Today" leaderboard={state.leaderboards.today ?? null} rigs={state.rigs}
-                        className="attract__board" top />
+                        className="attract__board" top fill />
     </main>
   );
 }
@@ -84,7 +84,7 @@ export function PortraitView({ state }: { state: DashboardState }) {
       <RecordHolder state={state} />
       <ChallengeCard state={state} />
       <LeaderboardPanel title="Today" leaderboard={state.leaderboards.today ?? null} rigs={state.rigs}
-                        className="portrait__board" top />
+                        className="portrait__board" top fill />
       <NextUp state={state} />
       <footer className="portrait__foot">
         <Tab left="On track now" right={String(anyDriving.length)} />

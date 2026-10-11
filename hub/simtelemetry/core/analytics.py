@@ -12,7 +12,7 @@ import datetime as dt
 import io
 import time
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 if TYPE_CHECKING:
     from .store import LapStore
@@ -26,8 +26,10 @@ def _local(ms: int) -> dt.datetime:
 
 class Analytics:
     def __init__(self, store: LapStore, day_start_hour: int = 0, open_hour: int = 10, close_hour: int = 22,
-                 clock=time.time) -> None:
+                 clock=time.time, rig_label: Callable[[str], str] | None = None) -> None:
         self.store = store
+        # Rigs are shown by name ("Rig 1"); without a hub, the name stored with their laps.
+        self.rig_label = rig_label or (lambda rig_id: store.rig_names().get(rig_id) or rig_id)
         self.day_start_hour = day_start_hour
         self.open_hour = open_hour
         self.close_hour = close_hour
@@ -63,7 +65,8 @@ class Analytics:
         dates, start_ms, end_ms = self.window(days)
         sessions = self._sessions(start_ms, end_ms)
         laps = self.store.laps_between(start_ms, end_ms)
-        rigs = sorted({r["rig_id"] for r in sessions} | {r["rig_id"] for r in laps})
+        rigs = sorted({r["rig_id"] for r in sessions} | {r["rig_id"] for r in laps},
+                      key=lambda rig: _natural(self.rig_label(rig)))
         open_min = max(1, (self.close_hour - self.open_hour) * 60)
 
         daily = {d: {"date": d.isoformat(), "weekday": WEEKDAYS[d.weekday()], "sessions": 0, "minutes": 0,
@@ -118,7 +121,7 @@ class Analytics:
         weekday_count = [sum(1 for d in dates if d.weekday() == w) for w in range(7)]
         heatmap = [[round(heat[w][h] / 60 / weekday_count[w], 2) if weekday_count[w] else 0.0 for h in range(24)]
                    for w in range(7)]
-        utilisation = [{"rig_id": rig, "days": [round(100 * rig_minutes[(rig, d)] / open_min, 1) for d in dates]}
+        utilisation = [{"rig_id": rig, "rig_name": self.rig_label(rig), "days": [round(100 * rig_minutes[(rig, d)] / open_min, 1) for d in dates]}
                        for rig in rigs]
         day_rows = []
         for d in dates:
@@ -130,7 +133,7 @@ class Analytics:
         drivers = {_identity(r) for r in sessions}
         return {
             "days": days, "from": dates[0].isoformat(), "to": dates[-1].isoformat(),
-            "open_hours": [self.open_hour, self.close_hour], "rigs": rigs,
+            "open_hours": [self.open_hour, self.close_hour], "rigs": [self.rig_label(r) for r in rigs],
             "summary": {
                 "sessions": len(sessions),
                 "hours": round(total_hours, 1),
@@ -164,7 +167,7 @@ class Analytics:
             w.writerow(["rig", "driver", "profile", "started", "ended", "minutes"])
             for r in self.store.sessions_between(start, end):
                 ended = r["ended_at"]
-                w.writerow([r["rig_id"], r["name"], "yes" if r["driver_id"] else "no", _iso(r["started_at"]),
+                w.writerow([self.rig_label(r["rig_id"]), r["name"], "yes" if r["driver_id"] else "no", _iso(r["started_at"]),
                             _iso(ended) if ended else "", round(((ended or end) - r["started_at"]) / 60000, 1)])
         elif kind == "laps":
             _, start, end = self.window(days)
@@ -175,6 +178,12 @@ class Analytics:
         else:
             raise ValueError(kind)
         return out.getvalue()
+
+
+def _natural(text: str) -> list:
+    """Sort key that puts "Rig 2" before "Rig 10"."""
+    import re
+    return [int(part) if part.isdigit() else part.casefold() for part in re.split(r"(\d+)", text)]
 
 
 def _identity(session: dict[str, Any]) -> str:

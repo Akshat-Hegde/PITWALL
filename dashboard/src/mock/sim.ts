@@ -44,6 +44,8 @@ export interface MockOptions {
   podiumEveryMs: number;
   /** A corporate event with teams is running. */
   event: boolean;
+  /** A weekly challenge is running (?challenge=0 turns it off). */
+  challenge: boolean;
 }
 
 export const DEFAULT_MOCK_OPTIONS: MockOptions = {
@@ -58,6 +60,7 @@ export const DEFAULT_MOCK_OPTIONS: MockOptions = {
   frameHz: 15,
   podiumEveryMs: 0,
   event: false,
+  challenge: true,
 };
 
 const MOCK_QUEUE = [{ id: 1, name: "Jordan P" }, { id: 2, name: "Office party (4)" }, { id: 3, name: "Sam W" }];
@@ -499,7 +502,7 @@ export class MockHub {
       entries: board.slice(0, 5).map((e, i) => ({ rank: i + 1, driver: e.driver ?? e.rig_name, lap_ms: e.lap_ms,
                                                    gap_ms: e.lap_ms - leader })),
     };
-    if (!this.options.event) return { challenge, event: null };
+    if (!this.options.event) return { challenge: this.options.challenge ? challenge : null, event: null };
     const names = board.map((e) => e.driver ?? e.rig_name);
     const team = (id: number, name: string, members: string[]) => {
       const bests = members.map((m) => ({ id: id * 10 + members.indexOf(m), name: m,
@@ -511,7 +514,7 @@ export class MockHub {
     const teams = [team(1, "Sales sharks", names.slice(0, 3)), team(2, "Dev ops", names.slice(3, 6)),
                    team(3, "Finance flyers", names.slice(6, 9)), team(4, "People team", names.slice(9, 11))]
       .sort((a, b) => (a.average_ms ?? Infinity) - (b.average_ms ?? Infinity)).map((t, i) => ({ ...t, rank: i + 1 }));
-    return { challenge, event: { id: 1, name: "Q4 kick-off", company: "Northwind", accent: "#0a84ff", logo: null,
+    return { challenge: this.options.challenge ? challenge : null, event: { id: 1, name: "Q4 kick-off", company: "Northwind", accent: "#0a84ff", logo: null,
       track_key: TRACK_KEY, track_name: TRACK_NAME, best_n: 2, starts_at: this.startedAt, teams } };
   }
 
@@ -777,5 +780,6 @@ export function mockOptionsFromQuery(query: URLSearchParams): MockOptions {
     idle: query.get("idle") === "1",
     podiumEveryMs: Math.max(0, Number(query.get("podium") ?? 0) || 0) * 1000,
     event: query.get("event") === "1",
+    challenge: query.get("challenge") !== "0",
   };
 }

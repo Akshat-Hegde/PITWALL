@@ -419,6 +419,13 @@ class LapStore:
                 (start_ms, end_ms)).fetchall()
         return [dict(r) for r in rows]
 
+    def rig_names(self) -> dict[str, str]:
+        """The latest name each rig had on its laps (for rigs this hub run hasn't seen yet)."""
+        with self._lock:
+            rows = self._db.execute("SELECT rig_id, rig_name FROM laps WHERE id IN"
+                                    " (SELECT MAX(id) FROM laps GROUP BY rig_id)").fetchall()
+        return {r["rig_id"]: r["rig_name"] for r in rows}
+
     def first_session_per_driver(self) -> dict[str, int]:
         """When each driver (profile, else name) first had a session: new vs returning drivers."""
         with self._lock:

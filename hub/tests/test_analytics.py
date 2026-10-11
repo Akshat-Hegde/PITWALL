@@ -104,3 +104,31 @@ def test_seed_demo_never_touches_real_data(tmp_path):
     assert again == counts
     report = Analytics(LapStore(demo / "laps.db"), clock=lambda: NOW.timestamp()).report(7)
     assert report["summary"]["sessions"] > 0 and report["tracks"]
+
+
+def test_rigs_are_shown_by_name_never_by_address(tmp_path):
+    store = LapStore(tmp_path / "laps.db")
+    session(store, "10.0.0.7", "Maya", dt.datetime(2026, 10, 13, 18, 0), 30)
+    session(store, "10.0.0.8", "Kofi", dt.datetime(2026, 10, 13, 18, 0), 30)
+    lap(store, "10.0.0.8", "Kofi", dt.datetime(2026, 10, 13, 18, 10), 90000)   # lap stored as rig "10.0.0.8"...
+    store._db.execute("UPDATE laps SET rig_name = 'Rig 2'")                    # ...under its name at the time
+    names = {"10.0.0.7": "Window rig"}                                          # the hub's registry (config name)
+    a = Analytics(store, clock=lambda: NOW.timestamp(), rig_label=lambda ip: names.get(ip) or
+                  store.rig_names().get(ip) or ip)
+    r = a.report(7)
+    assert r["rigs"] == ["Rig 2", "Window rig"]
+    assert {u["rig_name"] for u in r["utilisation"]} == {"Rig 2", "Window rig"}
+    sessions_csv = a.csv("sessions", 7)
+    assert "Window rig" in sessions_csv and "Rig 2" in sessions_csv and "10.0.0." not in sessions_csv
+    assert "10.0.0." not in a.csv("laps", 7)
+    # Without a hub, the names stored with the laps are used.
+    assert set(Analytics(store, clock=lambda: NOW.timestamp()).report(7)["rigs"]) == {"Rig 2", "10.0.0.7"}
+
+
+def test_seeded_demo_covers_every_simulated_rig(tmp_path):
+    from simtelemetry.tools.demo_sim import GAME_NAMES
+    from simtelemetry.tools.seed_demo import seed
+    seed(tmp_path / "demo", days=5, now=NOW.timestamp())
+    report = Analytics(LapStore(tmp_path / "demo" / "laps.db"), clock=lambda: NOW.timestamp()).report(5)
+    assert report["rigs"] == [f"Rig {n}" for n in range(1, len(GAME_NAMES) + 1)]
+    assert all(sum(u["days"]) > 0 for u in report["utilisation"])           # every rig has history

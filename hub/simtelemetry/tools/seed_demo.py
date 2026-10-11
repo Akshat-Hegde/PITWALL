@@ -22,7 +22,7 @@ from ..core.store import LapStore
 from .demo_sim import DEMO_TRACK_NAME, TRACK_ID, Circuit, rig_ip
 
 MARKER = ".simtelemetry-demo"
-RIGS = [rig_ip(n) for n in range(1, 5)]   # the same rigs the demo simulator drives
+RIGS = [rig_ip(n) for n in range(1, 7)]   # the same six rigs the demo simulator drives
 TRACKS = [(f"F1:{TRACK_ID}", DEMO_TRACK_NAME, 88_000), ("F1:10", "Spa-Francorchamps", 104_000), ("F1:11", "Monza", 81_500),
           ("F1:13", "Suzuka", 90_500)]
 FIRST = ["Maya", "Kofi", "Rosa", "Diego", "Hana", "Ollie", "Priya", "Sam", "Leni", "Arjun", "Tom", "Nico", "Zara",

@@ -3299,6 +3299,32 @@ html:has(.cardpage) {
   inset: 0 0 58% 0;
 }
 
+/* Open board slots (portrait, welcome): the board keeps its shape with few or no laps */
+.lb__row--open .pos,
+.lb__row--open .who__name,
+.lb__row--open .lb__time {
+  color: var(--text-3);
+}
+
+.lb__row--open .stripe {
+  background: var(--line-strong);
+}
+
+/* Portrait: a column where only the leaderboard stretches */
+.portrait {
+  display: flex;
+  flex-direction: column;
+}
+
+.portrait > .portrait__board {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.portrait > :not(.portrait__board):not(.stripes) {
+  flex: none;
+}
+
 /* ==== Misc =================================================================================== */
 
 .fullscreen-message {

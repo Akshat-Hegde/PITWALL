@@ -27,7 +27,7 @@ def owner_router(hub: Hub) -> APIRouter:
     config = hub.config
     guard = PinGuard(config.owner.pin, header=OWNER_PIN_HEADER)
     analytics = Analytics(hub.drivers.store, config.leaderboard.day_start_hour, config.owner.open_hour,
-                          config.owner.close_hour)
+                          config.owner.close_hour, rig_label=hub.rig_label)
 
     def check(request: Request) -> None:
         if not config.features.owner:

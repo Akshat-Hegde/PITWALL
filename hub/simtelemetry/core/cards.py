@@ -65,13 +65,12 @@ def build_card(hub: Hub, rig_id: str, session: Assignment, ended_at: int) -> dic
         if row:
             improvement = {"previous_best_ms": row["previous_best_ms"], "delta_ms": row["delta_ms"]}
     outline = hub.laps.outlines.get(track_key)
-    rig = hub.registry.get(rig_id)
     cafe = hub.config.cafe
     return {
         "token": new_token(),
         "created_at": ended_at,
         "driver": session.name,
-        "rig_name": rig.name if rig else rig_id,
+        "rig_name": hub.rig_label(rig_id),
         "track_key": track_key,
         "track_name": best.track_name,
         "cafe": {"name": cafe.name, "branding": dict(cafe.branding)},

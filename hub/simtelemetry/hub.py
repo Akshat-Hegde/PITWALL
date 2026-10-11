@@ -116,6 +116,14 @@ class Hub:
             counts[s.track_key] = counts.get(s.track_key, 0) + (2 if state is RigState.DRIVING else 1)
         return max(counts, key=lambda k: (counts[k], k)) if counts else None
 
+    def rig_label(self, rig_id: str) -> str:
+        """A rig's name for people ("Rig 1" or its configured name), never its address unless nothing else is known:
+        the registry first, then the name stored with its laps."""
+        rig = self.registry.get(rig_id)
+        if rig is not None:
+            return rig.name
+        return self.drivers.store.rig_names().get(rig_id) or rig_id
+
     def session_top_speed(self, ip: str) -> int | None:
         return self._session_top_kph.get(ip)
 
