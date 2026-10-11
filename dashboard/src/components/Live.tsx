@@ -103,7 +103,7 @@ export function SteeringWheel({ store, rigId, frameHz, rotationDeg }: {
   useRaf((now) => {
     const s = store.live.inputAt(rigId, now - 1000 / frameHz);
     const deg = (s?.steer ?? 0) * (rotationDeg / 2);
-    if (wheel.current) wheel.current.style.transform = `rotate(${deg.toFixed(1)}deg)`;
+    if (wheel.current) wheel.current.setAttribute("transform", `rotate(${deg.toFixed(1)})`);
     if (label.current) {
       const text = `${Math.round(deg)}°`;
       if (label.current.textContent !== text) label.current.textContent = text;
@@ -113,10 +113,11 @@ export function SteeringWheel({ store, rigId, frameHz, rotationDeg }: {
     <div className="wheel">
       <svg className="wheel__svg" viewBox="-50 -50 100 100" aria-hidden="true">
         <g ref={wheel} className="wheel__turn">
-          <path className="wheel__rim" d="M-40 -18 Q-40 -38 -20 -38 L20 -38 Q40 -38 40 -18 L40 14 Q40 34 20 34 L-20 34 Q-40 34 -40 14 Z" />
-          <path className="wheel__spoke" d="M-40 0 L-14 4 M40 0 L14 4 M0 14 L0 34" />
-          <circle className="wheel__hub" r="12" />
-          <rect className="wheel__mark" x="-2.5" y="-46" width="5" height="12" />
+          <path className="wheel__rim"
+                d="M-46 -12 Q-46 -26 -34 -26 L34 -26 Q46 -26 46 -12 L46 14 Q46 26 34 26 L-34 26 Q-46 26 -46 14 Z" />
+          <path className="wheel__spoke" d="M-46 2 L-14 2 M46 2 L14 2 M0 14 L0 26" />
+          <circle className="wheel__hub" r="11" />
+          <rect className="wheel__mark" x="-2.5" y="-33" width="5" height="12" />
         </g>
       </svg>
       <span ref={label} className="wheel__deg">0°</span>

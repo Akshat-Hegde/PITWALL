@@ -88,3 +88,27 @@ describe("lap traces", () => {
     expect(zones[0]!.at).toBeCloseTo(40.5 / 200);
   });
 });
+
+describe("mini-sector owners (map colours)", () => {
+  test("the rig fastest through each mini-sector owns it, from clean laps valid or not", async () => {
+    const { LapTraceTracker, MINI_SECTORS } = await import("./laptrace");
+    const tracker = new LapTraceTracker();
+    const L = 2400;
+    const lap = (rig: string, n: number, msPerMetre: (d: number) => number, valid: boolean) => {
+      let t = 0;
+      for (let d = 0; d <= L - 10; d += 10) {
+        tracker.add({ rig_id: rig, state: "driving", session: { track_key: "T", track_length_m: L },
+          lap: { number: n, distance_m: d, current_ms: Math.round(t), valid, last_ms: null }, speed_kph: 200 } as never);
+        t += 10 * msPerMetre(d);
+      }
+      tracker.add({ rig_id: rig, state: "driving", session: { track_key: "T", track_length_m: L },
+        lap: { number: n + 1, distance_m: 1, current_ms: 5, valid: true, last_ms: Math.round(t) }, speed_kph: 200 } as never);
+    };
+    lap("a", 1, (d) => (d < L / 2 ? 10 : 20), false);   // fast in the first half, invalid lap
+    lap("b", 1, (d) => (d < L / 2 ? 20 : 10), true);    // fast in the second half
+    const owners = tracker.miniOwners("T")!;
+    expect(owners).toHaveLength(MINI_SECTORS);
+    expect(owners[2]).toBe("a");
+    expect(owners[MINI_SECTORS - 3]).toBe("b");
+  });
+});

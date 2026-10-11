@@ -1126,9 +1126,8 @@ ul {
   display: none;
 }
 
-/* Motif 3: faint diagonal light streaks (header, moment cards) */
-.streaks::after,
-.header::after {
+/* Motif 3: faint diagonal light streaks (moment cards, attract hero; never behind data) */
+.streaks::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -2767,11 +2766,12 @@ html:has(.tvstage) {
 /* An invalid lap: the time stays readable, dimmed, with a small tag by the lap number. */
 .lapclock.is-invalid {
   color: var(--text-2);
+  text-decoration: none;
 }
 
 .invalid-tag {
   margin-left: 8px;
-  color: var(--delta-behind);
+  color: var(--text-3);
 }
 
 /* Hero numerals: wide Saira, tabular so values never jitter. */
@@ -2805,9 +2805,9 @@ html:has(.tvstage) {
   overflow: visible;
 }
 
+/* Turned with the SVG transform attribute: rotation about the viewBox origin, the wheel's centre. */
 .wheel__turn {
-  transform-box: view-box;
-  transform-origin: 50% 50%;
+  transform-box: initial;
 }
 
 .wheel__rim {
@@ -3244,7 +3244,7 @@ html:has(.tvstage) {
 .tile__body {
   display: grid;
   flex: 1;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
   gap: 24px;
   min-height: 0;
 }
@@ -3279,4 +3279,16 @@ html:has(.tvstage) {
 
 .tile__map .track-map {
   height: 100%;
+}
+
+/* ---- Step 4 polish: fixed-width numerals so nothing beside them moves as the values change ---- */
+
+.rcard__head .lapclock,
+.tile__head .lapclock {
+  min-width: 4.9em;
+  text-align: right;
+}
+
+.wheel__deg {
+  min-width: 3.4em;
 }

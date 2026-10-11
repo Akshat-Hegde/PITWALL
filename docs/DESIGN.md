@@ -1,4 +1,4 @@
-# TV dashboard design (v2)
+# TV dashboard design (v3: two pages)
 
 The TV dashboard should look like a motorsport broadcast: flat near-black, a clean grid, sharp racing accents
 used sparingly, big white numbers, small grey labels. The style is ours.
@@ -34,11 +34,18 @@ can override `--brand-accent` (and any other token) from `[cafe.branding]` in th
 | `--timing-yellow` | `#F2C230` | Slower than own best / behind on a gap. **Text and thin lines only.** |
 | `--temp-cold` / `--temp-warm` / `--temp-hot` | `#5AA9FF` / `#FFA43D` / `#FF5A4F` | Tyre and brake temperatures, as text colour; in range is `--text`. |
 | `--compound-*` | soft `#FF4A4A`, medium `#FFD43B`, hard `#ECECEC`, inter `#45C46B`, wet `#4C8DFF` | The compound letter / dot only. |
+| `--delta-ahead` / `--delta-behind` | `#38D97A` / `#FF5A4F` | Live delta (ahead / behind own best), speed-trace gap shading. |
+| `--throttle` / `--brake` | `#38D97A` / `#FF4A4A` | Pedal bars and the pedal trace. |
+| `--tyre-ok` | `#2F9E5A` | Tyre block in the working window (cold / warm / hot use the `--temp-*` tokens). |
 
-Rules:
-- Purple / green / yellow mean timing and are only ever a text colour or a thin line. Never a fill.
-- Rig colours (desaturated ~25 % by the dashboard) mark driver identity only: the 3 px name stripe, the map
-  dot and its leader line, chart lines. Never a panel tint or a value colour.
+Rules (TV pages):
+- **Colour is only for meaning**: rig identity, the delta (green / red), sector timing (purple / green /
+  yellow), throttle / brake, and tyre temperature. Everything else is white or grey; the brand accent is
+  left to the kerb strip and the attract / moment screens.
+- Purple / green / yellow timing colours are a text colour or a thin line, never a fill. Tyre blocks are the
+  one temperature fill.
+- Rig colours (desaturated ~25 % by the dashboard) mark driver identity only: the 3 px card edge, the map
+  dot and its leader line, the mini-sectors that rig owns, trace lines. Never a panel tint or a value colour.
 - No gradients or patterns behind data, no glows, no drop shadows, no tinted panels.
 
 ### Type
@@ -56,7 +63,12 @@ Rules:
 
 - Tabular numerals everywhere (`font-variant-numeric: tabular-nums`, set on `body`).
 - **No italics**, except the cafe logo if the cafe's own logo is italic.
-- `1rem` = 1.85 % of the screen height (20 px at 1080p, 40 px at 4K); in portrait, 1.05 % (20 px at 1920 px).
+- The TV is a fixed **1920 x 1080 design canvas** (portrait: 1080 x 1920) scaled to the screen and
+  letterboxed if the shape differs; `1rem` = 20 px on the canvas. A 4K TV shows the same layout at 2x
+  (canvases draw at screen resolution). Nothing may overflow the canvas.
+- **At most three text sizes per panel**: label, value, hero. Hero is only for speed, gear, delta and lap
+  time (wide display numerals). Names are value size.
+- Names up to 16 characters fit: text shrinks to fit (`FitText`, down to 60 %) before it is ever cut.
 
 | Token | Size | Token | Size |
 |---|---|---|---|
@@ -88,7 +100,7 @@ Each motif is drawn by us; references are for style only.
 |---|---|---|---|---|---|
 | 1 | **Stripe bundle**: 5 parallel thin lines that run in from a screen edge, bend 45° with a rounded corner and fade out at one end | Group_58 (corner bundles on every page, behind the posters) | One inline SVG (`<StripeBundle corner>`): 5 paths, 6 px apart at 1080p, `--brand-accent` at 22 % opacity, a linear-gradient mask for the fade | One per view, in a corner or edge that holds no data (the empty corner of the map, the attract / moment screens, the story card). View wipes. | Behind any number, name, table or map line; more than one per view; in other colours than the accent. |
 | 2 | **Double slanted bar**: two parallel bars, the lower one darker, both ending in a 60° cut, a separate slanted cap after a small gap | User screenshot "slanted bars" | `<SlantBar value>`: two 3 px divs (accent / accent-2, or white / grey for throttle) with `clip-path` cut ends + a cap parallelogram | Throttle / brake, lap progress, sector progress, ERS / fuel, section dividers under titles | As decoration with no value; thicker than 4 px per bar. |
-| 3 | **Diagonal light streaks**: 3–5 soft wide diagonal bands, a few % white | User screenshot "streak header", Group_58 posters | CSS `repeating-linear-gradient(115deg, …)` on a pseudo-element, masked to fade out | The header bar, the top-left corner of moment cards and the attract/portrait hero | Over tables, timing or maps. |
+| 3 | **Diagonal light streaks**: 3–5 soft wide diagonal bands, a few % white | User screenshot "streak header", Group_58 posters | CSS `repeating-linear-gradient(115deg, …)` on a pseudo-element, masked to fade out | The top-left corner of moment cards and the attract/portrait hero | Over tables, timing or maps. |
 | 4 | **Barcode meter**: a row of thin vertical ticks, lit ticks white, the rest `--line-strong`; ticks get taller toward the top end | User screenshot "broadcast card" (speed meter) | `<Barcode value max ticks>`: SVG rects; lit count rounded, no animation between ticks | Speed (instead of a round dial), revs, session timer, record "gap" meter | Any round dial or arc gauge. |
 | 5 | **Wide display numerals + angled tabs + cut-corner cards + avatar slot** | Broadcast card ("308 KM/H", "LAP 15/27 \| ATTACK"), Group_58 driver card ("112 POINTS") | Display type token; `<Tab>` parallelogram with a white half and an accent half; cut-corner `.card`; `<Avatar>` shows the staff photo or the driver's initials on `--panel-2` | Speed, lap time and gaps on cards; "LAP 4 \| PUSH", "P1 \| RECORD" tabs; driver cards | Real photos of anyone who didn't consent; team or sponsor wording on tabs. |
 | 6 | **Kinetic wide type**: huge wide uppercase words in rows, alternating filled and outlined, sliding sideways | Group_58 ("HAMMER TIME" rows) | `<KineticType words>`: Saira 125 % / 900, rows alternate `fill` and `-webkit-text-stroke`, CSS translate animation | View wipes (one word: the next view's name), record-broken and now-driving moments, attract mode | Anywhere data is shown at the same time; longer than the moment. |
@@ -98,32 +110,43 @@ Each motif is drawn by us; references are for style only.
 
 ## 3. Layout
 
-- Strict grid: page margin `--s6`, gutter `--s5`. Sections are separated by space and hairlines; cards are
-  used for things that are objects (a driver, a track, a moment), not for every group.
-- **Header** (2.6rem): kerb strip on top edge, cafe name and mark left, session · track centre, views ·
-  link · clock right, faint streaks (motif 3).
-- 1920×1080 and 3840×2160 with the same layout (rem scales); 1–10 rigs. Portrait 1080×1920 at `/portrait`.
+- **12-column grid, 24 px gutters and margins** (`--gutter`); every panel edge sits on a column line.
+- **Fewer boxes**: sections are separated by space and hairlines. Only rig cards (and MULTIVIEW tiles, which
+  are rig cards) are boxed.
+- **One stripe motif per page**, never under data, nothing decorative in the map area. On LIVE and
+  MULTIVIEW that motif is the kerb strip on the header's top edge.
+- **Header** (2.6rem): kerb strip, cafe name left, link state and clock right. No view tabs (pages are
+  switched from `/staff` or keys 1 / 2), no track (it is in the map corner), no warnings (staff only).
+- Motion: car dots, the steering wheel and pedal bars are interpolated at display rate (60 fps) between the
+  15 Hz frames; numerals are tabular with fixed widths so nothing beside them moves.
 
 ## 4. Components
 
 **Driver name**: 3 px rig stripe, name in Saira 112 % / 700 uppercase, rig name below in `--text-2`.
 
 **Timing values**: lap time, S1–S3, last, best, gap. Label above. White unless rated: purple (fastest today),
-green (own best), yellow (slower, on gaps and mini-sectors). Placeholders `--text-3`. Invalid lap: struck
-through in `--text-3`.
+green (own best), yellow (slower). Placeholders `--text-3`. Invalid lap: the time dims to `--text-2` and a
+small grey "Invalid" tag sits by the lap number (the numerals stay readable).
+
+**Delta**: the current lap against the driver's own best at the same lap distance, hero numerals, two
+decimals, green ahead / red behind, a dash until the driver has a full lap the page saw.
+
+**Steering wheel**: a generic yoke outline that turns with the input (steer x `steering_rotation_deg` / 2),
+a rig-colour mark at the top, the angle in degrees under it.
+
+**Pedal bars**: two thin (8 px) vertical bars, throttle green and brake red, filling from the bottom.
+
+**Tyre blocks**: 2 x 2 blocks (FL FR / RL RR), the fill is the surface-temperature band, the number the
+pressure (psi).
 
 **Mini-sectors**: 24 per lap (8 per sector), worked out in the dashboard from distance and time. Short 3 px
 lines under the sector times; done ones purple / green / yellow, the rest `--line-strong`.
 
-**Speed**: barcode meter (motif 4) with the speed in display numerals, `KM/H` unit, gear beside it.
+**Speed and gear**: display numerals, `KM/H` unit label between them.
 
-**Throttle / brake**: double slanted bars (motif 2), throttle white / grey, brake accent / accent-2.
-
-**Tyre**: compound letter (S M H I W) in the compound colour + age; on onboard: four tyre blocks with
-temperature as coloured text, wear, pressure, brake temperature.
-
-**Track map**: neutral 0.2rem line, no glow or casing, coloured only by meaning; small dots with name labels
-off the track on thin leader lines; start/finish a short white tick.
+**Track map**: thin neutral line, no glow or casing; each of 24 mini-sectors in the colour of the rig with the
+fastest time through it; sector ticks with S2 / S3; start/finish a short white tick; small dots with name
+labels off the track on thin leader lines. Mini maps (MULTIVIEW) show one car and no labels.
 
 **Leaderboard (tower)**: tab head with the period and track; rows: pos · stripe · name · lap time · gap ·
 class (PRO / OPEN); hairlines; P1's time purple and the P1 row gets the chequered edge.
@@ -131,14 +154,19 @@ class (PRO / OPEN); hairlines; P1's time purple and the P1 row gets the chequere
 **Moments** (full screen, over the current view, then back): kinetic type in, card, out. Now driving 4 s;
 record broken 6 s; podium 10 s; battle pop-up 5 s as a lower-third card (not full screen).
 
-## 5. Views
+## 5. TV pages
 
-| View | Shows | Key |
-|---|---|---|
-| **Race** | Track header card, map (lead car's mini-sectors), battle line, timing (cards ≤4 rigs, tower 5–10), bottom strip (today's top 3, speed trap, conditions), session timers and "Next up". | `1` |
-| **Leaderboard** | Pro and Open × today / week / all time towers for the track, 10 rows, paging. | `2` |
-| **Head to head** | Two drivers left / right, map coloured by who's faster per mini-sector, LOW / MEDIUM / HIGH SPEED labels, mirrored lap-share bars, speed traces. | `3` |
-| **Onboard** | Per driving rig (two per page): barcode speed, revs, pedals, steering, g-circle, tyres, fuel, ERS, DRS, damage, slides / saves. | `4` |
-| **Attract** | Cafe branding, today's top 10, record holder, current challenge. Auto when nobody drives. | `5` |
+Two pages. Staff switch them on `/staff` (or keys `1` / `2` on the TV PC); nothing rotates while anyone
+drives. Rigs without data are left off the TV.
 
-`?view=race|board|analysis|onboard|attract` fixes the view; `0` returns to auto rotation.
+| Page | Layout (12 columns) |
+|---|---|
+| **LIVE** (default) | Map, columns 1-8 (track name, length and today's record in the top-left corner only). Rig cards, columns 9-12, one per active rig: name, lap, lap time, delta, speed + gear, wheel, pedal bars, tyre blocks; large (1-2 rigs), tall (3), compact (4-6). Bottom strip (216 px, all 12 columns): the selected rig's name (cols 1-2), pedal trace over 10 s (cols 3-6), speed this lap vs best by distance with the gap shaded (cols 7-12). The selected rig is the one on the fastest lap (best + live delta) unless staff pinned one; it changes at most every 8 s. |
+| **MULTIVIEW** | One tile per active rig: 1 full, 2 side by side, 3-4 in 2 x 2, 5-6 in 3 x 2. Tile: name, lap time, delta; speed + gear, wheel and pedals; a mini map with only that car. |
+
+Also on the TV: **attract mode** (welcome and leaderboard, after 60 s with nobody driving, back to the page
+when a car drives), **head to head** and the **team board** (put over the page from `/staff`), and the
+**moments** (now driving, record, podium, battle), which play over the page and never change it.
+
+Not on the TV (still in the feed): fuel, ERS, g-force, damage, brake temperatures, tyre wear and inner
+temperatures, slides / saves, lap-share statistics, IP addresses and technical warnings.
