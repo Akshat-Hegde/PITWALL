@@ -33,3 +33,7 @@ dashboard/.screens/
 
 # Test temp folder (pytest --basetemp on X:)
 .pytest-tmp/
+
+# Design reference images and PDFs: third-party branding, never commit
+docs/design-refs/*
+!docs/design-refs/README.md
