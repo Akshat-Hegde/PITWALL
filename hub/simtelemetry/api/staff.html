@@ -121,6 +121,7 @@
   <div class="kerb"></div>
   <div class="bar">
     <span class="brand" id="cafe">Staff</span>
+    <button class="btn small" type="button" id="director-btn" hidden>Director</button>
     <button class="btn small" type="button" id="podium-btn">Show podium</button>
   </div>
   <nav class="tabs" role="tablist">
@@ -140,6 +141,24 @@
     <p class="msg error" id="pin-msg" role="alert"></p>
   </form>
   <p class="msg" id="top-msg" role="status"></p>
+  <section class="panel" id="director" hidden>
+    <div class="row"><span class="title">Demo director</span><span class="faint">Demo mode only · for filming</span></div>
+    <p class="faint">Each button puts that moment on the TV now.</p>
+    <div class="actions">
+      <button class="btn" type="button" data-demo="now_driving">Now driving</button>
+      <button class="btn" type="button" data-demo="battle">Battle</button>
+      <button class="btn" type="button" data-demo="podium">Podium</button>
+      <button class="btn" type="button" data-demo="challenge_winner">Challenge winner</button>
+      <button class="btn" type="button" data-demo="card">Story card QR</button>
+    </div>
+    <div class="actions">
+      <button class="btn" type="button" data-demo="record" data-period="today" data-class="open">Record: today, Open</button>
+      <button class="btn" type="button" data-demo="record" data-period="today" data-class="pro">Record: today, Pro</button>
+      <button class="btn" type="button" data-demo="record" data-period="all_time" data-class="open">Record: all time, Open</button>
+      <button class="btn" type="button" data-demo="record" data-period="all_time" data-class="pro">Record: all time, Pro</button>
+    </div>
+    <p class="msg" id="director-msg" role="status"></p>
+  </section>
   <section class="panel" id="card-panel" hidden>
     <div class="row"><span class="title">Session card</span><button class="btn small" type="button" id="card-close">Close</button></div>
     <p class="muted" id="card-text"></p>
@@ -717,6 +736,17 @@
     $("ch-end").value = iso(new Date(today.getTime() + 6 * 864e5));
   }
 
+  // --- demo director (run --demo only) -------------------------------------------------------
+  $("director-btn").addEventListener("click", () => { $("director").hidden = !$("director").hidden; });
+  document.querySelectorAll("[data-demo]").forEach((b) => b.addEventListener("click", async () => {
+    const body = b.dataset.period ? { period: b.dataset.period, lap_class: b.dataset.class } : {};
+    try {
+      const r = await api("POST", `/api/staff/demo/${b.dataset.demo}`, body);
+      say($("director-msg"), `On the TV: ${b.textContent}.`, "ok");
+      if (r.token) showCard({ token: r.token, driver: "Demo driver" });
+    } catch (err) { fail($("director-msg"), err); }
+  }));
+
   // --- podium --------------------------------------------------------------------------------
   $("podium-btn").addEventListener("click", async () => {
     try { await api("POST", "/api/staff/podium"); say($("top-msg"), "The TV is showing today's podium.", "ok"); }
@@ -730,6 +760,7 @@
       state = await api("GET", "/api/staff/rigs");
       if (state.cafe) $("cafe").textContent = state.cafe;
       $("podium-btn").hidden = state.features && state.features.podium === false;
+      $("director-btn").hidden = !state.demo;
       renderRigs();
       renderQueue();
       if (currentTab === "compete" && !compete) loadCompete();

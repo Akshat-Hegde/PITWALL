@@ -257,6 +257,16 @@ export interface CardMoment {
   track_name: string | null;
 }
 
+/** A battle pop-up sent by the hub (the demo director); normally the TV finds battles itself. */
+export interface BattleMoment {
+  kind: "battle";
+  at: number;
+  rig_ids: string[];
+  drivers: string[];
+  title: string;
+  text: string;
+}
+
 /** Story card data (GET /api/cards/<token>), drawn by the card page. Not part of the WebSocket feed. */
 export interface StoryCard {
   token: string;
@@ -461,7 +471,7 @@ export interface LeaderboardMessage extends Envelope<"leaderboard"> {
 }
 
 export interface MomentMessage extends Envelope<"moment"> {
-  moment: Moment | CardMoment;
+  moment: Moment | CardMoment | BattleMoment;
 }
 
 export interface QueueMessage extends Envelope<"queue"> {

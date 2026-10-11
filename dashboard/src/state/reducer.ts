@@ -6,6 +6,7 @@ import {
   type Comparison,
   type Features,
   MOMENT_KINDS,
+  type BattleMoment,
   type CardMoment,
   type Competition,
   type HeadToHead,
@@ -59,6 +60,8 @@ export interface DashboardState {
   queue: QueueEntry[];
   /** Story cards just made (newest last): the TV shows their QR codes for a while. */
   cards: CardMoment[];
+  /** A battle pop-up sent by the hub (demo director), shown before any the TV found itself. */
+  battle: BattleMoment | null;
 }
 
 export const ALL_FEATURES: Features = {
@@ -96,6 +99,7 @@ export function initialState(source: DashboardState["source"]): DashboardState {
     moments: [],
     queue: [],
     cards: [],
+    battle: null,
   };
 }
 
@@ -192,6 +196,9 @@ export function applyMessage(state: DashboardState, msg: HubMessage, now: number
     case "queue":
       return { ...state, queue: msg.queue };
     case "moment":
+      if (msg.moment?.kind === "battle") {
+        return state.features.battles ? { ...state, battle: msg.moment as BattleMoment } : state;
+      }
       if (msg.moment?.kind === "card") {
         if (!state.features.sharing) return state;
         return { ...state, cards: [...state.cards, msg.moment as CardMoment].slice(-CARDS_MAX) };

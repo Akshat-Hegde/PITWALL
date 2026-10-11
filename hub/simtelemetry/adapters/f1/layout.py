@@ -77,6 +77,27 @@ class Layout:
     def unpack_from(self, buffer: bytes | bytearray | memoryview, offset: int = 0) -> dict[str, Any]:
         return self._consume(iter(self.struct.unpack_from(buffer, offset)))
 
+    def pack(self, values: dict[str, Any] | None = None) -> bytes:
+        """The inverse of unpack_from: fields missing from `values` are zero (the demo simulator uses this)."""
+        flat: list[Any] = []
+        self._flatten(values or {}, flat)
+        return self.struct.pack(*flat)
+
+    def _flatten(self, values: dict[str, Any], out: list[Any]) -> None:
+        for f in self.fields:
+            v = values.get(f.name)
+            if isinstance(f.type, Layout):
+                items = [v] if f.count == 1 else list(v or [])
+                for i in range(f.count):
+                    f.type._flatten(items[i] if i < len(items) and items[i] else {}, out)
+            elif isinstance(f.type, Union) or f.type == "char":
+                out.append(v if isinstance(v, (bytes, bytearray)) else b"")
+            elif f.count == 1:
+                out.append(v if v is not None else 0)
+            else:
+                items = list(v or [])
+                out.extend(items[i] if i < len(items) else 0 for i in range(f.count))
+
     def _consume(self, values: Iterator[Any]) -> dict[str, Any]:
         out: dict[str, Any] = {}
         for f in self.fields:

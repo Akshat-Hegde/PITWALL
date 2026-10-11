@@ -95,7 +95,17 @@ def staff_router(hub: Hub) -> APIRouter:
     def rigs() -> dict[str, Any]:
         now = time.monotonic()
         return {"cafe": hub.config.cafe.name, "rigs": [rig_row(r, now) for r in hub.registry.all()],
-                "queue": drivers.queue(), "features": hub.config.features.model_dump()}
+                "queue": drivers.queue(), "features": hub.config.features.model_dump(), "demo": hub.demo is not None}
+
+    @router.post("/api/staff/demo/{action}", dependencies=[Depends(guard)])
+    def demo(action: str, body: dict[str, Any] = Body(default={})) -> dict[str, Any]:
+        """Demo director (run --demo only): trigger a moment on demand."""
+        if hub.demo is None:
+            raise HTTPException(404, "The demo director only exists in demo mode (run --demo).")
+        try:
+            return hub.demo.run(action, body)
+        except DriverError as exc:
+            raise _bad(exc) from None
 
     # --- sessions ----------------------------------------------------------------------------
 

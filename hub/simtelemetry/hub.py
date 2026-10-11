@@ -38,6 +38,7 @@ class Hub:
         # Other programs listening on the telemetry port on a specific address (see net/udp.py).
         self.port_shadows: list[str] = []
         self._session_top_kph: dict[str, int] = {}             # top speed per rig in the staff session
+        self.demo = None                                        # DemoDirector in `run --demo`
         self.started_at = time.monotonic()
         self._queue: asyncio.Queue[tuple[Checked, bytes, str, float]] = asyncio.Queue(QUEUE_MAX)
 

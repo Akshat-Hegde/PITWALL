@@ -153,6 +153,14 @@ export function BattlePopups({ state, trackKey }: { state: DashboardState; track
   const [popup, setPopup] = useState<Popup | null>(null);
   const shown = useRef(new Map<string, number>());
   const candidate = battleCandidate(state, trackKey);
+  const forced = state.battle;
+  useEffect(() => {
+    if (!forced) return;
+    const rigs = forced.rig_ids.map((id, i) => state.rigs.find((r) => r.rig_id === id)
+      ?? { rig_id: id, name: forced.drivers[i] ?? id, colour: "#8a8f99", address: "", game: "F1", data_format: null,
+           format_supported: true });
+    setPopup({ key: `forced-${forced.at}`, title: forced.title, text: forced.text, rigs });
+  }, [forced?.at]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!candidate || popup) return;
     const now = performance.now();
