@@ -90,6 +90,7 @@ class Hub:
             track_length_m=s.track_length_m if s else None,
             sector_starts_m=s.sector_starts_m if s else None,
             pro=s.pro if s else None,
+            driver_id=self.drivers.driver_id(ip),
         )
 
     # --- broadcast moments -----------------------------------------------------------
@@ -117,7 +118,7 @@ class Hub:
             return None
         track_key = (s.track_key if s else None) or self.active_track()
         record = self.laps.record_holder(track_key, "today") if track_key else None
-        best = self.laps.driver_best(track_key, driver_key(assigned.name, ip)) if track_key else None
+        best = self.laps.driver_best(track_key, driver_key(assigned.name, ip, assigned.driver_id)) if track_key else None
         return self.laps.publish_moment(
             "now_driving", rig_id=ip, rig_name=rig.name, driver=assigned.name, track_key=track_key,
             track_name=(s.track if s else None) or (record or {}).get("track_name"),
@@ -249,7 +250,7 @@ class Hub:
 
 def personal_best_key(hub: Hub, rig: Rig) -> str:
     """Driver key under which this rig's current laps are stored (see DriverRegistry.lap_name)."""
-    return driver_key(hub.drivers.lap_name(rig.ip, rig.driver_name, rig.name), rig.ip)
+    return driver_key(hub.drivers.lap_name(rig.ip, rig.driver_name, rig.name), rig.ip, hub.drivers.driver_id(rig.ip))
 
 
 def tyre_dict(s) -> dict[str, Any] | None:

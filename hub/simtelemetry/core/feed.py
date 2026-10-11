@@ -164,7 +164,17 @@ class FeedBuilder:
             "lap": hub.laps.live_view(rig.ip) if driving else None,
             "best": best.best_schema() if best else None,
             "personal_best": hub.laps.driver_best(track_key, personal_best_key(hub, rig)) if track_key else None,
+            "booking": self.booking(rig),
         }
+
+    def booking(self, rig: Rig) -> dict[str, Any] | None:
+        """Schema Booking: the staff session on the rig (who and until when), or None."""
+        a = self.hub.drivers.get(rig.ip)
+        return {"driver": a.name, "started_at": a.started_at, "ends_at": a.ends_at} if a else None
+
+    def queue(self) -> list[dict[str, Any]]:
+        """Schema QueueEntry list: who's waiting for a rig, first first (names only, never contact details)."""
+        return [{"id": e["id"], "name": e["name"]} for e in self.hub.drivers.queue()]
 
     def frame_body(self, now: float) -> dict[str, Any]:
         rigs = [self.rig_frame(rig, now) for rig in self.hub.registry.all()]
@@ -266,6 +276,7 @@ class FeedBuilder:
             "outlines": list(self.hub.laps.outlines.values()),
             "leaderboards": self.leaderboards(self.active_track(frame["rigs"]), frame["rigs"]),
             "recent_laps": self.hub.laps.recent_laps(),
+            "queue": self.queue(),
         }
 
 
@@ -282,6 +293,7 @@ class FeedConnection:
         self._status_at = float("-inf")
         self._message_id = 0                                  # last lap book message sent
         self._board: tuple[Any, ...] | None = None            # board_key last sent
+        self._queue: list[dict[str, Any]] = []                # queue last sent
 
     def _message(self, type_: str, body: dict[str, Any]) -> dict[str, Any]:
         msg = {"v": SCHEMA_VERSION, "type": type_, "seq": self.seq, "ts": round(self._clock() * 1000)}
@@ -297,6 +309,7 @@ class FeedConnection:
         laps = self.builder.hub.laps
         self._message_id = laps.last_message_id
         self._board = self.builder.board_key(self.builder.active_track(body["frame"]["rigs"]))
+        self._queue = body["queue"]
         return self._message("snapshot", body)
 
     def tick(self, now: float) -> list[dict[str, Any]]:
@@ -320,6 +333,10 @@ class FeedConnection:
             self._board = board
             for leaderboard in self.builder.leaderboards(track, frame["rigs"]):
                 out.append(self._message("leaderboard", {"leaderboard": leaderboard}))
+        queue = self.builder.queue()
+        if queue != self._queue:
+            self._queue = queue
+            out.append(self._message("queue", {"queue": queue}))
         status = self.builder.status(now)
         if status != self._status or now - self._status_at >= STATUS_INTERVAL_S:
             self._status, self._status_at = status, now

@@ -168,17 +168,30 @@ Mock options for demos: `?moment=now_driving|record|podium&momentAfter=5` shows 
 Branding comes from `[cafe]` in the hub config: `name`, plus CSS variables in `[cafe.branding]` (e.g.
 `"--brand-accent" = "#0a7cff"`), applied to the page as-is.
 
-## Driver names (staff page)
+## Staff page and driver profiles
 
-Open `http://<hub>:8000/staff` on a phone or tablet to set who is driving each rig: the driver's name and,
-optionally, a phone number and email (stored with the driver session for later reports; not used yet).
-**End session** clears the name when the customer leaves. Laps are saved under the name that applies when
-they complete: the staff-set name, else the game's player name, else the rig name; changing the name later
-doesn't rename earlier laps. The TV shows the name and that driver's best lap on the track ("PB").
+Open `http://<hub>:8000/staff` on a phone or tablet. Three tabs (a link like `/staff#queue` opens one):
 
-Set `[staff] pin` in `config\hub.toml` so customers can't change names: the page then asks for the PIN, and
-five wrong PINs in a minute lock that device out for a minute. Without a PIN anyone on the LAN can use the
-page.
+- **Rigs:** start a session for a walk-in name, the next person in the queue, or a driver profile, with a
+  session time (10–60 min or no timer). The TV shows "8 min left" next to the driver; from 5 minutes left the
+  staff page shows **Extend?** (+5 / +10). **End session** frees the rig. Starting a session shows **Now
+  driving** on the TV.
+- **Queue:** names waiting for a rig, in order; the TV shows the first few as **Next up** (names only).
+- **Drivers:** profiles keyed by phone number. Search by the last 4 digits, or create one: the phone number
+  is only stored after the driver agrees (the consent checkbox is required). A profile shows visits, best
+  lap per track and the improvement since the last visit. **Delete profile** removes the profile, its phone
+  number, its sessions and all its laps (they leave the leaderboards too).
+- **Show podium** (top right) puts today's top three on the TV.
+
+Laps are saved under the session's driver, else the game's player name, else the rig name; changing the
+name later doesn't rename earlier laps. A profile's laps follow the profile (two profiles with the same name
+stay separate). The TV shows the name and that driver's best lap on the track ("PB").
+
+Set `[staff] pin` in `config\hub.toml` so customers can't use the page: it then asks for the PIN, and five
+wrong PINs in a minute lock that device out for a minute. Without a PIN anyone on the LAN can use it.
+
+**Privacy:** phone numbers, names and lap times stay in `data\laps.db` on the hub PC; nothing is sent
+anywhere. The TV and its WebSocket feed only ever carry names, never phone numbers.
 
 ## Lap database
 

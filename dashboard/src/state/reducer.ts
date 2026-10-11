@@ -7,6 +7,7 @@ import {
   type Features,
   MOMENT_KINDS,
   type Moment,
+  type QueueEntry,
   type HubMessage,
   type HubStatus,
   type LapRecord,
@@ -45,6 +46,8 @@ export interface DashboardState {
   sounds: { enabled: boolean; volume: number };
   /** Broadcast moments waiting to be shown, oldest first (the store removes each once shown). */
   moments: Moment[];
+  /** Who's waiting for a rig (names only). */
+  queue: QueueEntry[];
 }
 
 export const ALL_FEATURES: Features = {
@@ -75,6 +78,7 @@ export function initialState(source: DashboardState["source"]): DashboardState {
     battleMarginMs: 300,
     sounds: { enabled: false, volume: 0.6 },
     moments: [],
+    queue: [],
   };
 }
 
@@ -137,6 +141,7 @@ export function applyMessage(state: DashboardState, msg: HubMessage, now: number
         outlines: Object.fromEntries(msg.outlines.map((o) => [o.track_key, o])),
         leaderboards: boardsByPeriod(msg.leaderboards),
         recentLaps: msg.recent_laps.slice(0, RECENT_LAPS_MAX),
+        queue: msg.queue ?? [],
         lastFrameAt: now,
       };
     case "frame":
@@ -154,6 +159,8 @@ export function applyMessage(state: DashboardState, msg: HubMessage, now: number
       return { ...state, outlines: { ...state.outlines, [msg.outline.track_key]: msg.outline } };
     case "lap_completed":
       return { ...state, recentLaps: [msg.lap, ...state.recentLaps].slice(0, RECENT_LAPS_MAX) };
+    case "queue":
+      return { ...state, queue: msg.queue };
     case "moment":
       if (!momentAllowed(msg.moment, state.features)) return state;
       return { ...state, moments: [...state.moments, msg.moment].slice(-MOMENTS_MAX) };

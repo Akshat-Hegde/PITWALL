@@ -2889,6 +2889,57 @@ html:has(.app--portrait) {
   }
 }
 
+/* Phase 3: booking time left, next up */
+.time-left.is-low {
+  color: var(--brand-accent);
+  font-weight: 700;
+}
+
+.summary__next {
+  font-family: var(--font-body);
+  font-stretch: 112%;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.nextup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+.nextup__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s6);
+  font-size: var(--fs-value);
+  font-stretch: 112%;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.nextup__pos {
+  margin-right: var(--s3);
+  color: var(--text-3);
+}
+
+.portrait {
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+}
+
+/* With a queue on the strip there is room for two of today's fastest. */
+.summary--queue .summary__entry:nth-of-type(n + 4) { /* the label is span 1 */
+  display: none;
+}
+
+.timing--m .card__body {
+  grid-template-columns: 6.6rem 5.4rem 7.8rem minmax(0, 2.6fr) repeat(3, minmax(0, 1fr));
+}
+
+.timing--m .field--clock .field__value {
+  font-size: 1.35rem;
+}
+
 /* ==== Misc =================================================================================== */
 
 .fullscreen-message {

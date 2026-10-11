@@ -56,6 +56,9 @@ export const DEFAULT_MOCK_OPTIONS: MockOptions = {
   podiumEveryMs: 0,
 };
 
+const MOCK_QUEUE = [{ id: 1, name: "Jordan P" }, { id: 2, name: "Office party (4)" }, { id: 3, name: "Sam W" }];
+const BOOKED_MIN = [20, 7, 15, 20, 45, 30, 20, 15, 30, 20]; // rig 2 is nearly out of time
+
 const RIG_DRIVERS = ["Apex_Hunter", "LateBraker77", "Sofia_K", "TurboTom", "Mika H", "DRS_Daisy", "Kerb Crusher",
   "Rae", "Big Ben", "Quali Queen"];
 const RIG_COLOURS = ["#36C5F0", "#FF8A3D", "#F15BB5", "#5B8CFF", "#2EC4B6", "#FF6B6B", "#C0C9D2", "#FFB3C6",
@@ -161,6 +164,7 @@ export class MockHub {
   private simMs = 0;
   private sinceStatus = 0;
   private sincePodium = 0;
+  private readonly startedAt: number;
   private outlineSent: boolean;
   private sessionBestSectors: [number, number, number] = [Infinity, Infinity, Infinity];
   private leaderboard: Leaderboard | null = null;
@@ -169,6 +173,7 @@ export class MockHub {
 
   constructor(readonly options: MockOptions = DEFAULT_MOCK_OPTIONS, private readonly clock: () => number = Date.now) {
     this.track = buildTrack();
+    this.startedAt = clock();
     this.rng = new Rng(options.seed);
     this.outlineSent = !options.outlineLate;
     const driving = Math.max(1, Math.min(10, options.rigs));
@@ -262,6 +267,7 @@ export class MockHub {
       outlines: this.outlineSent ? [this.outline()] : [],
       leaderboards: this.leaderboard ? this.periodBoards(this.leaderboard) : [],
       recent_laps: [...this.recentLaps],
+      queue: MOCK_QUEUE.slice(0, this.options.rigs >= 4 ? 3 : 2),
     };
   }
 
@@ -550,6 +556,10 @@ export class MockHub {
       driver: rig.spec.offline ? null : rig.spec.driver,
       session: this.session(rig),
       best: rig.best,
+      booking: rig.spec.offline || !rig.spec.driver ? null : {
+        driver: rig.spec.driver, started_at: this.startedAt,
+        ends_at: this.startedAt + BOOKED_MIN[(Number(rig.spec.info.rig_id.split("-")[1]) - 1) % 10]! * 60_000,
+      },
     };
     if (rig.spec.offline) {
       return {

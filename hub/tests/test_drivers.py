@@ -51,21 +51,21 @@ def test_fallback_order():
     assert drivers.lap_name(RIG, "Akshat", "Rig 1") == "Akshat"
 
 
-@pytest.mark.parametrize("name, phone, email, message", [
-    ("", None, None, "Enter the driver's name."),
-    ("x" * 33, None, None, "at most 32"),
-    ("Maya", "abc", None, "valid phone number"),
-    ("Maya", None, "not-an-email", "valid email address"),
+@pytest.mark.parametrize("name, minutes, message", [
+    ("", None, "Enter the driver's name."),
+    ("x" * 33, None, "at most 32"),
+    ("Maya", "abc", "number of minutes"),
+    ("Maya", 0.5, "1 to 720 minutes"),
 ])
-def test_validation(name, phone, email, message):
+def test_validation(name, minutes, message):
     with pytest.raises(DriverError, match=message):
-        DriverRegistry().assign(RIG, name, phone, email)
+        DriverRegistry().assign(RIG, name, minutes=minutes)
 
 
-def test_assignments_and_contacts_are_stored(tmp_path):
+def test_sessions_are_stored_and_restored(tmp_path):
     store = LapStore(tmp_path / "laps.db")
     drivers = DriverRegistry(store, clock=lambda: 1000.0)
-    drivers.assign(RIG, "Maya", "+44 7700 900123", "maya@example.com")
+    drivers.assign(RIG, "Maya", minutes=20)
     drivers.assign("192.168.1.22", "Guest")
     drivers.assign(RIG, "Kofi")                                       # replaces Maya, closes her session
     drivers.end("192.168.1.22")
@@ -74,10 +74,10 @@ def test_assignments_and_contacts_are_stored(tmp_path):
     store = LapStore(tmp_path / "laps.db")                            # hub restarted
     restored = DriverRegistry(store)
     assert restored.get(RIG).name == "Kofi" and restored.get("192.168.1.22") is None
-    rows = [(r["rig_id"], r["name"], r["phone"], r["email"], r["ended_at"]) for r in store.driver_sessions()]
-    assert rows == [(RIG, "Maya", "+44 7700 900123", "maya@example.com", 1_000_000),
-                    ("192.168.1.22", "Guest", None, None, 1_000_000),
-                    (RIG, "Kofi", None, None, None)]
+    rows = [(r["rig_id"], r["name"], r["ends_at"], r["ended_at"]) for r in store.driver_sessions()]
+    assert rows == [(RIG, "Maya", 1_000_000 + 20 * 60_000, 1_000_000),
+                    ("192.168.1.22", "Guest", None, 1_000_000),
+                    (RIG, "Kofi", None, None)]
     store.close()
 
 
@@ -136,23 +136,23 @@ async def client_with_rig(tmp_path, **cfg):
 async def test_staff_page_and_api(tmp_path):
     hub, client = await client_with_rig(tmp_path)
     page = client.get("/staff")
-    assert page.status_code == 200 and "Driver names" in page.text and "Save driver" in page.text
+    assert page.status_code == 200 and "Start session" in page.text
 
     (rig,) = client.get("/api/staff/rigs").json()["rigs"]
-    assert (rig["rig_id"], rig["rig_name"], rig["game_driver"], rig["assigned"], rig["laps_stored_as"]) == \
+    assert (rig["rig_id"], rig["rig_name"], rig["game_driver"], rig["session"], rig["laps_stored_as"]) == \
         (RIG, "Rig 1", "Akshat", None, "Akshat")
 
-    r = client.put(f"/api/staff/rigs/{RIG}/driver", json={"name": "Maya", "email": "maya@example.com"})
+    r = client.put(f"/api/staff/rigs/{RIG}/driver", json={"name": "Maya", "minutes": 20})
     assert r.status_code == 200
-    assert r.json()["assigned"]["name"] == "Maya" and r.json()["laps_stored_as"] == "Maya"
-    assert hub.drivers.get(RIG).email == "maya@example.com"
+    assert r.json()["session"]["name"] == "Maya" and r.json()["laps_stored_as"] == "Maya"
+    assert 19 * 60_000 < r.json()["time_left_ms"] <= 20 * 60_000 and r.json()["extend_prompt"] is False
 
     bad = client.put(f"/api/staff/rigs/{RIG}/driver", json={"name": ""})
     assert bad.status_code == 400 and bad.json()["detail"] == "Enter the driver's name."
     assert client.put("/api/staff/rigs/10.0.0.9/driver", json={"name": "X"}).status_code == 404
 
     r = client.delete(f"/api/staff/rigs/{RIG}/driver")
-    assert r.status_code == 200 and r.json()["assigned"] is None and r.json()["laps_stored_as"] == "Akshat"
+    assert r.status_code == 200 and r.json()["session"] is None and r.json()["laps_stored_as"] == "Akshat"
 
 
 async def test_staff_pin(tmp_path):

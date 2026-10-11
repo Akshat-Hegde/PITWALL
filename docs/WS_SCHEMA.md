@@ -63,6 +63,7 @@ Compatibility rules:
 | `session_changed` | A rig starts a new game session (e.g. new track, restart) | `{ "rig_id", "session": SessionInfo }` |
 | `track_outline` | An outline becomes available (generated or loaded) | `{ "outline": TrackOutline }` |
 | `lap_completed` | A rig finishes a lap | `{ "lap": LapRecord }` |
+| `queue` *(added in v1, optional)* | The waiting queue changes | `{ "queue": [QueueEntry] }`: full replacement |
 | `moment` *(added in v1, optional)* | A broadcast moment: a driver starts, a record falls, the podium | `{ "moment": Moment }` |
 | `leaderboard` | A board of the shown track changes | `{ "leaderboard": Leaderboard }`: full replacement of the board for its `period`. Boards for another track replace all boards. |
 
@@ -95,6 +96,8 @@ Compatibility rules:
 - `cafe.branding`: CSS custom properties from `[cafe.branding]` in the hub config. The dashboard applies
   them to `:root` as-is (keys must start with `--`; others are ignored).
 - `outlines`: every outline the hub has (one per track that has had a complete valid lap).
+- `queue` *(added in v1, optional)*: who's waiting for a rig, first first: `[{ "id": 3, "name": "Jordan P" }]`.
+  Names only; contact details never leave the hub.
 
 ### 3.2 `frame`
 
@@ -164,6 +167,7 @@ Conventions: times are integer **milliseconds**; distances **metres**; speed **k
 | `lap` | LiveLap \| null | The lap in progress; `null` when not driving. |
 | `best` | BestLap \| null | This rig's best valid lap on the current track in this hub session. |
 | `personal_best` | BestLap \| null | *(Added in v1, optional.)* The current driver's fastest valid lap on this track ever, from the lap database. Laps are stored under the staff-assigned name, else the game's player name, else the rig name. |
+| `booking` | object \| null | *(Added in v1, optional.)* The staff session on the rig: `{ "driver", "started_at", "ends_at" }` (Unix ms; `ends_at` null = no timer). The TV shows the time left. |
 | `car` | CarDetail \| null | *(Added in v1, optional.)* Car systems, tyres, brakes, damage, g-forces and slides; see below. |
 
 ### CarDetail *(added in v1, optional)*

@@ -22,7 +22,7 @@ export function Summary({ state, trackKey }: { state: DashboardState; trackKey: 
     .sort((a, b) => (b.car!.top_speed_kph ?? 0) - (a.car!.top_speed_kph ?? 0))[0];
   const trapRig = trap ? state.rigs.find((r) => r.rig_id === trap.rig_id) : undefined;
   return (
-    <footer className="summary" aria-label="Today on this track">
+    <footer className={`summary${state.queue.length ? " summary--queue" : ""}`} aria-label="Today on this track">
       <div className="summary__group summary__today">
         <span className="label">Fastest today</span>
         {entries.length === 0 && <span className="t2">No clean laps yet</span>}
@@ -43,6 +43,15 @@ export function Summary({ state, trackKey }: { state: DashboardState; trackKey: 
         <span className="unit">km/h</span>
         {trap && <span className="t2">{trap.driver ?? trapRig?.name}</span>}
       </div>
+      {state.queue.length > 0 && (
+        <div className="summary__group">
+          <span className="label">Next up</span>
+          {state.queue.slice(0, 3).map((q, i) => (
+            <span key={q.id} className="summary__next"><span className="t2">{i + 1}</span> {q.name}</span>
+          ))}
+          {state.queue.length > 3 && <span className="t3">+{state.queue.length - 3}</span>}
+        </div>
+      )}
       <Conditions frame={onTrack[0]} />
     </footer>
   );

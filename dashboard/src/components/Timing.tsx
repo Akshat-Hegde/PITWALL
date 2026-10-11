@@ -161,8 +161,19 @@ function Position({ position }: { position: number | null }) {
   return <span className="pos">{position ?? "–"}</span>;
 }
 
+/** "8 min left" from a staff booking; null without a timer. */
+export function timeLeft(frame: RigFrame | undefined, now = Date.now()): { text: string; low: boolean } | null {
+  const ends = frame?.booking?.ends_at;
+  if (ends == null) return null;
+  const ms = ends - now;
+  if (ms <= 0) return { text: "Time up", low: true };
+  const min = Math.ceil(ms / 60_000);
+  return { text: min <= 1 ? "Last minute" : `${min} min left`, low: ms <= 5 * 60_000 };
+}
+
 export function DriverName({ rig, frame, sub = true }: { rig: RigInfo; frame: RigFrame | undefined; sub?: boolean }) {
   const pb = frame?.personal_best && frame.state !== "no_data" ? frame.personal_best.lap_ms : null;
+  const left = timeLeft(frame);
   return (
     <span className="who">
       <span className="stripe" aria-hidden="true" />
@@ -171,6 +182,7 @@ export function DriverName({ rig, frame, sub = true }: { rig: RigInfo; frame: Ri
         {sub && (
           <span className="who__sub">
             {rig.name}
+            {left && <span className={left.low ? "time-left is-low" : "time-left"}> · {left.text}</span>}
             {pb != null && <span> · PB {formatLapTime(pb)}</span>}
           </span>
         )}

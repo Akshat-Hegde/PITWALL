@@ -263,6 +263,14 @@ export function validateMessage(msg: unknown): string[] {
       case "leaderboard":
         leaderboard(c, m.leaderboard, `${p}.leaderboard`);
         break;
+      case "queue":
+        c.array(m.queue, `${p}.queue`, (e, ep) =>
+          c.object(e, ep, (eo) => {
+            c.field(eo, "id", isInt, ep);
+            c.field(eo, "name", isStr, ep);
+          }),
+        );
+        break;
       case "moment":
         c.object(m.moment, `${p}.moment`, (mo) => {
           c.field(mo, "kind", isStr, `${p}.moment`);

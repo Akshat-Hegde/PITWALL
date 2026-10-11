@@ -3,137 +3,234 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Driver names</title>
+<meta name="theme-color" content="#0c0d11">
+<title>Staff</title>
 <style>
   :root {
-    --surface-0: #18232d;
-    --surface-1: #202e3a;
-    --surface-2: #283a49;
-    --rule: #33475a;
-    --text: #eef3f6;
-    --text-muted: #8fa3b3;
-    --accent: #36c5f0;
-    --ok: #3ddc84;
+    --bg: #0c0d11;
+    --panel: #14151b;
+    --panel-2: #1b1c24;
+    --edge: #262731;
+    --line: rgba(255, 255, 255, 0.08);
+    --text: #fff;
+    --text-2: rgba(255, 255, 255, 0.6);
+    --text-3: rgba(255, 255, 255, 0.38);
+    --accent: #e10600;
+    --ok: #38d97a;
+    --warn: #f2c230;
     --error: #ff6b6b;
-    --radius: 8px;
     color-scheme: dark;
   }
   * { box-sizing: border-box; }
   body {
     margin: 0;
-    background: var(--surface-0);
+    background: var(--bg);
     color: var(--text);
-    font: 16px/1.4 "Segoe UI", system-ui, sans-serif;
+    font: 16px/1.4 "Saira", "Segoe UI", system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
   }
-  main { max-width: 640px; margin: 0 auto; padding: 16px; }
-  h1 { font-size: 1.5rem; margin: 8px 0 4px; }
-  .intro { color: var(--text-muted); margin: 0 0 16px; }
-  .rig {
-    background: var(--surface-1);
-    border-radius: var(--radius);
-    border-left: 6px solid var(--rig-colour, var(--rule));
-    padding: 14px 16px;
-    margin-bottom: 14px;
+  header.top {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
   }
-  .rig__head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
-  .rig__name { font-size: 1.2rem; font-weight: 600; }
-  .rig__state { color: var(--text-muted); font-size: 0.9rem; }
-  .rig__now { margin: 6px 0 12px; }
-  .rig__now strong { font-size: 1.1rem; }
-  .rig__source { color: var(--text-muted); font-size: 0.9rem; }
-  label { display: block; font-size: 0.9rem; color: var(--text-muted); margin: 10px 0 4px; }
-  input {
-    min-width: 0;
-    width: 100%;
-    font: inherit;
-    color: var(--text);
-    background: var(--surface-2);
-    border: 1px solid var(--rule);
-    border-radius: 6px;
-    padding: 10px 12px;
-  }
-  input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .optional { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 12px; }
-  .actions { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
-  button {
-    font: inherit;
-    font-weight: 600;
-    border-radius: 6px;
-    padding: 10px 16px;
+  .kerb { height: 4px; background: repeating-linear-gradient(90deg, var(--accent) 0 18px, #fff 18px 36px); }
+  .bar { display: flex; align-items: center; gap: 12px; max-width: 720px; margin: 0 auto; padding: 10px 16px; }
+  .brand { flex: 1; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+  .brand::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 8px; background: var(--accent); }
+  nav.tabs { display: flex; max-width: 720px; margin: 0 auto; padding: 0 16px; gap: 4px; }
+  nav.tabs button {
+    flex: 1;
+    padding: 10px 4px;
     border: 0;
+    border-bottom: 3px solid transparent;
+    background: none;
+    color: var(--text-2);
+    font: inherit;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 0.85rem;
     cursor: pointer;
   }
-  button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
-  .primary { background: var(--accent); color: #0b1a24; }
-  .secondary { background: transparent; color: var(--text); border: 1px solid var(--rule); }
-  button:disabled { opacity: 0.5; cursor: default; }
-  .msg { margin: 10px 0 0; font-size: 0.95rem; min-height: 1.4em; }
+  nav.tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
+  .badge { display: inline-block; min-width: 1.4em; margin-left: 4px; padding: 0 5px; background: var(--accent); color: #fff; font-size: 0.75rem; }
+  main { max-width: 720px; margin: 0 auto; padding: 16px; }
+  .panel {
+    position: relative;
+    background: var(--panel);
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    border-left: 4px solid var(--rig-colour, var(--edge));
+    clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%);
+  }
+  .row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .title { font-size: 1.2rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.02em; }
+  .muted { color: var(--text-2); font-size: 0.9rem; }
+  .faint { color: var(--text-3); font-size: 0.85rem; }
+  .driver { font-size: 1.15rem; font-weight: 700; }
+  .timer { font-size: 1.6rem; font-weight: 800; }
+  .timer.is-low { color: var(--warn); }
+  .timer.is-over { color: var(--error); }
+  .extend {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin-top: 10px; padding: 10px 12px; background: rgba(242, 194, 48, 0.12); border-left: 3px solid var(--warn);
+  }
+  .extend strong { flex: 1; }
+  label { display: block; font-size: 0.85rem; color: var(--text-2); margin: 10px 0 4px; letter-spacing: 0.04em; }
+  input, select {
+    width: 100%; min-width: 0; padding: 11px 12px; font: inherit; color: var(--text);
+    background: var(--panel-2); border: 1px solid var(--edge); border-radius: 0;
+  }
+  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0; }
+  .grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 10px; }
+  .check { display: flex; gap: 10px; align-items: flex-start; margin: 12px 0 0; color: var(--text); font-size: 0.95rem; }
+  .check input { width: 22px; height: 22px; flex: none; margin: 1px 0 0; }
+  .actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  button.btn {
+    padding: 11px 16px; border: 1px solid var(--edge); background: var(--panel-2); color: var(--text);
+    font: inherit; font-weight: 700; cursor: pointer;
+  }
+  button.btn.primary { background: var(--accent); border-color: var(--accent); }
+  button.btn.danger { color: var(--error); border-color: rgba(255, 107, 107, 0.4); background: none; }
+  button.btn.small { padding: 7px 12px; font-size: 0.9rem; }
+  button:disabled { opacity: 0.45; cursor: default; }
+  .msg { margin: 8px 0 0; min-height: 1.3em; font-size: 0.92rem; }
   .msg.ok { color: var(--ok); }
   .msg.error { color: var(--error); }
-  .pin { background: var(--surface-1); border-radius: var(--radius); padding: 16px; }
-  .empty { color: var(--text-muted); }
-  @media (max-width: 420px) { .optional { grid-template-columns: 1fr; } }
+  ul.list { list-style: none; margin: 8px 0 0; padding: 0; }
+  ul.list li { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  ul.list li .grow { flex: 1; min-width: 0; }
+  .pos { width: 1.6em; color: var(--text-2); font-weight: 800; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chips button { padding: 6px 10px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 0.95rem; }
+  th { text-align: left; color: var(--text-3); font-weight: 600; font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; padding: 6px 0; }
+  td { padding: 7px 0; border-top: 1px solid var(--line); }
+  td.r, th.r { text-align: right; }
+  .faster { color: var(--ok); }
+  .slower { color: var(--warn); }
+  [hidden] { display: none !important; }
+  @media (max-width: 440px) { .grid2 { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
-<main>
-  <h1>Driver names</h1>
-  <p class="intro" id="intro">Set who is driving each rig. Laps are saved under this name and shown on the TV.</p>
+<header class="top">
+  <div class="kerb"></div>
+  <div class="bar">
+    <span class="brand" id="cafe">Staff</span>
+    <button class="btn small" type="button" id="podium-btn">Show podium</button>
+  </div>
+  <nav class="tabs" role="tablist">
+    <button type="button" role="tab" data-tab="rigs" aria-selected="true">Rigs</button>
+    <button type="button" role="tab" data-tab="queue" aria-selected="false">Queue <span class="badge" id="queue-count" hidden></span></button>
+    <button type="button" role="tab" data-tab="drivers" aria-selected="false">Drivers</button>
+  </nav>
+</header>
 
-  <form class="pin" id="pin-form" hidden>
-    <label for="pin">Staff PIN</label>
+<main>
+  <form class="panel" id="pin-form" hidden>
+    <div class="title">Staff PIN</div>
+    <label for="pin">Enter the PIN to manage rigs and drivers</label>
     <input id="pin" type="password" inputmode="numeric" autocomplete="off">
-    <div class="actions"><button class="primary" type="submit">Unlock</button></div>
+    <div class="actions"><button class="btn primary" type="submit">Unlock</button></div>
     <p class="msg error" id="pin-msg" role="alert"></p>
   </form>
+  <p class="msg" id="top-msg" role="status"></p>
 
-  <div id="rigs"></div>
-  <section class="rig" id="tv-tools">
-    <div class="rig__head"><span class="rig__name">TV</span></div>
-    <div class="actions"><button type="button" id="podium-btn">Show podium</button></div>
-    <p class="msg" id="podium-msg" role="status"></p>
+  <section id="tab-rigs" role="tabpanel"><div id="rigs"></div></section>
+
+  <section id="tab-queue" role="tabpanel" hidden>
+    <form class="panel" id="queue-form">
+      <div class="title">Add to the queue</div>
+      <label for="queue-name">Name</label>
+      <input id="queue-name" maxlength="32" autocomplete="off" placeholder="Walk-in name">
+      <div class="actions"><button class="btn primary" type="submit">Add</button></div>
+      <p class="faint">Drivers with a profile: add them from the Drivers tab.</p>
+      <p class="msg" id="queue-msg" role="status"></p>
+    </form>
+    <div class="panel"><div class="title">Waiting</div><ul class="list" id="queue"></ul></div>
   </section>
-  <p class="msg error" id="page-msg" role="alert"></p>
+
+  <section id="tab-drivers" role="tabpanel" hidden>
+    <form class="panel" id="search-form">
+      <div class="title">Find a driver</div>
+      <label for="search">Phone number (the last 4 digits are enough)</label>
+      <input id="search" inputmode="tel" autocomplete="off">
+      <div class="actions"><button class="btn primary" type="submit">Search</button></div>
+      <ul class="list" id="results"></ul>
+      <p class="msg" id="search-msg" role="status"></p>
+    </form>
+    <div class="panel" id="profile" hidden></div>
+    <form class="panel" id="create-form">
+      <div class="title">New driver profile</div>
+      <div class="grid2">
+        <div><label for="new-name">Name</label><input id="new-name" maxlength="32" autocomplete="off"></div>
+        <div><label for="new-phone">Phone</label><input id="new-phone" inputmode="tel" autocomplete="off"></div>
+      </div>
+      <label class="check"><input type="checkbox" id="new-consent">
+        <span>The driver agrees that we store their name, phone number, visits and lap times to show their
+          progress. They can ask us to delete it at any time.</span></label>
+      <div class="actions"><button class="btn primary" type="submit">Create profile</button></div>
+      <p class="msg" id="create-msg" role="status"></p>
+    </form>
+  </section>
 </main>
 
 <template id="rig-template">
-  <section class="rig">
-    <div class="rig__head">
-      <span class="rig__name"></span>
-      <span class="rig__state"></span>
-    </div>
-    <p class="rig__now">Laps saved as <strong class="rig__driver"></strong> <span class="rig__source"></span></p>
-    <form class="rig__form" novalidate>
-      <label>Driver's name</label>
-      <input name="name" maxlength="32" autocomplete="off" required>
-      <div class="optional">
-        <div><label>Phone (optional)</label><input name="phone" type="tel" maxlength="20" autocomplete="off"></div>
-        <div><label>Email (optional)</label><input name="email" type="email" maxlength="100" autocomplete="off"></div>
+  <section class="panel rig">
+    <div class="row"><span class="title rig__name"></span><span class="muted rig__state"></span></div>
+    <div class="rig__session" hidden>
+      <div class="row" style="margin-top:8px">
+        <div><div class="faint">Now driving</div><div class="driver rig__driver"></div></div>
+        <div style="text-align:right"><div class="faint rig__timer-label">Time left</div><div class="timer rig__timer"></div></div>
+      </div>
+      <div class="extend rig__extend" hidden>
+        <strong>5 minutes left. Extend?</strong>
+        <button class="btn small" type="button" data-extend="5">+5 min</button>
+        <button class="btn small" type="button" data-extend="10">+10 min</button>
       </div>
       <div class="actions">
-        <button class="primary" type="submit">Save driver</button>
-        <button class="secondary end" type="button">End session</button>
+        <button class="btn small" type="button" data-extend="5">+5 min</button>
+        <button class="btn small" type="button" data-extend="15">+15 min</button>
+        <button class="btn danger small rig__end" type="button">End session</button>
       </div>
-      <p class="msg" role="status"></p>
+    </div>
+    <form class="rig__start">
+      <p class="faint rig__stored"></p>
+      <div class="rig__next" hidden>
+        <label>Next in the queue</label>
+        <div class="chips rig__queue"></div>
+      </div>
+      <div class="grid2">
+        <div><label>Walk-in name</label><input class="rig__name-input" maxlength="32" autocomplete="off"></div>
+        <div><label>Session time</label>
+          <select class="rig__minutes">
+            <option value="">No timer</option>
+            <option value="10">10 min</option><option value="15">15 min</option>
+            <option value="20" selected>20 min</option><option value="30">30 min</option>
+            <option value="45">45 min</option><option value="60">60 min</option>
+          </select></div>
+      </div>
+      <div class="actions"><button class="btn primary" type="submit">Start session</button></div>
     </form>
+    <p class="msg rig__msg" role="status"></p>
   </section>
 </template>
 
 <script>
 (() => {
   const PIN_KEY = "simtelemetry-staff-pin";
-  const rigsEl = document.getElementById("rigs");
-  const pinForm = document.getElementById("pin-form");
-  const pageMsg = document.getElementById("page-msg");
-  const cards = new Map();
+  const $ = (id) => document.getElementById(id);
+  const pinForm = $("pin-form");
+  let state = { rigs: [], queue: [] };
   let refreshTimer = null;
+  let selectedDriver = null; // profile chosen on the Drivers tab, to start or queue
 
-  function storedPin() {
-    try { return sessionStorage.getItem(PIN_KEY) || ""; } catch { return ""; }
-  }
-  function storePin(pin) {
-    try { sessionStorage.setItem(PIN_KEY, pin); } catch { /* private mode: ask again next time */ }
-  }
+  function storedPin() { try { return sessionStorage.getItem(PIN_KEY) || ""; } catch { return ""; } }
+  function storePin(pin) { try { sessionStorage.setItem(PIN_KEY, pin); } catch { /* private mode */ } }
 
   async function api(method, path, body) {
     const headers = { "X-Staff-Pin": storedPin() };
@@ -141,137 +238,265 @@
     const res = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined });
     let data = null;
     try { data = await res.json(); } catch { /* empty body */ }
-    if (res.status === 401 || res.status === 429) {
-      showPin(data && data.detail);
-      throw new Error("locked");
-    }
+    if (res.status === 401 || res.status === 429) { showPin(data && data.detail); throw new Error("locked"); }
     if (!res.ok) throw new Error((data && data.detail) || `The hub answered ${res.status}.`);
     return data;
   }
 
-  document.getElementById("podium-btn").addEventListener("click", async () => {
-    const msg = document.getElementById("podium-msg");
-    msg.classList.remove("error");
-    try {
-      await api("POST", "/api/staff/podium");
-      msg.textContent = "The TV is showing today's podium.";
-    } catch (err) {
-      if (err.message === "locked") return;
-      msg.classList.add("error");
-      msg.textContent = err.message;
-    }
-  });
+  function say(el, text, kind) { el.textContent = text || ""; el.className = "msg" + (kind ? " " + kind : ""); }
+  function fail(el, err) { if (err.message !== "locked") say(el, err.message, "error"); }
 
   function showPin(message) {
     pinForm.hidden = false;
-    rigsEl.hidden = true;
-    document.getElementById("pin-msg").textContent = message || "";
-    document.getElementById("pin").focus();
+    document.querySelectorAll("[role=tabpanel]").forEach((p) => (p.hidden = true));
+    $("pin-msg").textContent = message || "";
+    $("pin").focus();
   }
-
   pinForm.addEventListener("submit", (e) => {
     e.preventDefault();
-    storePin(document.getElementById("pin").value);
+    storePin($("pin").value);
+    pinForm.hidden = true;
+    showTab(currentTab);
     load();
   });
 
-  function sourceText(rig) {
-    if (rig.assigned) return "(set here)";
-    if (rig.game_driver) return "(name from the game)";
-    return "(no name yet: rig name)";
+  // --- tabs ----------------------------------------------------------------------------------
+  let currentTab = "rigs";
+  function showTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll("nav.tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === tab)));
+    document.querySelectorAll("[role=tabpanel]").forEach((p) => (p.hidden = p.id !== "tab-" + tab));
   }
+  document.querySelectorAll("nav.tabs button").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
+  if (["rigs", "queue", "drivers"].includes(location.hash.slice(1))) showTab(location.hash.slice(1)); // e.g. /staff#queue
 
-  function render(rig) {
-    let card = cards.get(rig.rig_id);
-    if (!card) {
-      card = document.getElementById("rig-template").content.firstElementChild.cloneNode(true);
-      const form = card.querySelector("form");
-      form.addEventListener("submit", (e) => { e.preventDefault(); save(rig.rig_id, card); });
-      card.querySelector(".end").addEventListener("click", () => endSession(rig.rig_id, card));
-      for (const input of form.querySelectorAll("input")) {
-        input.addEventListener("input", () => { input.dataset.dirty = "1"; });
-        input.id = `${rig.rig_id}-${input.name}`;
-        input.previousElementSibling.htmlFor = input.id;
-      }
-      cards.set(rig.rig_id, card);
-      rigsEl.append(card);
-    }
-    card.style.setProperty("--rig-colour", rig.colour);
-    card.querySelector(".rig__name").textContent = rig.rig_name;
-    card.querySelector(".rig__state").textContent =
-      rig.track_name ? `${rig.state_text}, ${rig.track_name}` : rig.state_text;
-    card.querySelector(".rig__driver").textContent = rig.laps_stored_as;
-    card.querySelector(".rig__source").textContent = sourceText(rig);
-    card.querySelector(".end").disabled = !rig.assigned;
-    // Fill the form from the hub, unless staff are typing in it.
-    for (const input of card.querySelectorAll("input")) {
-      if (input.dataset.dirty || document.activeElement === input) continue;
-      input.value = (rig.assigned && rig.assigned[input.name]) || "";
-    }
+  // --- time ----------------------------------------------------------------------------------
+  function fmtLeft(ms) {
+    const over = ms < 0;
+    const s = Math.floor(Math.abs(ms) / 1000);
+    const text = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+    return over ? "+" + text : text;
   }
-
-  function message(card, text, kind) {
-    const el = card.querySelector(".msg");
-    el.textContent = text;
-    el.className = `msg ${kind}`;
+  function fmtLap(ms) {
+    if (ms == null) return "–";
+    const m = Math.floor(ms / 60000), rest = ms % 60000;
+    return `${m}:${String(Math.floor(rest / 1000)).padStart(2, "0")}.${String(rest % 1000).padStart(3, "0")}`;
   }
+  function fmtDelta(ms) { return (ms < 0 ? "−" : "+") + (Math.abs(ms) / 1000).toFixed(3); }
 
-  function clearDirty(card) {
-    for (const input of card.querySelectorAll("input")) delete input.dataset.dirty;
-  }
-
-  async function save(rigId, card) {
-    const form = card.querySelector("form");
-    const body = Object.fromEntries(new FormData(form).entries());
-    if (!String(body.name || "").trim()) {
-      message(card, "Enter the driver's name.", "error");
-      form.elements.name.focus();
+  // --- rigs ----------------------------------------------------------------------------------
+  function renderRigs() {
+    const box = $("rigs");
+    const focused = document.activeElement && box.contains(document.activeElement);
+    if (focused) return; // don't redraw under someone typing
+    box.textContent = "";
+    if (!state.rigs.length) {
+      box.innerHTML = '<p class="muted">No rigs yet. Each rig appears as soon as its game sends telemetry.</p>';
       return;
     }
-    try {
-      const rig = await api("PUT", `/api/staff/rigs/${encodeURIComponent(rigId)}/driver`, body);
-      clearDirty(card);
-      render(rig);
-      message(card, `Saved. New laps on ${rig.rig_name} are saved as ${rig.laps_stored_as}.`, "ok");
-    } catch (err) {
-      if (err.message !== "locked") message(card, err.message, "error");
-    }
+    for (const rig of state.rigs) box.appendChild(rigCard(rig));
   }
 
-  async function endSession(rigId, card) {
-    try {
-      const rig = await api("DELETE", `/api/staff/rigs/${encodeURIComponent(rigId)}/driver`);
-      clearDirty(card);
-      render(rig);
-      message(card, `Session ended. New laps on ${rig.rig_name} are saved as ${rig.laps_stored_as}.`, "ok");
-    } catch (err) {
-      if (err.message !== "locked") message(card, err.message, "error");
-    }
-  }
-
-  async function load() {
-    try {
-      const data = await api("GET", "/api/staff/rigs");
-      pinForm.hidden = true;
-      rigsEl.hidden = false;
-      pageMsg.textContent = "";
-      if (data.cafe) document.title = `Driver names: ${data.cafe}`;
-      if (data.rigs.length === 0) {
-        rigsEl.innerHTML = '<p class="empty">No rigs yet. Rigs appear here once they send telemetry.</p>';
+  function rigCard(rig) {
+    const el = $("rig-template").content.firstElementChild.cloneNode(true);
+    el.style.setProperty("--rig-colour", rig.colour);
+    el.querySelector(".rig__name").textContent = rig.rig_name;
+    el.querySelector(".rig__state").textContent = rig.state_text + (rig.track_name ? " · " + rig.track_name : "");
+    const msg = el.querySelector(".rig__msg");
+    const s = rig.session;
+    el.querySelector(".rig__session").hidden = !s;
+    el.querySelector(".rig__start").hidden = !!s;
+    if (s) {
+      el.querySelector(".rig__driver").textContent = s.name + (s.driver_id ? "  ★" : "");
+      const timer = el.querySelector(".rig__timer");
+      if (rig.time_left_ms == null) {
+        timer.textContent = "No timer";
+        el.querySelector(".rig__timer-label").textContent = "";
       } else {
-        rigsEl.querySelector(".empty")?.remove();
-        data.rigs.forEach(render);
+        timer.textContent = fmtLeft(rig.time_left_ms);
+        timer.classList.toggle("is-low", rig.time_left_ms <= 5 * 60000 && rig.time_left_ms >= 0);
+        timer.classList.toggle("is-over", rig.time_left_ms < 0);
+        el.querySelector(".rig__timer-label").textContent = rig.time_left_ms < 0 ? "Over time" : "Time left";
       }
-      clearTimeout(refreshTimer);
-      refreshTimer = setTimeout(load, 5000);
+      el.querySelector(".rig__extend").hidden = !rig.extend_prompt;
+      el.querySelectorAll("[data-extend]").forEach((b) => b.addEventListener("click", async () => {
+        try { await api("POST", `/api/staff/rigs/${encodeURIComponent(rig.rig_id)}/extend`, { minutes: Number(b.dataset.extend) }); await load(); }
+        catch (err) { fail(msg, err); }
+      }));
+      el.querySelector(".rig__end").addEventListener("click", async () => {
+        try { await api("DELETE", `/api/staff/rigs/${encodeURIComponent(rig.rig_id)}/driver`); await load(); }
+        catch (err) { fail(msg, err); }
+      });
+    } else {
+      el.querySelector(".rig__stored").textContent =
+        `Laps now saved as ${rig.laps_stored_as}` + (rig.game_driver ? " (name from the game)" : "");
+      const chips = el.querySelector(".rig__queue");
+      el.querySelector(".rig__next").hidden = !state.queue.length && !selectedDriver;
+      const minutes = () => el.querySelector(".rig__minutes").value || null;
+      const start = async (body) => {
+        try { await api("PUT", `/api/staff/rigs/${encodeURIComponent(rig.rig_id)}/driver`, { ...body, minutes: minutes() }); await load(); }
+        catch (err) { fail(msg, err); }
+      };
+      if (selectedDriver) {
+        const b = document.createElement("button");
+        b.type = "button"; b.className = "btn small primary"; b.textContent = "★ " + selectedDriver.name;
+        b.addEventListener("click", () => start({ driver_id: selectedDriver.id }));
+        chips.appendChild(b);
+      }
+      state.queue.slice(0, 3).forEach((q, i) => {
+        const b = document.createElement("button");
+        b.type = "button"; b.className = "btn small"; b.textContent = `${i + 1}. ${q.name}`;
+        b.addEventListener("click", () => start({ queue_id: q.id }));
+        chips.appendChild(b);
+      });
+      el.querySelector(".rig__start").addEventListener("submit", (e) => {
+        e.preventDefault();
+        start({ name: el.querySelector(".rig__name-input").value });
+      });
+    }
+    return el;
+  }
+
+  // --- queue ---------------------------------------------------------------------------------
+  function renderQueue() {
+    const list = $("queue");
+    list.textContent = "";
+    $("queue-count").hidden = !state.queue.length;
+    $("queue-count").textContent = state.queue.length;
+    if (!state.queue.length) { list.innerHTML = '<li class="muted">Nobody waiting.</li>'; return; }
+    state.queue.forEach((q, i) => {
+      const li = document.createElement("li");
+      li.innerHTML = `<span class="pos">${i + 1}</span><span class="grow"></span>`;
+      li.querySelector(".grow").textContent = q.name + (q.driver_id ? "  ★" : "");
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "btn danger small"; b.textContent = "Remove";
+      b.addEventListener("click", async () => {
+        try { await api("DELETE", `/api/staff/queue/${q.id}`); await load(); } catch (err) { fail($("queue-msg"), err); }
+      });
+      li.appendChild(b);
+      list.appendChild(li);
+    });
+  }
+  $("queue-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      await api("POST", "/api/staff/queue", { name: $("queue-name").value });
+      $("queue-name").value = "";
+      say($("queue-msg"), "Added.", "ok");
+      await load();
+    } catch (err) { fail($("queue-msg"), err); }
+  });
+
+  // --- drivers -------------------------------------------------------------------------------
+  $("search-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const results = $("results");
+    results.textContent = "";
+    try {
+      const data = await api("GET", "/api/staff/drivers?phone=" + encodeURIComponent($("search").value));
+      say($("search-msg"), data.drivers.length ? "" : "No driver with that number. Create a profile below.");
+      for (const d of data.drivers) {
+        const li = document.createElement("li");
+        li.innerHTML = '<span class="grow"><strong></strong><br><span class="faint"></span></span>';
+        li.querySelector("strong").textContent = d.name;
+        li.querySelector(".faint").textContent = "…" + d.phone.slice(-4);
+        const b = document.createElement("button");
+        b.type = "button"; b.className = "btn small primary"; b.textContent = "Open";
+        b.addEventListener("click", () => openProfile(d.id));
+        li.appendChild(b);
+        results.appendChild(li);
+      }
+    } catch (err) { fail($("search-msg"), err); }
+  });
+
+  async function openProfile(id) {
+    const box = $("profile");
+    try {
+      const p = await api("GET", `/api/staff/drivers/${id}`);
+      box.hidden = false;
+      box.innerHTML = `
+        <div class="row"><span class="title"></span><span class="faint phone"></span></div>
+        <div class="actions">
+          <button class="btn primary small" type="button" data-act="select">Use for the next free rig</button>
+          <button class="btn small" type="button" data-act="queue">Add to queue</button>
+        </div>
+        <h3 class="muted" style="margin:16px 0 0">Best laps</h3><table class="bests"></table>
+        <h3 class="muted" style="margin:16px 0 0">Improvement since the last visit</h3><table class="imp"></table>
+        <h3 class="muted" style="margin:16px 0 0">Visits</h3><table class="visits"></table>
+        <div class="actions"><button class="btn danger small" type="button" data-act="delete">Delete profile and all its data</button></div>
+        <p class="msg" role="status"></p>`;
+      box.querySelector(".title").textContent = p.name;
+      box.querySelector(".phone").textContent = p.phone + " · consent " + new Date(p.consent_at).toLocaleDateString();
+      const table = (sel, head, rows) => {
+        const t = box.querySelector(sel);
+        t.innerHTML = "<tr>" + head.map(([h, r]) => `<th class="${r ? "r" : ""}">${h}</th>`).join("") + "</tr>";
+        if (!rows.length) { t.innerHTML += `<tr><td class="faint" colspan="${head.length}">Nothing yet</td></tr>`; return; }
+        for (const cells of rows) {
+          const tr = document.createElement("tr");
+          cells.forEach(([text, cls], i) => { const td = document.createElement("td"); td.textContent = text; td.className = (head[i][1] ? "r " : "") + (cls || ""); tr.appendChild(td); });
+          t.appendChild(tr);
+        }
+      };
+      table(".bests", [["Track"], ["Best", 1], ["Laps", 1]], p.bests.map((b) => [[b.track_name || b.track_key], [fmtLap(b.lap_ms)], [String(b.laps)]]));
+      table(".imp", [["Track"], ["Last visit", 1], ["Before", 1], ["Change", 1]], p.improvement.map((r) =>
+        [[r.track_name || r.track_key], [fmtLap(r.best_ms)], [fmtLap(r.previous_best_ms)], [fmtDelta(r.delta_ms), r.delta_ms < 0 ? "faster" : "slower"]]));
+      table(".visits", [["Day"], ["Sessions", 1], ["Minutes", 1], ["Laps", 1]], p.visits.map((v) => [[v.date], [String(v.sessions)], [String(v.minutes)], [String(v.laps)]]));
+      const msg = box.querySelector(".msg");
+      box.querySelector('[data-act="select"]').addEventListener("click", () => {
+        selectedDriver = { id: p.id, name: p.name };
+        showTab("rigs");
+        renderRigs();
+        say($("top-msg"), `${p.name} selected: press ★ ${p.name} on a free rig.`, "ok");
+      });
+      box.querySelector('[data-act="queue"]').addEventListener("click", async () => {
+        try { await api("POST", "/api/staff/queue", { driver_id: p.id }); say(msg, "Added to the queue.", "ok"); await load(); }
+        catch (err) { fail(msg, err); }
+      });
+      box.querySelector('[data-act="delete"]').addEventListener("click", async () => {
+        if (!confirm(`Delete ${p.name}'s profile, phone number, visits and all their laps? This can't be undone.`)) return;
+        try {
+          const r = await api("DELETE", `/api/staff/drivers/${p.id}`);
+          box.hidden = true;
+          $("results").textContent = "";
+          if (selectedDriver && selectedDriver.id === p.id) selectedDriver = null;
+          say($("search-msg"), `Deleted: profile, ${r.sessions} sessions and ${r.laps} laps.`, "ok");
+          await load();
+        } catch (err) { fail(msg, err); }
+      });
+    } catch (err) { fail($("search-msg"), err); }
+  }
+
+  $("create-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      const d = await api("POST", "/api/staff/drivers", { name: $("new-name").value, phone: $("new-phone").value, consent: $("new-consent").checked });
+      $("new-name").value = ""; $("new-phone").value = ""; $("new-consent").checked = false;
+      say($("create-msg"), `Profile created for ${d.name}.`, "ok");
+      openProfile(d.id);
+    } catch (err) { fail($("create-msg"), err); }
+  });
+
+  // --- podium --------------------------------------------------------------------------------
+  $("podium-btn").addEventListener("click", async () => {
+    try { await api("POST", "/api/staff/podium"); say($("top-msg"), "The TV is showing today's podium.", "ok"); }
+    catch (err) { fail($("top-msg"), err); }
+  });
+
+  // --- refresh -------------------------------------------------------------------------------
+  async function load() {
+    clearTimeout(refreshTimer);
+    try {
+      state = await api("GET", "/api/staff/rigs");
+      if (state.cafe) $("cafe").textContent = state.cafe;
+      $("podium-btn").hidden = state.features && state.features.podium === false;
+      renderRigs();
+      renderQueue();
     } catch (err) {
       if (err.message === "locked") return;
-      pageMsg.textContent = "Can't reach the hub. Retrying…";
-      clearTimeout(refreshTimer);
-      refreshTimer = setTimeout(load, 5000);
+      say($("top-msg"), "Can't reach the hub: " + err.message, "error");
     }
+    refreshTimer = setTimeout(load, 3000);
   }
-
   load();
 })();
 </script>

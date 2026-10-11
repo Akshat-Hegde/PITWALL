@@ -1,7 +1,7 @@
-"""Staff page (/staff) and its API: set or clear the current driver's name per rig.
+"""Staff page (/staff) and its API: sessions per rig (with booking timers), driver profiles, the queue.
 
-With [staff] pin set, every /api/staff call needs the header X-Staff-Pin. Repeated wrong PINs
-from one address lock that address out for a minute.
+With [staff] pin set, every /api/staff call needs the header X-Staff-Pin. Repeated wrong PINs from one
+address lock that address out for a minute.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
-from ..core.drivers import DriverError
+from ..core.drivers import EXTEND_PROMPT_MS, DriverError
 from ..core.health import RigState
 
 if TYPE_CHECKING:
@@ -52,14 +52,20 @@ class PinGuard:
             raise HTTPException(401, "Wrong PIN." if given else "Enter the staff PIN.")
 
 
+def _bad(exc: DriverError) -> HTTPException:
+    return HTTPException(400, str(exc))
+
+
 def staff_router(hub: Hub) -> APIRouter:
     router = APIRouter()
     guard = PinGuard(hub.config.staff.pin)
+    drivers = hub.drivers
 
     def rig_row(rig, now: float) -> dict[str, Any]:
         s = hub.adapter.live_summary(rig.ip)
         state = hub.health.state(rig.ip, now)
-        assigned = hub.drivers.get(rig.ip)
+        assigned = drivers.get(rig.ip)
+        left = drivers.time_left_ms(rig.ip)
         return {
             "rig_id": rig.ip,
             "rig_name": rig.name,
@@ -68,8 +74,10 @@ def staff_router(hub: Hub) -> APIRouter:
             "state_text": STATE_TEXT[state],
             "track_name": s.track if s and state is not RigState.NO_DATA else None,
             "game_driver": rig.driver_name,
-            "assigned": assigned.to_json() if assigned else None,
-            "laps_stored_as": hub.drivers.lap_name(rig.ip, rig.driver_name, rig.name),
+            "session": assigned.to_json() if assigned else None,
+            "time_left_ms": left,
+            "extend_prompt": left is not None and left <= EXTEND_PROMPT_MS,
+            "laps_stored_as": drivers.lap_name(rig.ip, rig.driver_name, rig.name),
         }
 
     def find_rig(rig_id: str):
@@ -85,23 +93,88 @@ def staff_router(hub: Hub) -> APIRouter:
     @router.get("/api/staff/rigs", dependencies=[Depends(guard)])
     def rigs() -> dict[str, Any]:
         now = time.monotonic()
-        return {"cafe": hub.config.cafe.name, "rigs": [rig_row(r, now) for r in hub.registry.all()]}
+        return {"cafe": hub.config.cafe.name, "rigs": [rig_row(r, now) for r in hub.registry.all()],
+                "queue": drivers.queue(), "features": hub.config.features.model_dump()}
+
+    # --- sessions ----------------------------------------------------------------------------
 
     @router.put("/api/staff/rigs/{rig_id}/driver", dependencies=[Depends(guard)])
-    def assign(rig_id: str, body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    def start(rig_id: str, body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+        """Start a session: {"name"} for a walk-in or {"driver_id"} for a profile, optional "minutes"."""
         rig = find_rig(rig_id)
         try:
-            hub.drivers.assign(rig.ip, body.get("name"), body.get("phone"), body.get("email"))
+            if body.get("queue_id") is not None:
+                drivers.start_from_queue(int(body["queue_id"]), rig.ip, body.get("minutes"))
+            else:
+                drivers.assign(rig.ip, body.get("name"), body.get("driver_id"), body.get("minutes"))
         except DriverError as exc:
-            raise HTTPException(400, str(exc)) from None
+            raise _bad(exc) from None
         hub.announce_driver(rig.ip)
+        return rig_row(rig, time.monotonic())
+
+    @router.post("/api/staff/rigs/{rig_id}/extend", dependencies=[Depends(guard)])
+    def extend(rig_id: str, body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+        rig = find_rig(rig_id)
+        try:
+            drivers.extend(rig.ip, body.get("minutes"))
+        except DriverError as exc:
+            raise _bad(exc) from None
         return rig_row(rig, time.monotonic())
 
     @router.delete("/api/staff/rigs/{rig_id}/driver", dependencies=[Depends(guard)])
     def end(rig_id: str) -> dict[str, Any]:
         rig = find_rig(rig_id)
-        hub.drivers.end(rig.ip)
+        drivers.end(rig.ip)
         return rig_row(rig, time.monotonic())
+
+    # --- driver profiles -----------------------------------------------------------------------
+
+    @router.get("/api/staff/drivers", dependencies=[Depends(guard)])
+    def search(phone: str = "") -> dict[str, Any]:
+        try:
+            return {"drivers": drivers.search(phone)}
+        except DriverError as exc:
+            raise _bad(exc) from None
+
+    @router.post("/api/staff/drivers", dependencies=[Depends(guard)])
+    def create(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+        try:
+            return drivers.create_profile(body.get("name"), body.get("phone"), body.get("consent"))
+        except DriverError as exc:
+            raise _bad(exc) from None
+
+    @router.get("/api/staff/drivers/{driver_id}", dependencies=[Depends(guard)])
+    def profile(driver_id: int) -> dict[str, Any]:
+        details = drivers.profile_details(driver_id, hub.config.leaderboard.day_start_hour)
+        if details is None:
+            raise HTTPException(404, "That driver profile doesn't exist.")
+        return details
+
+    @router.delete("/api/staff/drivers/{driver_id}", dependencies=[Depends(guard)])
+    def delete(driver_id: int) -> dict[str, Any]:
+        try:
+            removed = drivers.delete_profile(driver_id)
+        except DriverError as exc:
+            raise HTTPException(404, str(exc)) from None
+        hub.laps.forget_driver(driver_id)
+        return {"deleted": True, **removed}
+
+    # --- queue -------------------------------------------------------------------------------
+
+    @router.post("/api/staff/queue", dependencies=[Depends(guard)])
+    def queue_add(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+        try:
+            drivers.queue_add(body.get("name"), body.get("driver_id"))
+        except DriverError as exc:
+            raise _bad(exc) from None
+        return {"queue": drivers.queue()}
+
+    @router.delete("/api/staff/queue/{entry_id}", dependencies=[Depends(guard)])
+    def queue_remove(entry_id: int) -> dict[str, Any]:
+        drivers.queue_remove(entry_id)
+        return {"queue": drivers.queue()}
+
+    # --- TV ----------------------------------------------------------------------------------
 
     @router.post("/api/staff/podium", dependencies=[Depends(guard)])
     def podium() -> dict[str, Any]:

@@ -158,6 +158,7 @@ class LapContext:
     track_length_m: float | None = None
     sector_starts_m: tuple[float, float, float] | None = None
     pro: bool | None = None                            # all assists off right now (None: unknown)
+    driver_id: int | None = None                       # driver profile, if the session has one
 
 
 @dataclass(slots=True)
@@ -222,6 +223,7 @@ class LapRecord:
     trace: Trace | None = field(default=None, repr=False, compare=False)  # best laps keep theirs
     db_id: int | None = None                                               # row in the lap store
     lap_class: str = OPEN_CLASS                                            # "pro" or "open"
+    driver_id: int | None = None                                           # driver profile
 
     @property
     def counted(self) -> bool:
@@ -229,7 +231,7 @@ class LapRecord:
 
     @property
     def driver_key(self) -> str:
-        return driver_key(self.driver, self.rig_id)
+        return driver_key(self.driver, self.rig_id, self.driver_id)
 
     def best_schema(self) -> dict[str, Any]:
         """Schema BestLap."""
@@ -247,8 +249,10 @@ class LapRecord:
         }
 
 
-def driver_key(driver: str | None, rig_id: str) -> str:
-    """Personal bests follow the driver name; a rig without a name stands in for its driver."""
+def driver_key(driver: str | None, rig_id: str, driver_id: int | None = None) -> str:
+    """Personal bests follow the driver profile, else the name; a rig without a name stands in for its driver."""
+    if driver_id is not None:
+        return f"profile:{driver_id}"
     return f"driver:{driver.casefold()}" if driver else f"rig:{rig_id}"
 
 
@@ -271,6 +275,7 @@ class RigLaps:
     live: LiveLap | None = None
     track_key: str | None = None
     driver: str | None = None
+    driver_id: int | None = None
     session_id: str | None = None
     last_sectors: list[dict[str, Any] | None] | None = None
     best: dict[str, LapRecord] = field(default_factory=dict)  # track_key -> this rig's best counted lap
@@ -313,6 +318,7 @@ class LapBook:
         """Apply one decoded packet's worth of lap information. Returns laps completed by it."""
         rig = self.rig(rig_id)
         rig.track_key, rig.driver, rig.session_id = ctx.track_key, ctx.driver, ctx.session_id
+        rig.driver_id = ctx.driver_id
         completed = []
         for event in events:
             lap_debug.info("rig=%s %s", rig_id, describe(event))
@@ -388,6 +394,7 @@ class LapBook:
             personal_best=False, session_best=False, completed_at=round(self._clock() * 1000),
             trace=rig.traces.get(event.lap),
             lap_class=PRO_CLASS if event.lap in rig.pro_laps and event.lap not in rig.assisted_laps else OPEN_CLASS,
+            driver_id=ctx.driver_id,
         )
         broken = self._records_broken(record) if record.counted else []
         session = self._session.setdefault(record.track_key, Bests())
@@ -444,6 +451,20 @@ class LapBook:
         self._bump_board(match.track_key)
         lap_debug.info("rig=%s removed lap=%d time=%s; bests recomputed", rig_id, match.lap_number,
                        fmt_ms(match.lap_ms))
+
+    def forget_driver(self, driver_id: int) -> None:
+        """A deleted profile: drop its laps from this hub session too (the store has deleted them)."""
+        gone = [r for r in self.laps if r.driver_id == driver_id]
+        if not gone:
+            return
+        for record in gone:
+            self.laps.remove(record)
+            if record in self.recent:
+                self.recent.remove(record)
+        self._lap_version += 1
+        self._rebuild_bests()
+        for track_key in {r.track_key for r in gone}:
+            self._bump_board(track_key)
 
     def _rebuild_bests(self) -> None:
         self._session.clear()
@@ -678,7 +699,8 @@ class LapBook:
         rated = live.valid and not live.out_lap and rig.track_key is not None
         if rated:
             today = self.today_sector_bests(rig.track_key)
-            own = self.own_sector_bests(rig_id, rig.session_id, driver_key(rig.driver, rig_id), rig.track_key)
+            own = self.own_sector_bests(rig_id, rig.session_id, driver_key(rig.driver, rig_id, rig.driver_id),
+                                        rig.track_key)
         for i, ms in enumerate((live.sector1_ms, live.sector2_ms)):
             if ms is not None and live.sector > i:
                 sectors[i] = {"ms": ms, "rating": self._rate(i, ms, today, own) if rated else None}

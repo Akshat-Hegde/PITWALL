@@ -155,12 +155,20 @@ On the dashboard, check:
       and `lap_completed ... source=session_history` for that rig. Note any `lap_data_fallback` or
       `lap_retracted` lines.
 
-**Driver names (staff page).** On the dashboard device (or a phone), open `http://<hub PC IP>:8000/staff`.
+**Staff page.** On a phone, open `http://<hub PC IP>:8000/staff`.
 
-- [ ] Both rigs are listed with "Laps saved as <game name> (name from the game)".
-- [ ] Set a name for Rig 2 and **Save driver**: within a second the dashboard shows it. Driver 2's next lap
-      is saved under that name; their earlier laps keep the game name.
-- [ ] **End session**: the name goes back to the game's name, and the next lap is saved under it.
+- [ ] Both rigs are listed under **Rigs** with "Laps now saved as <game name> (name from the game)".
+- [ ] Type a walk-in name for Rig 2, choose **10 min**, **Start session**: the TV shows **Now driving**, then
+      "10 min left" under the name. Driver 2's next lap is saved under that name; earlier laps keep the game
+      name.
+- [ ] **Queue** tab: add two names. The TV's bottom strip shows them as **Next up**.
+- [ ] **Drivers** tab: create a profile with your own phone number. Without ticking the consent box you get
+      an error; with it the profile is created. Search for it by the last 4 digits.
+- [ ] On the profile, **Use for the next free rig**, then on **Rigs** press the ★ name on Rig 1 with
+      **5 min**: the rig card shows "5 minutes left. Extend?"; **+5 min** makes it 10.
+- [ ] Drive a lap, then open the profile again: the visit and the best lap are listed.
+- [ ] **End session** on both rigs: the names go back to the game's names.
+- [ ] At the end of the test: **Delete profile** on your test profile; its laps disappear from the boards.
 - [ ] If both games use the same generic player name, laps from both rigs merge into one leaderboard entry
       until names are set on `/staff`. Note whether that happened (A14).
 

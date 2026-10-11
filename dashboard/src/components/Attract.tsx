@@ -30,6 +30,21 @@ export function RecordHolder({ state }: { state: DashboardState }) {
   );
 }
 
+/** Who's waiting for a rig (names only). */
+export function NextUp({ state, max = 5 }: { state: DashboardState; max?: number }) {
+  if (!state.queue.length) return null;
+  return (
+    <section className="nextup" aria-label="Next up">
+      <Tab left="Next up" right={String(state.queue.length)} />
+      <ol className="nextup__list">
+        {state.queue.slice(0, max).map((q, i) => (
+          <li key={q.id}><span className="nextup__pos">{i + 1}</span>{q.name}</li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
 /** Attract mode: cafe branding, today's top 10, the record holder (and the challenge, when there is one). */
 export function AttractView({ state }: { state: DashboardState }) {
   const name = state.cafe.name || "Live timing";
@@ -43,6 +58,7 @@ export function AttractView({ state }: { state: DashboardState }) {
           <h1 className="attract__name">{name}</h1>
           <p className="attract__tag">Grab a seat. Set a lap. Beat the board.</p>
         </div>
+        <NextUp state={state} max={3} />
         <RecordHolder state={state} />
       </section>
       <LeaderboardPanel title="Today" leaderboard={state.leaderboards.today ?? null} rigs={state.rigs}
@@ -66,6 +82,7 @@ export function PortraitView({ state }: { state: DashboardState }) {
       <RecordHolder state={state} />
       <LeaderboardPanel title="Today" leaderboard={state.leaderboards.today ?? null} rigs={state.rigs}
                         className="portrait__board" top />
+      <NextUp state={state} />
       <footer className="portrait__foot">
         <Tab left="On track now" right={String(anyDriving.length)} />
         <span className="t2">

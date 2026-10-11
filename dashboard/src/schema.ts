@@ -131,6 +131,21 @@ export interface RigFrame {
   /** The driver's fastest valid lap on this track ever (added in v1; older hubs don't send it). */
   personal_best?: BestLap | null;
   car?: CarDetail | null;
+  /** Added in v1 (optional): the staff session on this rig (who, and the booking end). */
+  booking?: Booking | null;
+}
+
+export interface Booking {
+  driver: string;
+  started_at: number;
+  /** Unix ms when the booked time runs out; null = no timer. */
+  ends_at: number | null;
+}
+
+/** Added in v1 (optional): someone waiting for a rig. Names only. */
+export interface QueueEntry {
+  id: number;
+  name: string;
 }
 
 export interface ComparisonEntry {
@@ -286,6 +301,8 @@ export interface SnapshotMessage extends Envelope<"snapshot"> {
   /** One board per period for the shown track; empty while no track is known. */
   leaderboards: Leaderboard[];
   recent_laps: LapRecord[];
+  /** Added in v1 (optional): the waiting queue, first first. */
+  queue?: QueueEntry[];
 }
 
 export interface FrameMessage extends Envelope<"frame"> {
@@ -322,6 +339,10 @@ export interface MomentMessage extends Envelope<"moment"> {
   moment: Moment;
 }
 
+export interface QueueMessage extends Envelope<"queue"> {
+  queue: QueueEntry[];
+}
+
 export type HubMessage =
   | SnapshotMessage
   | FrameMessage
@@ -331,7 +352,8 @@ export type HubMessage =
   | TrackOutlineMessage
   | LapCompletedMessage
   | LeaderboardMessage
-  | MomentMessage;
+  | MomentMessage
+  | QueueMessage;
 
 /** Message types this client knows; others must be ignored (schema rule). */
 export const KNOWN_TYPES: ReadonlySet<string> = new Set<HubMessage["type"]>([
@@ -344,4 +366,5 @@ export const KNOWN_TYPES: ReadonlySet<string> = new Set<HubMessage["type"]>([
   "lap_completed",
   "leaderboard",
   "moment",
+  "queue",
 ]);

@@ -122,7 +122,7 @@ async def test_driving_rig_frame(tmp_path):
                     "air_temp_c": 23, "track_temp_c": 31},
         "position": {"x": -412.6, "z": 188.2}, "speed_kph": 287, "gear": 7, "throttle": 0.75, "brake": 0.0,
         "rpm": 11240, "max_rpm": 13000, "tyre": {"compound": "soft", "label": "C3", "age_laps": 2},
-        "lap": None, "best": None, "personal_best": None,
+        "lap": None, "best": None, "personal_best": None, "booking": None,
         "car": {
             "drs_open": True, "drs_allowed": True, "rev_lights_pct": 82, "ers_pct": 75.0, "ers_mode": "hotlap",
             "fuel_kg": 12.5, "fuel_laps": 3.25, "pit_limiter": False, "steer": -0.25, "g_lat": 0.0, "g_long": 0.0,

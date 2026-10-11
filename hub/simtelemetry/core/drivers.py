@@ -1,13 +1,16 @@
-"""Driver names assigned by staff, per rig.
+"""Drivers: who is on each rig (sessions, booking timers), driver profiles and the waiting queue.
 
-Staff set the current driver's name on the /staff page (with optional phone/email, stored for
-later reports but not used yet) and end the session when the customer leaves. Each assignment
-is a "driver session" row in the lap database, so assignments survive hub restarts and the
-history stays available.
+Staff run this from the /staff page:
 
-Name used for a rig's laps, in order: the assigned name, the game's player name, the rig name.
-Laps take the name that applies when they complete; changing the name later doesn't rename
-earlier laps.
+- **Sessions.** Staff start a session on a rig for a walk-in name or a driver profile, optionally with a
+  booking time ("20 minutes"); the TV shows the time left and, at 5 minutes left, the staff page offers to
+  extend. Ending the session frees the rig. Sessions are rows in the lap database, so they survive restarts.
+- **Profiles** are keyed by phone number, which is only stored after the driver agreed (consent checkbox).
+  A profile collects the driver's visits and laps across days; staff can delete a profile and all its data.
+- **Queue:** names waiting for a rig; starting a session from the queue removes the entry.
+
+Name used for a rig's laps, in order: the session's driver, the game's player name, the rig name. Laps take
+the name that applies when they complete; changing it later doesn't rename earlier laps.
 """
 
 from __future__ import annotations
@@ -21,9 +24,9 @@ if TYPE_CHECKING:
     from .store import LapStore
 
 NAME_MAX = 32
-CONTACT_MAX = 100
-_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-_PHONE = re.compile(r"^[0-9+()\-. ]{5,20}$")
+BOOKING_MAX_MIN = 12 * 60
+EXTEND_PROMPT_MS = 5 * 60_000      # staff page offers to extend from 5 minutes left
+_PHONE = re.compile(r"^\+?[0-9]{6,15}$")
 
 
 class DriverError(ValueError):
@@ -33,12 +36,13 @@ class DriverError(ValueError):
 @dataclass(frozen=True, slots=True)
 class Assignment:
     name: str
-    phone: str | None
-    email: str | None
-    started_at: int  # Unix ms
+    started_at: int                  # Unix ms
+    driver_id: int | None = None     # profile, if the driver has one
+    ends_at: int | None = None       # booking end (Unix ms); None = no timer
 
     def to_json(self) -> dict[str, Any]:
-        return {"name": self.name, "phone": self.phone, "email": self.email, "started_at": self.started_at}
+        return {"name": self.name, "driver_id": self.driver_id, "started_at": self.started_at,
+                "ends_at": self.ends_at}
 
 
 def clean_name(value: Any) -> str:
@@ -52,50 +56,157 @@ def clean_name(value: Any) -> str:
     return name
 
 
-def clean_contact(value: Any, pattern: re.Pattern[str], what: str) -> str | None:
+def clean_phone(value: Any) -> str:
+    """Digits only, with an optional leading +: "+44 7700-900 123" -> "+447700900123"."""
     text = str(value or "").strip()
-    if not text:
+    phone = ("+" if text.startswith("+") else "") + re.sub(r"\D", "", text)
+    if not _PHONE.match(phone):
+        raise DriverError("Enter a phone number of 6 to 15 digits.")
+    return phone
+
+
+def clean_minutes(value: Any) -> int | None:
+    if value in (None, "", 0, "0"):
         return None
-    if len(text) > CONTACT_MAX or not pattern.match(text):
-        raise DriverError(f"That doesn't look like a valid {what}.")
-    return text
+    try:
+        minutes = int(value)
+    except (TypeError, ValueError):
+        raise DriverError("The session time must be a number of minutes.") from None
+    if not 1 <= minutes <= BOOKING_MAX_MIN:
+        raise DriverError(f"Session times are 1 to {BOOKING_MAX_MIN} minutes.")
+    return minutes
 
 
 class DriverRegistry:
     def __init__(self, store: LapStore | None = None, clock=time.time) -> None:
+        if store is None:
+            from .store import LapStore
+            store = LapStore(None)  # in memory: profiles and the queue still work (tests, replays)
         self._store = store
         self._clock = clock
-        self._current: dict[str, Assignment] = store.current_driver_sessions() if store is not None else {}
+        self._current: dict[str, Assignment] = store.current_driver_sessions()
 
-    def assign(self, rig_id: str, name: Any, phone: Any = None, email: Any = None) -> Assignment:
+    def _now_ms(self) -> int:
+        return round(self._clock() * 1000)
+
+    # --- sessions --------------------------------------------------------------------------
+
+    def assign(self, rig_id: str, name: Any = None, driver_id: Any = None, minutes: Any = None) -> Assignment:
+        """Start a session on a rig: a walk-in name, or a profile (driver_id), with an optional booking time."""
+        profile = None
+        if driver_id not in (None, ""):
+            profile = self.profile(int(driver_id))
+            if profile is None:
+                raise DriverError("That driver profile doesn't exist any more. Search again.")
+        booked = clean_minutes(minutes)
+        now = self._now_ms()
         assignment = Assignment(
-            name=clean_name(name),
-            phone=clean_contact(phone, _PHONE, "phone number"),
-            email=clean_contact(email, _EMAIL, "email address"),
-            started_at=round(self._clock() * 1000),
+            name=profile["name"] if profile else clean_name(name),
+            started_at=now,
+            driver_id=profile["id"] if profile else None,
+            ends_at=now + booked * 60_000 if booked else None,
         )
-        if self._store is not None:
-            self._store.start_driver_session(rig_id, assignment)
+        self._store.start_driver_session(rig_id, assignment)
         self._current[rig_id] = assignment
         return assignment
 
+    def extend(self, rig_id: str, minutes: Any) -> Assignment:
+        current = self._current.get(rig_id)
+        if current is None:
+            raise DriverError("No session on that rig.")
+        extra = clean_minutes(minutes)
+        if extra is None:
+            raise DriverError("Choose how many minutes to add.")
+        base = max(current.ends_at or self._now_ms(), self._now_ms())
+        updated = Assignment(current.name, current.started_at, current.driver_id, base + extra * 60_000)
+        self._store.set_session_end(rig_id, updated.ends_at)
+        self._current[rig_id] = updated
+        return updated
+
     def end(self, rig_id: str) -> bool:
-        """End the rig's driver session; False if there was none."""
+        """End the rig's session; False if there was none."""
         if rig_id not in self._current:
             return False
-        if self._store is not None:
-            self._store.end_driver_session(rig_id, round(self._clock() * 1000))
+        self._store.end_driver_session(rig_id, self._now_ms())
         del self._current[rig_id]
         return True
 
     def get(self, rig_id: str) -> Assignment | None:
         return self._current.get(rig_id)
 
+    def time_left_ms(self, rig_id: str) -> int | None:
+        a = self._current.get(rig_id)
+        return None if a is None or a.ends_at is None else a.ends_at - self._now_ms()
+
     def display_name(self, rig_id: str, game_name: str | None) -> str | None:
-        """Name for the TV: the assigned name, else the game's player name (None if neither)."""
+        """Name for the TV: the session's driver, else the game's player name (None if neither)."""
         assigned = self._current.get(rig_id)
         return assigned.name if assigned else game_name or None
 
     def lap_name(self, rig_id: str, game_name: str | None, rig_name: str) -> str:
-        """Name a lap is stored under: assigned name, else game player name, else rig name."""
+        """Name a lap is stored under: session driver, else game player name, else rig name."""
         return self.display_name(rig_id, game_name) or rig_name
+
+    def driver_id(self, rig_id: str) -> int | None:
+        assigned = self._current.get(rig_id)
+        return assigned.driver_id if assigned else None
+
+    # --- profiles --------------------------------------------------------------------------
+
+    def create_profile(self, name: Any, phone: Any, consent: Any) -> dict[str, Any]:
+        if consent is not True:
+            raise DriverError("Ask the driver first: their phone number is only stored with their consent.")
+        name, phone = clean_name(name), clean_phone(phone)
+        if self._store.find_driver_by_phone(phone) is not None:
+            raise DriverError("A driver with that phone number already exists. Search for it instead.")
+        now = self._now_ms()
+        return self._store.create_driver(name, phone, consent_at=now, created_at=now)
+
+    def search(self, phone: Any) -> list[dict[str, Any]]:
+        digits = re.sub(r"\D", "", str(phone or ""))
+        if len(digits) < 4:
+            raise DriverError("Type at least 4 digits of the phone number.")
+        return self._store.search_drivers(digits)
+
+    def profile(self, driver_id: int) -> dict[str, Any] | None:
+        return self._store.get_driver(driver_id)
+
+    def profile_details(self, driver_id: int, day_start_hour: int = 0) -> dict[str, Any] | None:
+        profile = self._store.get_driver(driver_id)
+        if profile is None:
+            return None
+        return {**profile, "visits": self._store.driver_visits(driver_id, day_start_hour),
+                "bests": self._store.driver_track_bests(driver_id),
+                "improvement": self._store.driver_improvement(driver_id, day_start_hour)}
+
+    def delete_profile(self, driver_id: int) -> dict[str, int]:
+        """Delete a profile and everything stored for it (laps, sessions, queue entries)."""
+        if self._store.get_driver(driver_id) is None:
+            raise DriverError("That driver profile doesn't exist.")
+        for rig_id in [r for r, a in self._current.items() if a.driver_id == driver_id]:
+            self.end(rig_id)
+        return self._store.delete_driver(driver_id)
+
+    # --- queue -----------------------------------------------------------------------------
+
+    def queue(self) -> list[dict[str, Any]]:
+        return self._store.queue()
+
+    def queue_add(self, name: Any = None, driver_id: Any = None) -> dict[str, Any]:
+        if driver_id not in (None, ""):
+            profile = self.profile(int(driver_id))
+            if profile is None:
+                raise DriverError("That driver profile doesn't exist any more.")
+            return self._store.queue_add(profile["name"], profile["id"], self._now_ms())
+        return self._store.queue_add(clean_name(name), None, self._now_ms())
+
+    def queue_remove(self, entry_id: int) -> bool:
+        return self._store.queue_remove(entry_id)
+
+    def start_from_queue(self, entry_id: int, rig_id: str, minutes: Any = None) -> Assignment:
+        entry = next((e for e in self.queue() if e["id"] == entry_id), None)
+        if entry is None:
+            raise DriverError("That queue entry is gone. Reload the page.")
+        assignment = self.assign(rig_id, entry["name"], entry["driver_id"], minutes)
+        self.queue_remove(entry_id)
+        return assignment

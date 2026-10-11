@@ -57,6 +57,19 @@ CREATE TABLE IF NOT EXISTS driver_sessions (
     ended_at   INTEGER
 );
 CREATE INDEX IF NOT EXISTS driver_sessions_open ON driver_sessions (rig_id, ended_at);
+CREATE TABLE IF NOT EXISTS drivers (
+    id         INTEGER PRIMARY KEY,
+    name       TEXT NOT NULL,
+    phone      TEXT NOT NULL UNIQUE,
+    consent_at INTEGER NOT NULL,
+    created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS queue (
+    id        INTEGER PRIMARY KEY,
+    name      TEXT NOT NULL,
+    driver_id INTEGER,
+    added_at  INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS outlines (
     track_key  TEXT PRIMARY KEY,
     outline    TEXT NOT NULL,
@@ -95,9 +108,13 @@ class LapStore:
         with self._lock, self._db:
             self._db.execute("PRAGMA journal_mode=WAL")
             self._db.executescript(_SCHEMA)
-            columns = {row[1] for row in self._db.execute("PRAGMA table_info(laps)")}
-            if "lap_class" not in columns:  # databases from before Pro / Open: those laps count as Open
-                self._db.execute("ALTER TABLE laps ADD COLUMN lap_class TEXT")
+            # Columns added after the first release; older databases get them here.
+            for table, column in (("laps", "lap_class TEXT"), ("laps", "driver_id INTEGER"),
+                                  ("driver_sessions", "driver_id INTEGER"), ("driver_sessions", "ends_at INTEGER")):
+                existing = {row[1] for row in self._db.execute(f"PRAGMA table_info({table})")}
+                if column.split()[0] not in existing:
+                    self._db.execute(f"ALTER TABLE {table} ADD COLUMN {column}")
+            self._db.execute("CREATE INDEX IF NOT EXISTS laps_driver ON laps (driver_id)")
         log.info("Lap database: %s (%d laps)", path or "in memory, not saved", self.count())
 
     def close(self) -> None:
@@ -115,11 +132,11 @@ class LapStore:
         with self._lock, self._db:
             cur = self._db.execute(
                 "INSERT INTO laps (rig_id, rig_name, driver, driver_key, track_key, track_name, session_id,"
-                " lap_number, lap_ms, s1_ms, s2_ms, s3_ms, valid, out_lap, tyre, completed_at, lap_class)"
-                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                " lap_number, lap_ms, s1_ms, s2_ms, s3_ms, valid, out_lap, tyre, completed_at, lap_class,"
+                " driver_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (r.rig_id, r.rig_name, r.driver, r.driver_key, r.track_key, r.track_name, r.session_id,
                  r.lap_number, r.lap_ms, s1, s2, s3, int(r.valid), int(r.out_lap),
-                 json.dumps(r.tyre) if r.tyre else None, r.completed_at, r.lap_class))
+                 json.dumps(r.tyre) if r.tyre else None, r.completed_at, r.lap_class, r.driver_id))
             return int(cur.lastrowid)
 
     def delete(self, lap_id: int) -> None:
@@ -169,8 +186,13 @@ class LapStore:
         with self._lock, self._db:
             self._db.execute("UPDATE driver_sessions SET ended_at = ? WHERE rig_id = ? AND ended_at IS NULL",
                              (a.started_at, rig_id))
-            self._db.execute("INSERT INTO driver_sessions (rig_id, name, phone, email, started_at)"
-                             " VALUES (?,?,?,?,?)", (rig_id, a.name, a.phone, a.email, a.started_at))
+            self._db.execute("INSERT INTO driver_sessions (rig_id, name, driver_id, started_at, ends_at)"
+                             " VALUES (?,?,?,?,?)", (rig_id, a.name, a.driver_id, a.started_at, a.ends_at))
+
+    def set_session_end(self, rig_id: str, ends_at: int | None) -> None:
+        with self._lock, self._db:
+            self._db.execute("UPDATE driver_sessions SET ends_at = ? WHERE rig_id = ? AND ended_at IS NULL",
+                             (ends_at, rig_id))
 
     def end_driver_session(self, rig_id: str, ended_at: int) -> None:
         with self._lock, self._db:
@@ -181,11 +203,110 @@ class LapStore:
         from .drivers import Assignment
         with self._lock:
             rows = self._db.execute("SELECT * FROM driver_sessions WHERE ended_at IS NULL ORDER BY id").fetchall()
-        return {r["rig_id"]: Assignment(r["name"], r["phone"], r["email"], r["started_at"]) for r in rows}
+        return {r["rig_id"]: Assignment(r["name"], r["started_at"], r["driver_id"], r["ends_at"]) for r in rows}
 
     def driver_sessions(self) -> list[dict[str, Any]]:
         with self._lock:
             return [dict(r) for r in self._db.execute("SELECT * FROM driver_sessions ORDER BY id").fetchall()]
+
+    # --- driver profiles (phone numbers only with consent) ----------------------------------
+
+    def create_driver(self, name: str, phone: str, consent_at: int, created_at: int) -> dict[str, Any]:
+        with self._lock, self._db:
+            cur = self._db.execute("INSERT INTO drivers (name, phone, consent_at, created_at) VALUES (?,?,?,?)",
+                                   (name, phone, consent_at, created_at))
+            driver_id = int(cur.lastrowid)
+        return {"id": driver_id, "name": name, "phone": phone, "consent_at": consent_at, "created_at": created_at}
+
+    def get_driver(self, driver_id: int) -> dict[str, Any] | None:
+        with self._lock:
+            row = self._db.execute("SELECT * FROM drivers WHERE id = ?", (driver_id,)).fetchone()
+        return dict(row) if row else None
+
+    def find_driver_by_phone(self, phone: str) -> dict[str, Any] | None:
+        with self._lock:
+            row = self._db.execute("SELECT * FROM drivers WHERE phone = ?", (phone,)).fetchone()
+        return dict(row) if row else None
+
+    def search_drivers(self, digits: str, limit: int = 10) -> list[dict[str, Any]]:
+        """Profiles whose phone number contains these digits (staff type the last few)."""
+        with self._lock:
+            rows = self._db.execute("SELECT * FROM drivers WHERE replace(phone, '+', '') LIKE ? ORDER BY name LIMIT ?",
+                                    (f"%{digits}%", limit)).fetchall()
+        return [dict(r) for r in rows]
+
+    def delete_driver(self, driver_id: int) -> dict[str, int]:
+        """Delete a profile with its laps, sessions and queue entries. Returns what was removed."""
+        with self._lock, self._db:
+            laps = self._db.execute("DELETE FROM laps WHERE driver_id = ?", (driver_id,)).rowcount
+            sessions = self._db.execute("DELETE FROM driver_sessions WHERE driver_id = ?", (driver_id,)).rowcount
+            self._db.execute("DELETE FROM queue WHERE driver_id = ?", (driver_id,))
+            self._db.execute("DELETE FROM drivers WHERE id = ?", (driver_id,))
+        return {"laps": laps, "sessions": sessions}
+
+    def driver_visits(self, driver_id: int, day_start_hour: int = 0) -> list[dict[str, Any]]:
+        """One entry per day the driver came in (newest first): sessions, minutes on a rig, laps."""
+        days: dict[str, dict[str, Any]] = {}
+        with self._lock:
+            sessions = self._db.execute("SELECT started_at, ended_at FROM driver_sessions WHERE driver_id = ?",
+                                        (driver_id,)).fetchall()
+            laps = self._db.execute("SELECT completed_at FROM laps WHERE driver_id = ?", (driver_id,)).fetchall()
+        for row in sessions:
+            day = _day(row["started_at"], day_start_hour)
+            entry = days.setdefault(day, {"date": day, "sessions": 0, "minutes": 0, "laps": 0})
+            entry["sessions"] += 1
+            if row["ended_at"]:
+                entry["minutes"] += round((row["ended_at"] - row["started_at"]) / 60000)
+        for row in laps:
+            day = _day(row["completed_at"], day_start_hour)
+            days.setdefault(day, {"date": day, "sessions": 0, "minutes": 0, "laps": 0})["laps"] += 1
+        return sorted(days.values(), key=lambda d: d["date"], reverse=True)
+
+    def driver_track_bests(self, driver_id: int) -> list[dict[str, Any]]:
+        """The driver's fastest counted lap per track, fastest tracks first by name."""
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT track_key, track_name, MIN(lap_ms) AS lap_ms, COUNT(*) AS laps FROM laps"
+                " WHERE driver_id = ? AND valid = 1 AND out_lap = 0 GROUP BY track_key ORDER BY track_name",
+                (driver_id,)).fetchall()
+        return [dict(r) for r in rows]
+
+    def driver_improvement(self, driver_id: int, day_start_hour: int = 0) -> list[dict[str, Any]]:
+        """Per track: best lap on the latest visit day vs the best before that day (negative = faster)."""
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT track_key, track_name, lap_ms, completed_at FROM laps"
+                " WHERE driver_id = ? AND valid = 1 AND out_lap = 0", (driver_id,)).fetchall()
+        by_track: dict[str, list] = {}
+        for r in rows:
+            by_track.setdefault(r["track_key"], []).append(r)
+        result = []
+        for track_key, laps in by_track.items():
+            latest_day = max(_day(r["completed_at"], day_start_hour) for r in laps)
+            latest = [r["lap_ms"] for r in laps if _day(r["completed_at"], day_start_hour) == latest_day]
+            before = [r["lap_ms"] for r in laps if _day(r["completed_at"], day_start_hour) < latest_day]
+            if not before:
+                continue
+            result.append({"track_key": track_key, "track_name": laps[0]["track_name"], "visit": latest_day,
+                           "best_ms": min(latest), "previous_best_ms": min(before),
+                           "delta_ms": min(latest) - min(before)})
+        return sorted(result, key=lambda r: r["delta_ms"])
+
+    # --- waiting queue -----------------------------------------------------------------------
+
+    def queue(self) -> list[dict[str, Any]]:
+        with self._lock:
+            return [dict(r) for r in self._db.execute("SELECT * FROM queue ORDER BY added_at, id").fetchall()]
+
+    def queue_add(self, name: str, driver_id: int | None, added_at: int) -> dict[str, Any]:
+        with self._lock, self._db:
+            cur = self._db.execute("INSERT INTO queue (name, driver_id, added_at) VALUES (?,?,?)",
+                                   (name, driver_id, added_at))
+        return {"id": int(cur.lastrowid), "name": name, "driver_id": driver_id, "added_at": added_at}
+
+    def queue_remove(self, entry_id: int) -> bool:
+        with self._lock, self._db:
+            return self._db.execute("DELETE FROM queue WHERE id = ?", (entry_id,)).rowcount > 0
 
     # --- outlines ---------------------------------------------------------------------------
 
@@ -198,3 +319,9 @@ class LapStore:
         with self._lock:
             rows = self._db.execute("SELECT track_key, outline FROM outlines").fetchall()
         return {row["track_key"]: json.loads(row["outline"]) for row in rows}
+
+
+def _day(ms: int, day_start_hour: int = 0) -> str:
+    """Local date (YYYY-MM-DD) of a Unix ms time, with days starting at day_start_hour."""
+    when = dt.datetime.fromtimestamp(ms / 1000) - dt.timedelta(hours=day_start_hour)
+    return when.date().isoformat()
