@@ -48,6 +48,11 @@ class Session:
     rule_set: int
     sector2_lap_distance_start: float
     sector3_lap_distance_start: float
+    # Assists (Pro / Open laps): 0 = off unless noted
+    steering_assist: int = 0
+    braking_assist: int = 0           # 0 off, 1 low, 2 medium, 3 high
+    gearbox_assist: int = 1           # 1 manual, 2 manual + suggested gear, 3 auto
+    dynamic_racing_line: int = 0      # 0 off, 1 corners only, 2 full
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,6 +146,8 @@ class CarStatus:
     drs_allowed: bool
     ers_store_energy: float
     ers_deploy_mode: int
+    traction_control: int = 0         # 0 off, 1 medium, 2 full
+    anti_lock_brakes: bool = False
 
 
 @dataclass(frozen=True, slots=True)

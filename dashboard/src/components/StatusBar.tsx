@@ -14,6 +14,7 @@ const VIEW_TEXT: [View, string][] = [
   ["board", "Leaderboard"],
   ["analysis", "Head to head"],
   ["onboard", "Onboard"],
+  ["attract", "Welcome"],
 ];
 
 interface Props {

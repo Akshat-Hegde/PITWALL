@@ -4,6 +4,9 @@ import {
   type BoardPeriod,
   SCHEMA_VERSION,
   type Comparison,
+  type Features,
+  MOMENT_KINDS,
+  type Moment,
   type HubMessage,
   type HubStatus,
   type LapRecord,
@@ -36,7 +39,18 @@ export interface DashboardState {
   leaderboards: Partial<Record<BoardPeriod, Leaderboard>>;
   recentLaps: LapRecord[];
   lastFrameAt: number | null;
+  /** Optional features from the hub config (missing = on). */
+  features: Features;
+  battleMarginMs: number;
+  sounds: { enabled: boolean; volume: number };
+  /** Broadcast moments waiting to be shown, oldest first (the store removes each once shown). */
+  moments: Moment[];
 }
+
+export const ALL_FEATURES: Features = {
+  moments: true, battles: true, podium: true, attract: true, portrait: true, head_to_head: true, onboard: true,
+};
+export const MOMENTS_MAX = 5;
 
 export const RECENT_LAPS_MAX = 20;
 
@@ -57,7 +71,16 @@ export function initialState(source: DashboardState["source"]): DashboardState {
     leaderboards: {},
     recentLaps: [],
     lastFrameAt: null,
+    features: ALL_FEATURES,
+    battleMarginMs: 300,
+    sounds: { enabled: false, volume: 0.6 },
+    moments: [],
   };
+}
+
+function momentAllowed(moment: Moment, features: Features): boolean {
+  if (!moment || !MOMENT_KINDS.has(moment.kind)) return false;
+  return moment.kind === "podium" ? features.podium : features.moments;
 }
 
 function isPeriod(period: string): period is BoardPeriod {
@@ -104,6 +127,9 @@ export function applyMessage(state: DashboardState, msg: HubMessage, now: number
         frameHz: msg.hub.frame_hz,
         telemetryTarget: { address: msg.hub.lan_address ?? null, port: msg.hub.udp_port ?? 20777 },
         steeringRotationDeg: msg.hub.steering_rotation_deg ?? 360,
+        features: { ...ALL_FEATURES, ...(msg.hub.features ?? {}) },
+        battleMarginMs: msg.hub.moments?.battle_margin_ms ?? 300,
+        sounds: msg.hub.sounds ?? { enabled: false, volume: 0.6 },
         status: msg.status,
         rigs: msg.rigs.map(soften),
         frames: framesById(msg.frame.rigs),
@@ -128,6 +154,9 @@ export function applyMessage(state: DashboardState, msg: HubMessage, now: number
       return { ...state, outlines: { ...state.outlines, [msg.outline.track_key]: msg.outline } };
     case "lap_completed":
       return { ...state, recentLaps: [msg.lap, ...state.recentLaps].slice(0, RECENT_LAPS_MAX) };
+    case "moment":
+      if (!momentAllowed(msg.moment, state.features)) return state;
+      return { ...state, moments: [...state.moments, msg.moment].slice(-MOMENTS_MAX) };
     case "leaderboard": {
       const period = msg.leaderboard.period;
       if (!isPeriod(period)) return state;

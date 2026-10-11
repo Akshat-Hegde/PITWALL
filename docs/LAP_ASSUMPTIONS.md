@@ -177,6 +177,19 @@ Write down the in-game times while driving, then compare them with the log. Tick
 - **Handled:** as stated. A retracted lap (A5, A6) is removed and bests are recomputed.
 - **Verify:** the purple/green/yellow colours on the TV match what you'd expect from your laps.
 
+### A16. Pro laps have every assist off for the whole lap
+
+- **Spec:** Session `m_steeringAssist` (0 off), `m_brakingAssist` (0 off), `m_gearboxAssist` (1 manual),
+  `m_dynamicRacingLine` (0 off); CarStatus `m_tractionControl` (0 off) and `m_antiLockBrakes` (0 off).
+- **Assumption (our rule):** a lap is **Pro** only if every frame of it that the hub saw had all six off
+  (manual gears), and the hub saw at least one. Anything else, including assists not reported yet or a lap
+  picked up halfway, is **Open**. ERS and DRS assists, the pit assists and the visual racing line in corners
+  are not checked because they don't make a lap faster in Time Trial; the dynamic racing line is checked.
+  Pro laps also count on the Open boards.
+- **Handled:** `LiveSummary.pro`; `LapBook` keeps per rig which laps were seen Pro and which assisted.
+- **Verify:** drive one lap with all assists off and one with ABS on; `--lap-debug` and the boards show the
+  first as `pro` and the second as `open`.
+
 ---
 
 ## Results from the real test
@@ -198,3 +211,4 @@ Write down the in-game times while driving, then compare them with the log. Tick
 | A13 | | |
 | A14 | | |
 | A15 | | |
+| A16 | | |

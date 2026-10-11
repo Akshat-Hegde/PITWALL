@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from ..core.feed import FeedBuilder, FeedConnection
@@ -75,6 +75,11 @@ def create_app(hub: Hub, dashboard_dir: Path | None = None) -> FastAPI:
 
     directory = dashboard_dir or hub.config.dashboard.directory or DEFAULT_DASHBOARD_DIR
     if (directory / "index.html").is_file():
+        @app.get("/portrait", include_in_schema=False)
+        def portrait() -> FileResponse:
+            """Portrait layout for vertical screens: the same dashboard, which reads the path."""
+            return FileResponse(directory / "index.html")
+
         app.mount("/", StaticFiles(directory=directory, html=True), name="dashboard")
     else:
         log.warning("Dashboard not built: no index.html in %s (run `npm run build` in dashboard/)", directory)

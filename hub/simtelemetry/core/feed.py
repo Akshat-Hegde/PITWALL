@@ -255,7 +255,10 @@ class FeedBuilder:
         return {
             "hub": {"version": __version__, "games": [self.hub.adapter.game], "frame_hz": self.frame_hz,
                     "udp_port": self.hub.config.network.udp_port, "lan_address": lan_address(),
-                    "steering_rotation_deg": self.hub.config.dashboard.steering_wheel_rotation_deg},
+                    "steering_rotation_deg": self.hub.config.dashboard.steering_wheel_rotation_deg,
+                    "features": self.hub.config.features.model_dump(),
+                    "moments": {"battle_margin_ms": self.hub.config.moments.battle_margin_ms},
+                    "sounds": self.hub.config.sounds.model_dump()},
             "cafe": {"name": cafe.name, "branding": dict(cafe.branding)},
             "status": self.status(now),
             "rigs": self.rig_infos(),

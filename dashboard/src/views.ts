@@ -1,25 +1,27 @@
 import { useEffect, useRef, useState } from "react";
 
-export type View = "race" | "board" | "analysis" | "onboard";
+export type View = "race" | "board" | "analysis" | "onboard" | "attract";
 /** What the TV is set to show: a fixed view, or "auto" (rotates while someone drives, attract mode otherwise). */
 export type ViewMode = "auto" | View;
 
 export const IDLE_AFTER_MS = 10_000; // nobody driving this long: attract mode
-export const ATTRACT_BOARD_MS = 20_000; // attract mode: leaderboard view this long...
-export const ATTRACT_RACE_MS = 10_000; // ...then race view (the track) this long...
-export const ATTRACT_ANALYSIS_MS = 10_000; // ...then head to head (if there is one), repeating
+export const ATTRACT_HERO_MS = 20_000; // attract mode: the branded attract screen this long...
+export const ATTRACT_BOARD_MS = 20_000; // ...the leaderboard view...
+export const ATTRACT_RACE_MS = 10_000; // ...the race view (the track)...
+export const ATTRACT_ANALYSIS_MS = 10_000; // ...and head to head (if there is one), repeating
 export const LIVE_RACE_MS = 40_000; // someone driving: race view this long...
 export const LIVE_ANALYSIS_MS = 15_000; // ...head to head (when two drivers have a full lap)...
 export const LIVE_ONBOARD_MS = 15_000; // ...onboard, repeating
 
-/** Views that have something to show right now. */
+/** Views that have something to show right now (and are switched on). */
 export interface Available {
   analysis: boolean;
   onboard: boolean;
+  attract?: boolean;
 }
 
-const NONE: Available = { analysis: false, onboard: false };
-const VIEWS: readonly View[] = ["race", "board", "analysis", "onboard"];
+const NONE: Available = { analysis: false, onboard: false, attract: false };
+const VIEWS: readonly View[] = ["race", "board", "analysis", "onboard", "attract"];
 
 export function viewModeFromQuery(query: URLSearchParams): ViewMode {
   const v = query.get("view") as View | null;
@@ -50,14 +52,18 @@ export function chooseView(mode: ViewMode, idleForMs: number | null, clockMs = 0
     return { view: pick(schedule, clockMs), attract: false };
   }
   if (idleForMs < IDLE_AFTER_MS) return { view: "race", attract: false };
-  const schedule: [View, number][] = [["board", ATTRACT_BOARD_MS], ["race", ATTRACT_RACE_MS]];
+  const schedule: [View, number][] = [];
+  if (available.attract) schedule.push(["attract", ATTRACT_HERO_MS]);
+  schedule.push(["board", ATTRACT_BOARD_MS], ["race", ATTRACT_RACE_MS]);
   if (available.analysis) schedule.push(["analysis", ATTRACT_ANALYSIS_MS]);
   return { view: pick(schedule, idleForMs - IDLE_AFTER_MS), attract: true };
 }
 
-const KEYS: Record<string, ViewMode> = { "1": "race", "2": "board", "3": "analysis", "4": "onboard", "0": "auto", a: "auto" };
+const KEYS: Record<string, ViewMode> = {
+  "1": "race", "2": "board", "3": "analysis", "4": "onboard", "5": "attract", "0": "auto", a: "auto",
+};
 
-/** Current view; keys 1-4 on the TV PC fix race / leaderboard / head to head / onboard, 0 goes back to auto. */
+/** Current view; keys 1-5 on the TV PC fix a view, 0 goes back to auto. */
 export function useView(initialMode: ViewMode, anyDriving: boolean, available: Available) {
   const [mode, setMode] = useState<ViewMode>(initialMode);
   const [now, setNow] = useState(() => performance.now());

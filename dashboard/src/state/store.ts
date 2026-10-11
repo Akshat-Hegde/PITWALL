@@ -76,6 +76,13 @@ export class DashboardStore {
     this.gTrail.set(rigId, trail);
   }
 
+  /** The moment at the head of the queue has been shown. */
+  shiftMoment(at: number): void {
+    if (this.state.moments[0]?.at !== at) return;
+    this.state = { ...this.state, moments: this.state.moments.slice(1) };
+    this.emit();
+  }
+
   setLink(link: LinkState): void {
     if (this.state.link === link || this.state.link === "version_mismatch") return;
     this.state = { ...this.state, link };

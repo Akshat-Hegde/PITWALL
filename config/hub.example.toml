@@ -35,6 +35,23 @@ frame_hz = 15                          # WebSocket updates per second (10-20)
 steering_wheel_rotation_deg = 360       # lock-to-lock rotation of the TV's wheel graphic
 # directory = "dashboard/dist"         # built dashboard; default <project>/dashboard/dist
 
+[features]                             # switch optional features off (future licence tiers)
+# moments = true                       # "now driving" and "record broken" full-screen moments
+# battles = true                       # battle pop-ups
+# podium = true                        # podium screen (hourly and on staff command)
+# attract = true                       # attract mode when nobody is driving
+# portrait = true                      # /portrait layout for vertical screens
+# head_to_head = true
+# onboard = true
+
+[moments]
+battle_margin_ms = 300                 # battle pop-up when two best laps are this close
+podium_every_min = 60                  # podium at the end of every N minutes on the clock; 0 = staff only
+
+[sounds]
+enabled = false                        # session start and record sounds on the TV
+volume = 0.6
+
 [staff]
 pin = ""                               # PIN for the /staff page (driver names); empty = no PIN
 

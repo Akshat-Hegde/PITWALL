@@ -63,6 +63,7 @@ Compatibility rules:
 | `session_changed` | A rig starts a new game session (e.g. new track, restart) | `{ "rig_id", "session": SessionInfo }` |
 | `track_outline` | An outline becomes available (generated or loaded) | `{ "outline": TrackOutline }` |
 | `lap_completed` | A rig finishes a lap | `{ "lap": LapRecord }` |
+| `moment` *(added in v1, optional)* | A broadcast moment: a driver starts, a record falls, the podium | `{ "moment": Moment }` |
 | `leaderboard` | A board of the shown track changes | `{ "leaderboard": Leaderboard }`: full replacement of the board for its `period`. Boards for another track replace all boards. |
 
 ### 3.1 `snapshot`
@@ -83,6 +84,12 @@ Compatibility rules:
 
 - `hub.udp_port`, `hub.lan_address` *(added in v1, optional)*: where games should send telemetry (this PC's
   network address, `null` if unknown); shown on the dashboard's waiting screen.
+- `hub.features` *(added in v1, optional)*: `[features]` from the hub config, e.g.
+  `{ "moments": true, "battles": true, "podium": true, "attract": true, "portrait": true, "head_to_head": true,
+  "onboard": true }`. A feature that is `false` is not shown. Missing keys mean on.
+- `hub.moments` *(added in v1, optional)*: `{ "battle_margin_ms": 300 }`, the gap under which two best laps
+  make a battle pop-up.
+- `hub.sounds` *(added in v1, optional)*: `{ "enabled": false, "volume": 0.6 }`.
 - `hub.steering_rotation_deg` *(added in v1, optional, default 360)*: lock-to-lock wheel rotation for the
   steering wheel graphic, from `[dashboard] steering_wheel_rotation_deg`.
 - `cafe.branding`: CSS custom properties from `[cafe.branding]` in the hub config. The dashboard applies
@@ -268,6 +275,20 @@ live lap vs your best lap at the same distance"; with more rigs, each rig is com
 | `personal_best` | bool | New best for this driver on this track. |
 | `session_best` | bool | New best of all rigs on this track. |
 | `completed_at` | int | Unix ms. |
+| `lap_class` | string | *(Added in v1, optional.)* `"pro"` (every assist off for the whole lap, docs/LAP_ASSUMPTIONS.md A16) or `"open"`. Missing means `"open"`. |
+
+### Moment *(added in v1, optional)*
+
+Something the TV shows full screen for a few seconds, then returns to the view it was on. Every moment has
+`kind` and `at` (Unix ms); clients ignore kinds they don't know.
+
+| `kind` | Fields |
+|---|---|
+| `now_driving` | `rig_id`, `rig_name`, `driver`, `track_key`, `track_name`, `today_record` (`{ "driver", "lap_ms" }` \| null), `personal_best_ms` (int \| null). Sent when staff start a session on a rig. |
+| `record` | `rig_id`, `driver`, `track_key`, `track_name`, `lap_ms`, `lap_class`, `records`: what the lap beat, most important first, each `{ "period": "all_time" \| "today", "lap_class": "pro" \| "open", "previous_ms", "previous_driver", "gap_ms" }` (`gap_ms` negative). Only sent when an existing record is beaten. |
+| `podium` | `reason` (`"hourly"`, `"scheduled"` or `"staff"`), `track_key`, `track_name`, `entries`: today's top three (LeaderboardEntry). |
+
+Pro laps count on the Open boards too; the Pro boards hold Pro laps only.
 
 ### Leaderboard
 

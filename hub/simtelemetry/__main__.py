@@ -163,7 +163,8 @@ async def run_hub(args: argparse.Namespace, hub: Hub, selection: SourceSelection
 
     if hub.recorder is not None:
         hub.recorder.start()
-    tasks = [asyncio.create_task(hub.consume()), asyncio.create_task(hub.tick_health())]
+    tasks = [asyncio.create_task(hub.consume()), asyncio.create_task(hub.tick_health()),
+             asyncio.create_task(hub.tick_podium())]
     if print_lines:
         tasks.append(asyncio.create_task(print_status_lines(hub)))
     server = server_task = None

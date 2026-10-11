@@ -83,6 +83,21 @@ class LiveSummary:
     saves: int = 0                     # slides caught this session ("SAVE!")
     last_save_at_ms: int | None = None # Unix ms
     last_save_peak_deg: float | None = None
+    # Assists, for Pro / Open laps. None until the game has reported them.
+    assists: dict[str, int] | None = None
+
+    @property
+    def pro(self) -> bool | None:
+        """True when every assist is off (a Pro lap), False when any is on, None while unknown."""
+        a = self.assists
+        if a is None or not PRO_ASSISTS.keys() <= a.keys():
+            return None
+        return all(a[k] == PRO_ASSISTS[k] for k in PRO_ASSISTS)
+
+
+# Assist settings a Pro lap needs (docs/LAP_ASSUMPTIONS.md A16): everything off, manual gears.
+PRO_ASSISTS = {"traction_control": 0, "anti_lock_brakes": 0, "steering": 0, "braking": 0, "gearbox": 1,
+               "racing_line": 0}
 
 
 class GameAdapter(Protocol):

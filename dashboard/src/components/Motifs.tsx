@@ -94,3 +94,22 @@ export function Avatar({ name, photoUrl = null, className = "" }: { name: string
     </span>
   );
 }
+
+/**
+ * Motif 6: huge wide words in rows, alternating filled and outlined, sliding sideways in opposite
+ * directions. Only for moments, view wipes and attract mode, never next to live data.
+ */
+export function KineticType({ words, rows = 3, className = "" }: { words: string[]; rows?: number; className?: string }) {
+  const line = Array.from({ length: 4 }, () => words).flat();
+  return (
+    <div className={`kinetic ${className}`} aria-hidden="true">
+      {Array.from({ length: rows }, (_, r) => (
+        <div key={r} className={`kinetic__row kinetic__row--${r % 2 ? "rev" : "fwd"}`}>
+          {line.map((w, i) => (
+            <span key={i} className={(i + r) % 2 ? "kinetic__word kinetic__word--outline" : "kinetic__word"}>{w}</span>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}

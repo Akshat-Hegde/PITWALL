@@ -43,7 +43,8 @@ CREATE TABLE IF NOT EXISTS laps (
     valid        INTEGER NOT NULL,
     out_lap      INTEGER NOT NULL,
     tyre         TEXT,
-    completed_at INTEGER NOT NULL
+    completed_at INTEGER NOT NULL,
+    lap_class    TEXT
 );
 CREATE INDEX IF NOT EXISTS laps_board ON laps (track_key, completed_at);
 CREATE TABLE IF NOT EXISTS driver_sessions (
@@ -94,6 +95,9 @@ class LapStore:
         with self._lock, self._db:
             self._db.execute("PRAGMA journal_mode=WAL")
             self._db.executescript(_SCHEMA)
+            columns = {row[1] for row in self._db.execute("PRAGMA table_info(laps)")}
+            if "lap_class" not in columns:  # databases from before Pro / Open: those laps count as Open
+                self._db.execute("ALTER TABLE laps ADD COLUMN lap_class TEXT")
         log.info("Lap database: %s (%d laps)", path or "in memory, not saved", self.count())
 
     def close(self) -> None:
@@ -111,24 +115,29 @@ class LapStore:
         with self._lock, self._db:
             cur = self._db.execute(
                 "INSERT INTO laps (rig_id, rig_name, driver, driver_key, track_key, track_name, session_id,"
-                " lap_number, lap_ms, s1_ms, s2_ms, s3_ms, valid, out_lap, tyre, completed_at)"
-                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                " lap_number, lap_ms, s1_ms, s2_ms, s3_ms, valid, out_lap, tyre, completed_at, lap_class)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (r.rig_id, r.rig_name, r.driver, r.driver_key, r.track_key, r.track_name, r.session_id,
                  r.lap_number, r.lap_ms, s1, s2, s3, int(r.valid), int(r.out_lap),
-                 json.dumps(r.tyre) if r.tyre else None, r.completed_at))
+                 json.dumps(r.tyre) if r.tyre else None, r.completed_at, r.lap_class))
             return int(cur.lastrowid)
 
     def delete(self, lap_id: int) -> None:
         with self._lock, self._db:
             self._db.execute("DELETE FROM laps WHERE id = ?", (lap_id,))
 
-    def board(self, track_key: str, since_ms: int | None, limit: int = BOARD_LIMIT) -> list[dict[str, Any]]:
-        """Best counted lap per driver on a track since a time, fastest first (ties: earliest)."""
+    def board(self, track_key: str, since_ms: int | None, limit: int = BOARD_LIMIT,
+              lap_class: str = "open") -> list[dict[str, Any]]:
+        """Best counted lap per driver on a track since a time, fastest first (ties: earliest).
+
+        lap_class "open": every lap (Pro laps count on the Open boards too); "pro": Pro laps only.
+        """
+        pro = " AND lap_class = 'pro'" if lap_class == "pro" else ""
         with self._lock:
             rows = self._db.execute(
                 "SELECT * FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY driver_key"
                 "  ORDER BY lap_ms, completed_at) AS n FROM laps"
-                "  WHERE track_key = ? AND valid = 1 AND out_lap = 0 AND completed_at >= ?)"
+                "  WHERE track_key = ? AND valid = 1 AND out_lap = 0 AND completed_at >= ?" + pro + ")"
                 " WHERE n = 1 ORDER BY lap_ms, completed_at LIMIT ?",
                 (track_key, since_ms if since_ms is not None else 0, limit)).fetchall()
         return [dict(row) for row in rows]

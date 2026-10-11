@@ -169,7 +169,67 @@ export interface LapRecord {
   personal_best: boolean;
   session_best: boolean;
   completed_at: number;
+  /** Added in v1 (optional): "pro" = every assist off for the whole lap; missing = "open". */
+  lap_class?: LapClass | string;
 }
+
+export type LapClass = "pro" | "open";
+
+/** Added in v1 (optional): switches from [features] in the hub config. Missing = on. */
+export interface Features {
+  moments: boolean;
+  battles: boolean;
+  podium: boolean;
+  attract: boolean;
+  portrait: boolean;
+  head_to_head: boolean;
+  onboard: boolean;
+}
+
+export interface RecordBroken {
+  period: "all_time" | "today" | string;
+  lap_class: LapClass | string;
+  previous_ms: number;
+  previous_driver: string | null;
+  gap_ms: number;
+}
+
+export interface NowDrivingMoment {
+  kind: "now_driving";
+  at: number;
+  rig_id: string;
+  rig_name: string;
+  driver: string;
+  track_key: string | null;
+  track_name: string | null;
+  today_record: { driver: string | null; lap_ms: number } | null;
+  personal_best_ms: number | null;
+}
+
+export interface RecordMoment {
+  kind: "record";
+  at: number;
+  rig_id: string;
+  driver: string | null;
+  track_key: string;
+  track_name: string | null;
+  lap_ms: number;
+  lap_class: LapClass | string;
+  records: RecordBroken[];
+}
+
+export interface PodiumMoment {
+  kind: "podium";
+  at: number;
+  reason: "hourly" | "scheduled" | "staff" | string;
+  track_key: string;
+  track_name: string | null;
+  entries: LeaderboardEntry[];
+}
+
+/** Added in v1 (optional): a full-screen broadcast moment. Unknown kinds are ignored. */
+export type Moment = NowDrivingMoment | RecordMoment | PodiumMoment;
+export const MOMENT_KINDS: ReadonlySet<string> = new Set(["now_driving", "record", "podium"]);
 
 export interface LeaderboardEntry {
   rank: number;
@@ -214,6 +274,9 @@ export interface SnapshotMessage extends Envelope<"snapshot"> {
     lan_address?: string | null;
     /** Lock-to-lock rotation of the steering wheel graphic. */
     steering_rotation_deg?: number;
+    features?: Partial<Features>;
+    moments?: { battle_margin_ms: number };
+    sounds?: { enabled: boolean; volume: number };
   };
   cafe: { name: string; branding: Record<string, string> };
   status: HubStatus;
@@ -255,6 +318,10 @@ export interface LeaderboardMessage extends Envelope<"leaderboard"> {
   leaderboard: Leaderboard;
 }
 
+export interface MomentMessage extends Envelope<"moment"> {
+  moment: Moment;
+}
+
 export type HubMessage =
   | SnapshotMessage
   | FrameMessage
@@ -263,7 +330,8 @@ export type HubMessage =
   | SessionChangedMessage
   | TrackOutlineMessage
   | LapCompletedMessage
-  | LeaderboardMessage;
+  | LeaderboardMessage
+  | MomentMessage;
 
 /** Message types this client knows; others must be ignored (schema rule). */
 export const KNOWN_TYPES: ReadonlySet<string> = new Set<HubMessage["type"]>([
@@ -275,4 +343,5 @@ export const KNOWN_TYPES: ReadonlySet<string> = new Set<HubMessage["type"]>([
   "track_outline",
   "lap_completed",
   "leaderboard",
+  "moment",
 ]);

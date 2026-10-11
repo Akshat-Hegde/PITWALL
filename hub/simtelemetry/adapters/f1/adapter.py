@@ -86,6 +86,9 @@ class F1Adapter:
             live.air_temp_c = packet.air_temperature
             live.track_temp_c = packet.track_temperature
             live.time_left_s = packet.session_time_left
+            live.assists = {**(live.assists or {}), "steering": packet.steering_assist,
+                            "braking": packet.braking_assist, "gearbox": packet.gearbox_assist,
+                            "racing_line": packet.dynamic_racing_line}
             if 0 < packet.sector2_lap_distance_start < packet.sector3_lap_distance_start:
                 live.sector_starts_m = (0.0, packet.sector2_lap_distance_start, packet.sector3_lap_distance_start)
         elif isinstance(packet, LapData):
@@ -120,6 +123,8 @@ class F1Adapter:
             live.fuel_kg = round(packet.fuel_in_tank, 2)
             live.fuel_laps = round(packet.fuel_remaining_laps, 2)
             live.pit_limiter = packet.pit_limiter
+            live.assists = {**(live.assists or {}), "traction_control": packet.traction_control,
+                            "anti_lock_brakes": int(packet.anti_lock_brakes)}
         elif isinstance(packet, MotionEx):
             live.slide_deg = round(math.degrees(packet.chassis_yaw), 1)
             save = self._slides.setdefault(source, SlideDetector()).update(

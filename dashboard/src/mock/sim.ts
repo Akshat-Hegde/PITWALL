@@ -10,6 +10,7 @@ import {
   type LapRecord,
   type Leaderboard,
   type LeaderboardEntry,
+  type Moment,
   type RigFrame,
   type RigInfo,
   type SectorRating,
@@ -38,6 +39,8 @@ export interface MockOptions {
   rigs: number;
   /** Every rig stays in the menu: nobody drives (attract mode). */
   idle: boolean;
+  /** Podium moment every this many ms of simulated time; 0 = never (demo mode turns it on). */
+  podiumEveryMs: number;
 }
 
 export const DEFAULT_MOCK_OPTIONS: MockOptions = {
@@ -50,6 +53,7 @@ export const DEFAULT_MOCK_OPTIONS: MockOptions = {
   rigs: 2,
   idle: false,
   frameHz: 15,
+  podiumEveryMs: 0,
 };
 
 const RIG_DRIVERS = ["Apex_Hunter", "LateBraker77", "Sofia_K", "TurboTom", "Mika H", "DRS_Daisy", "Kerb Crusher",
@@ -107,6 +111,7 @@ interface RigSim {
   saves: number;
   savedLap: number;
   lastSaveAt: number | null;
+  announced: boolean;
 }
 
 class Rng {
@@ -155,6 +160,7 @@ export class MockHub {
   private seq = 0;
   private simMs = 0;
   private sinceStatus = 0;
+  private sincePodium = 0;
   private outlineSent: boolean;
   private sessionBestSectors: [number, number, number] = [Infinity, Infinity, Infinity];
   private leaderboard: Leaderboard | null = null;
@@ -232,6 +238,7 @@ export class MockHub {
       saves: 0,
       savedLap: 0,
       lastSaveAt: null,
+      announced: false,
     };
   }
 
@@ -244,7 +251,10 @@ export class MockHub {
     return {
       ...this.envelope("snapshot"),
       hub: { version: "mock", games: ["F1"], frame_hz: this.options.frameHz, udp_port: 20777,
-             lan_address: "192.168.1.10", steering_rotation_deg: 360 },
+             lan_address: "192.168.1.10", steering_rotation_deg: 360,
+             features: { moments: true, battles: true, podium: true, attract: true, portrait: true,
+                         head_to_head: true, onboard: true },
+             moments: { battle_margin_ms: 300 }, sounds: { enabled: false, volume: 0.6 } },
       cafe: { name: "Sim Racing Cafe", branding: {} },
       status: this.status(),
       rigs: this.rigs.map((r) => r.spec.info),
@@ -260,6 +270,7 @@ export class MockHub {
     const out: HubMessage[] = [];
     this.simMs += dtMs;
     for (const rig of this.rigs) out.push(...this.advance(rig, dtMs));
+    out.push(...this.podiumDue(dtMs));
     out.push({ ...this.envelope("frame"), rigs: this.rigs.map((r) => this.frame(r)), comparison: this.comparison() });
     this.sinceStatus += dtMs;
     if (this.sinceStatus >= 1000) {
@@ -276,6 +287,10 @@ export class MockHub {
   private advance(rig: RigSim, dtMs: number): HubMessage[] {
     if (!this.driving(rig)) return [];
     const msgs: HubMessage[] = [];
+    if (!rig.announced && rig.spec.driver && rig.spec.menuUntilMs > 0) {
+      rig.announced = true; // rigs that start later get a "now driving" moment, like a staff-started session
+      msgs.push(this.moment(this.nowDriving(rig)));
+    }
     const lapAngle = (Math.max(0, rig.distance) / this.track.length) * Math.PI * 2;
     const style = 1 + 0.014 * Math.sin(lapAngle * 3 + rig.stylePhase);
     const target = sampleTrack(this.track, rig.distance).speed * rig.lapPace * style;
@@ -332,6 +347,7 @@ export class MockHub {
     const sectorsMs: [number, number, number] = [s1, s2, s3];
 
     const valid = rig.valid;
+    const recordBefore = this.leaderboard?.entries[0] ?? null;
     const personalBest = valid && (rig.best === null || lapMs < rig.best.lap_ms);
     const others = this.rigs.filter((r) => r.best).map((r) => r.best!.lap_ms);
     const sessionBest = personalBest && (others.length === 0 || lapMs < Math.min(...others));
@@ -357,6 +373,9 @@ export class MockHub {
     this.recentLaps.unshift(lap);
     this.recentLaps.splice(20);
     msgs.push({ ...this.envelope("lap_completed"), lap });
+    if (valid && recordBefore && lapMs < recordBefore.lap_ms) {
+      msgs.push(this.moment(this.recordMoment(rig, lapMs, recordBefore)));
+    }
     if (personalBest) {
       this.leaderboard = this.buildLeaderboard();
       for (const board of this.periodBoards(this.leaderboard)) {
@@ -382,6 +401,65 @@ export class MockHub {
     rig.valid = true;
     rig.invalidAtM = this.rng.next() < 0.15 ? this.rng.next() * this.track.length : null;
     return msgs;
+  }
+
+  private moment(moment: Moment): HubMessage {
+    return { ...this.envelope("moment"), moment };
+  }
+
+  private nowDriving(rig: RigSim): Moment {
+    const record = this.leaderboard?.entries[0] ?? null;
+    return {
+      kind: "now_driving", at: this.clock(), rig_id: rig.spec.info.rig_id, rig_name: rig.spec.info.name,
+      driver: rig.spec.driver ?? rig.spec.info.name, track_key: TRACK_KEY, track_name: TRACK_NAME,
+      today_record: record ? { driver: record.driver, lap_ms: record.lap_ms } : null,
+      personal_best_ms: rig.best?.lap_ms ?? null,
+    };
+  }
+
+  private recordMoment(rig: RigSim, lapMs: number, before: LeaderboardEntry): Moment {
+    const gap = lapMs - before.lap_ms;
+    const prev = { previous_ms: before.lap_ms, previous_driver: before.driver ?? before.rig_name, gap_ms: gap };
+    return {
+      kind: "record", at: this.clock(), rig_id: rig.spec.info.rig_id, driver: rig.spec.driver, track_key: TRACK_KEY,
+      track_name: TRACK_NAME, lap_ms: lapMs, lap_class: "pro",
+      records: [{ period: "all_time", lap_class: "pro", ...prev }, { period: "all_time", lap_class: "open", ...prev },
+                { period: "today", lap_class: "open", ...prev }],
+    };
+  }
+
+  private podiumMoment(): Moment | null {
+    const entries = this.leaderboard?.entries.slice(0, 3) ?? [];
+    if (!entries.length) return null;
+    return { kind: "podium", at: this.clock(), reason: "hourly", track_key: TRACK_KEY, track_name: TRACK_NAME, entries };
+  }
+
+  /** A moment right now, for demos and screenshots (?moment=now_driving|record|podium). */
+  forceMoment(kind: string): HubMessage | null {
+    const rig = this.rigs.find((r) => !r.spec.offline) ?? null;
+    if (!rig) return null;
+    if (kind === "now_driving") return this.moment(this.nowDriving(rig));
+    if (kind === "podium") {
+      const m = this.podiumMoment();
+      return m ? this.moment(m) : null;
+    }
+    if (kind === "record") {
+      const top = this.leaderboard?.entries[0];
+      const base: LeaderboardEntry = top ?? { rank: 1, rig_id: "rig-2", rig_name: "Rig 2", driver: "Maya R",
+        lap_ms: 87_671, sectors_ms: null, gap_ms: 0, tyre: null, lap_number: 3, set_at: this.clock() };
+      return this.moment(this.recordMoment(rig, base.lap_ms - 412, base));
+    }
+    return null;
+  }
+
+  /** Podium every podiumEveryMs of simulated time (demo mode). */
+  private podiumDue(dtMs: number): HubMessage[] {
+    if (!this.options.podiumEveryMs) return [];
+    this.sincePodium += dtMs;
+    if (this.sincePodium < this.options.podiumEveryMs) return [];
+    this.sincePodium = 0;
+    const m = this.podiumMoment();
+    return m ? [this.moment(m)] : [];
   }
 
   /** The mock has one session, so every period shows the same board. */
@@ -629,5 +707,6 @@ export function mockOptionsFromQuery(query: URLSearchParams): MockOptions {
     pastDrivers: Math.max(0, Math.min(40, Math.floor(Number(query.get("board") ?? 0) || 0))),
     rigs: Math.max(1, Math.min(10, Math.floor(Number(query.get("rigs") ?? 2) || 2))),
     idle: query.get("idle") === "1",
+    podiumEveryMs: Math.max(0, Number(query.get("podium") ?? 0) || 0) * 1000,
   };
 }

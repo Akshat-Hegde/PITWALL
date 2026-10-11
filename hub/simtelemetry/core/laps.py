@@ -42,6 +42,10 @@ OUTLINE_MAX_GAP_M = 120       # no bigger gap between consecutive points
 OUTLINE_MIN_POINTS = 50
 OUTLINE_STEP_M = 6            # outline point spacing
 
+PRO_CLASS = "pro"             # every assist off for the whole lap (LAP_ASSUMPTIONS A16)
+OPEN_CLASS = "open"           # anything else; the Open boards include Pro laps too
+CLASSES = (OPEN_CLASS, PRO_CLASS)
+
 SESSION_BEST = "session_best"
 PERSONAL_BEST = "personal_best"
 NORMAL = "normal"
@@ -153,6 +157,7 @@ class LapContext:
     position: tuple[float, float] | None = None       # world (x, z) of the latest Motion packet
     track_length_m: float | None = None
     sector_starts_m: tuple[float, float, float] | None = None
+    pro: bool | None = None                            # all assists off right now (None: unknown)
 
 
 @dataclass(slots=True)
@@ -216,6 +221,7 @@ class LapRecord:
     sector_ratings: tuple[str | None, str | None, str | None] = (None, None, None)
     trace: Trace | None = field(default=None, repr=False, compare=False)  # best laps keep theirs
     db_id: int | None = None                                               # row in the lap store
+    lap_class: str = OPEN_CLASS                                            # "pro" or "open"
 
     @property
     def counted(self) -> bool:
@@ -237,6 +243,7 @@ class LapRecord:
             "sectors_ms": list(self.sectors_ms) if self.sectors_ms else None, "valid": self.valid,
             "out_lap": self.out_lap, "tyre": self.tyre, "personal_best": self.personal_best,
             "session_best": self.session_best, "completed_at": self.completed_at,
+            "lap_class": self.lap_class,
         }
 
 
@@ -268,6 +275,8 @@ class RigLaps:
     last_sectors: list[dict[str, Any] | None] | None = None
     best: dict[str, LapRecord] = field(default_factory=dict)  # track_key -> this rig's best counted lap
     traces: dict[int, Trace] = field(default_factory=dict)    # lap number -> trace (current + recent)
+    pro_laps: set[int] = field(default_factory=set)           # laps seen with every assist off
+    assisted_laps: set[int] = field(default_factory=set)      # laps seen with an assist on (or unknown)
     cut_pending: bool = False                                  # flashback: cut the trace at the next update
 
 
@@ -325,6 +334,10 @@ class LapBook:
         if live is not None:
             rig.live = live
             self._trace(rig, ctx, live)
+            (rig.pro_laps if ctx.pro is True else rig.assisted_laps).add(live.number)
+            for laps in (rig.pro_laps, rig.assisted_laps):
+                for old in [n for n in laps if n < live.number - 3]:
+                    laps.discard(old)
         return completed
 
     def _trace(self, rig: RigLaps, ctx: LapContext, live: LiveLap) -> None:
@@ -342,8 +355,17 @@ class LapBook:
                 del rig.traces[old]
         trace.add(live.distance_m, live.current_ms, ctx.position[0], ctx.position[1])
 
-    def _publish(self, type_: str, body: dict[str, Any]) -> None:
+    def publish(self, type_: str, body: dict[str, Any]) -> None:
+        """Queue a message for every dashboard connection (lap_completed, track_outline, moment)."""
         self.messages.append((next(self._message_ids), type_, body))
+
+    _publish = publish
+
+    def publish_moment(self, kind: str, **body: Any) -> dict[str, Any]:
+        """A broadcast moment for the TV (docs/WS_SCHEMA.md, Moment)."""
+        moment = {"kind": kind, "at": round(self._clock() * 1000), **body}
+        self.publish("moment", {"moment": moment})
+        return moment
 
     def messages_after(self, message_id: int) -> list[tuple[int, str, dict[str, Any]]]:
         return [m for m in self.messages if m[0] > message_id]
@@ -365,7 +387,9 @@ class LapBook:
             sectors_ms=event.sectors_ms, valid=event.valid, out_lap=event.out_lap, tyre=ctx.tyre,
             personal_best=False, session_best=False, completed_at=round(self._clock() * 1000),
             trace=rig.traces.get(event.lap),
+            lap_class=PRO_CLASS if event.lap in rig.pro_laps and event.lap not in rig.assisted_laps else OPEN_CLASS,
         )
+        broken = self._records_broken(record) if record.counted else []
         session = self._session.setdefault(record.track_key, Bests())
         personal = self._personal.setdefault((record.track_key, record.driver_key), Bests())
         if record.sectors_ms:
@@ -393,6 +417,10 @@ class LapBook:
                        record.out_lap, record.counted, record.personal_best, record.session_best,
                        list(record.sector_ratings))
         self._publish("lap_completed", {"lap": record.to_schema()})
+        if broken:
+            self.publish_moment("record", rig_id=rig_id, driver=record.driver, track_key=record.track_key,
+                                track_name=record.track_name, lap_ms=record.lap_ms, lap_class=record.lap_class,
+                                records=broken)
         if record.counted:
             self._bump_board(record.track_key)
             if record.track_key not in self.outlines:
@@ -431,6 +459,27 @@ class LapBook:
             best = rig.best.get(record.track_key)
             if best is None or record.lap_ms < best.lap_ms:
                 rig.best[record.track_key] = record
+
+    # --- records -----------------------------------------------------------------------------
+
+    def record_holder(self, track_key: str, period: str, lap_class: str = OPEN_CLASS) -> dict[str, Any] | None:
+        """Top entry of a board (period "today" / "week" / "all_time", class "open" / "pro"), or None."""
+        since = self.period_starts()[period]
+        board = self.board(track_key, period, since, lap_class, limit=1)
+        return board["entries"][0] if board["entries"] else None
+
+    def _records_broken(self, record: LapRecord) -> list[dict[str, Any]]:
+        """Records this lap beats, checked before it is stored: all time first, then today; Pro, then Open."""
+        classes = [PRO_CLASS, OPEN_CLASS] if record.lap_class == PRO_CLASS else [OPEN_CLASS]
+        broken = []
+        for period in ("all_time", "today"):
+            for lap_class in classes:
+                prev = self.record_holder(record.track_key, period, lap_class)
+                if prev is not None and record.lap_ms < prev["lap_ms"]:
+                    broken.append({"period": period, "lap_class": lap_class, "previous_ms": prev["lap_ms"],
+                                   "previous_driver": prev["driver"] or prev["rig_name"],
+                                   "gap_ms": record.lap_ms - prev["lap_ms"]})
+        return broken
 
     # --- track outline -----------------------------------------------------------------------
 
@@ -558,13 +607,15 @@ class LapBook:
             starts[period] = round(start.timestamp() * 1000) if start else None
         return starts
 
-    def boards(self, track_key: str) -> list[dict[str, Any]]:
+    def boards(self, track_key: str, lap_class: str = OPEN_CLASS) -> list[dict[str, Any]]:
         """Schema Leaderboard for each period ("today", "week", "all_time") of one track."""
-        return [self.board(track_key, period, since) for period, since in self.period_starts().items()]
+        return [self.board(track_key, period, since, lap_class) for period, since in self.period_starts().items()]
 
-    def board(self, track_key: str, period: str, since_ms: int | None) -> dict[str, Any]:
+    def board(self, track_key: str, period: str, since_ms: int | None, lap_class: str = OPEN_CLASS,
+              limit: int | None = None) -> dict[str, Any]:
         if self.store is not None:
-            rows = self.store.board(track_key, since_ms)
+            rows = self.store.board(track_key, since_ms, lap_class=lap_class,
+                                    **({"limit": limit} if limit is not None else {}))
         else:  # no database (unit tests): this hub session's laps
             rows = [{"rig_id": r.rig_id, "rig_name": r.rig_name, "driver": r.driver, "lap_ms": r.lap_ms,
                      "s1_ms": r.sectors_ms[0] if r.sectors_ms else None,
@@ -572,7 +623,8 @@ class LapBook:
                      "s3_ms": r.sectors_ms[2] if r.sectors_ms else None, "track_name": r.track_name,
                      "tyre": json.dumps(r.tyre) if r.tyre else None, "lap_number": r.lap_number,
                      "completed_at": r.completed_at}
-                    for r in self.leaderboard(track_key) if since_ms is None or r.completed_at >= since_ms]
+                    for r in self.leaderboard(track_key, lap_class)
+                    if since_ms is None or r.completed_at >= since_ms][:limit]
         leader = rows[0]["lap_ms"] if rows else 0
         entries = []
         for i, row in enumerate(rows):
@@ -641,11 +693,12 @@ class LapBook:
             "last_sectors": rig.last_sectors,
         }
 
-    def leaderboard(self, track_key: str) -> list[LapRecord]:
+    def leaderboard(self, track_key: str, lap_class: str = OPEN_CLASS) -> list[LapRecord]:
         """Best counted lap per driver on a track this hub session, fastest first."""
         best: dict[str, LapRecord] = {}
         for record in self.laps:
-            if record.counted and record.track_key == track_key:
+            if record.counted and record.track_key == track_key and (
+                    lap_class == OPEN_CLASS or record.lap_class == lap_class):
                 current = best.get(record.driver_key)
                 if current is None or record.lap_ms < current.lap_ms:
                     best[record.driver_key] = record

@@ -263,6 +263,12 @@ export function validateMessage(msg: unknown): string[] {
       case "leaderboard":
         leaderboard(c, m.leaderboard, `${p}.leaderboard`);
         break;
+      case "moment":
+        c.object(m.moment, `${p}.moment`, (mo) => {
+          c.field(mo, "kind", isStr, `${p}.moment`);
+          c.field(mo, "at", isInt, `${p}.moment`);
+        });
+        break;
       default:
         c.errors.push(`${p}: unknown type`);
     }

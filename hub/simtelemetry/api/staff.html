@@ -88,6 +88,11 @@
   </form>
 
   <div id="rigs"></div>
+  <section class="rig" id="tv-tools">
+    <div class="rig__head"><span class="rig__name">TV</span></div>
+    <div class="actions"><button type="button" id="podium-btn">Show podium</button></div>
+    <p class="msg" id="podium-msg" role="status"></p>
+  </section>
   <p class="msg error" id="page-msg" role="alert"></p>
 </main>
 
@@ -143,6 +148,19 @@
     if (!res.ok) throw new Error((data && data.detail) || `The hub answered ${res.status}.`);
     return data;
   }
+
+  document.getElementById("podium-btn").addEventListener("click", async () => {
+    const msg = document.getElementById("podium-msg");
+    msg.classList.remove("error");
+    try {
+      await api("POST", "/api/staff/podium");
+      msg.textContent = "The TV is showing today's podium.";
+    } catch (err) {
+      if (err.message === "locked") return;
+      msg.classList.add("error");
+      msg.textContent = err.message;
+    }
+  });
 
   function showPin(message) {
     pinForm.hidden = false;

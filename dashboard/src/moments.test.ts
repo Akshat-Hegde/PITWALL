@@ -1,0 +1,86 @@
+import { describe, expect, test } from "vitest";
+import { battleCandidate } from "./components/Moments";
+import { DEFAULT_MOCK_OPTIONS, MockHub } from "./mock/sim";
+import type { HubMessage, Moment } from "./schema";
+import { ALL_FEATURES, applyMessage, initialState, type DashboardState } from "./state/reducer";
+import { DashboardStore } from "./state/store";
+import { validateMessage } from "./testing/validate";
+import { ATTRACT_HERO_MS, IDLE_AFTER_MS, chooseView } from "./views";
+
+function run(seconds: number, options = DEFAULT_MOCK_OPTIONS): HubMessage[] {
+  let clock = 1_791_300_000_000;
+  const hub = new MockHub(options, () => clock);
+  const out: HubMessage[] = [hub.snapshot()];
+  for (let t = 0; t < seconds * 15; t++) {
+    clock += 67;
+    out.push(...hub.step(1000 / 15));
+  }
+  return out;
+}
+
+const moment = (kind: string, at: number) =>
+  ({ v: 1, type: "moment", seq: 1, ts: at, moment: { kind, at } }) as unknown as HubMessage;
+
+describe("moments", () => {
+  test("the mock sends valid now-driving, record and podium moments", () => {
+    const msgs = run(400, { ...DEFAULT_MOCK_OPTIONS, rigs: 4, pastDrivers: 6, podiumEveryMs: 60_000 });
+    const kinds = new Set(msgs.filter((m) => m.type === "moment").map((m) => (m as { moment: Moment }).moment.kind));
+    expect(kinds).toEqual(new Set(["now_driving", "record", "podium"]));
+    for (const m of msgs.filter((x) => x.type === "moment")) expect(validateMessage(m)).toEqual([]);
+  });
+
+  test("moments queue up, unknown kinds and switched-off features are dropped", () => {
+    let s: DashboardState = { ...initialState("hub"), link: "live", receivedVersion: 1 };
+    s = applyMessage(s, moment("now_driving", 1), 0);
+    s = applyMessage(s, moment("fireworks", 2), 0);
+    s = applyMessage(s, moment("podium", 3), 0);
+    expect(s.moments.map((m) => m.at)).toEqual([1, 3]);
+    s = { ...s, features: { ...ALL_FEATURES, moments: false } };
+    s = applyMessage(s, moment("record", 4), 0);
+    expect(s.moments).toHaveLength(2);
+  });
+
+  test("the store removes a moment once it has been shown", () => {
+    const store = new DashboardStore("mock");
+    store.dispatch(run(0)[0]!);
+    store.dispatch(moment("now_driving", 10));
+    store.shiftMoment(99); // not the head: ignored
+    expect(store.getState().moments).toHaveLength(1);
+    store.shiftMoment(10);
+    expect(store.getState().moments).toHaveLength(0);
+  });
+
+  test("snapshot settings: features, battle margin, sounds", () => {
+    const store = new DashboardStore("mock");
+    store.dispatch(run(0)[0]!);
+    const s = store.getState();
+    expect(s.features.attract).toBe(true);
+    expect(s.battleMarginMs).toBe(300);
+    expect(s.sounds.enabled).toBe(false);
+  });
+});
+
+describe("battle pop-ups", () => {
+  test("a close pair of best laps makes a pop-up; a wide gap doesn't", () => {
+    const store = new DashboardStore("mock");
+    for (const m of run(300, { ...DEFAULT_MOCK_OPTIONS, rigs: 2 })) store.dispatch(m);
+    const s = store.getState();
+    const track = Object.values(s.frames)[0]!.session.track_key;
+    const wide = battleCandidate({ ...s, battleMarginMs: 0, comparison: null }, track);
+    expect(wide).toBeNull();
+    const close = battleCandidate({ ...s, battleMarginMs: 60_000, comparison: null }, track);
+    expect(close?.title).toBe("Close fight");
+    expect(battleCandidate({ ...s, battleMarginMs: 60_000, features: { ...ALL_FEATURES, battles: false } }, track))
+      .toBeNull();
+  });
+});
+
+describe("attract rotation", () => {
+  test("idle: the branded attract screen comes first when switched on", () => {
+    const idle = IDLE_AFTER_MS + 1;
+    expect(chooseView("auto", idle, 0, { analysis: false, onboard: false, attract: true }).view).toBe("attract");
+    expect(chooseView("auto", idle + ATTRACT_HERO_MS, 0, { analysis: false, onboard: false, attract: true }).view)
+      .toBe("board");
+    expect(chooseView("auto", idle, 0, { analysis: false, onboard: false, attract: false }).view).toBe("board");
+  });
+});

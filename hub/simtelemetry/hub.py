@@ -70,7 +70,10 @@ class Hub:
             if summary is not None:
                 self.registry.set_driver_name(ip, summary.driver_name)
             if result.lap_events or result.lap_update:
-                self.laps.update(ip, self.lap_context(ip), self.adapter.live_lap(ip), result.lap_events)
+                try:
+                    self.laps.update(ip, self.lap_context(ip), self.adapter.live_lap(ip), result.lap_events)
+                except Exception:  # lap tracking must never stop the packet pipeline
+                    log.exception("Lap tracking failed on %s packet from %s", checked.label, ip)
 
     def lap_context(self, ip: str) -> LapContext:
         rig = self.registry.get(ip)
@@ -86,7 +89,66 @@ class Hub:
             position=s.position if s else None,
             track_length_m=s.track_length_m if s else None,
             sector_starts_m=s.sector_starts_m if s else None,
+            pro=s.pro if s else None,
         )
+
+    # --- broadcast moments -----------------------------------------------------------
+
+    def active_track(self, now: float | None = None) -> str | None:
+        """The track the TV shows: the one most rigs are on, driving rigs counting double."""
+        now = time.monotonic() if now is None else now
+        counts: dict[str, int] = {}
+        for rig in self.registry.all():
+            state = self.health.state(rig.ip, now)
+            s = self.adapter.live_summary(rig.ip)
+            if state is RigState.NO_DATA or s is None or not s.track_key:
+                continue
+            counts[s.track_key] = counts.get(s.track_key, 0) + (2 if state is RigState.DRIVING else 1)
+        return max(counts, key=lambda k: (counts[k], k)) if counts else None
+
+    def announce_driver(self, ip: str) -> dict[str, Any] | None:
+        """'Now driving' moment when staff start a session on a rig."""
+        if not self.config.features.moments:
+            return None
+        rig = self.registry.get(ip)
+        s = self.adapter.live_summary(ip)
+        assigned = self.drivers.get(ip)
+        if rig is None or assigned is None:
+            return None
+        track_key = (s.track_key if s else None) or self.active_track()
+        record = self.laps.record_holder(track_key, "today") if track_key else None
+        best = self.laps.driver_best(track_key, driver_key(assigned.name, ip)) if track_key else None
+        return self.laps.publish_moment(
+            "now_driving", rig_id=ip, rig_name=rig.name, driver=assigned.name, track_key=track_key,
+            track_name=(s.track if s else None) or (record or {}).get("track_name"),
+            today_record=({"driver": record["driver"] or record["rig_name"], "lap_ms": record["lap_ms"]}
+                          if record else None),
+            personal_best_ms=best["lap_ms"] if best else None)
+
+    def podium(self, reason: str) -> dict[str, Any] | None:
+        """Podium moment: today's top three on the shown track ("hourly" or "staff")."""
+        track_key = self.active_track()
+        if not self.config.features.podium or track_key is None:
+            return None
+        since = self.laps.period_starts()["today"]
+        board = self.laps.board(track_key, "today", since, limit=3)
+        if not board["entries"]:
+            return None
+        return self.laps.publish_moment("podium", reason=reason, track_key=track_key,
+                                        track_name=board["track_name"], entries=board["entries"])
+
+    async def tick_podium(self, clock=time.time) -> None:
+        """Podium at the end of every [moments] podium_every_min minutes on the wall clock."""
+        last_slot: int | None = None
+        while True:
+            await asyncio.sleep(5.0)
+            every = self.config.moments.podium_every_min
+            if every <= 0:
+                continue
+            slot = int(clock() // 60) // every
+            if last_slot is not None and slot != last_slot:
+                self.podium("hourly" if every == 60 else "scheduled")
+            last_slot = slot
 
     async def drain(self) -> None:
         """Wait until every queued packet has been decoded (used after a replay)."""

@@ -164,6 +164,20 @@ On the dashboard, check:
 - [ ] If both games use the same generic player name, laps from both rigs merge into one leaderboard entry
       until names are set on `/staff`. Note whether that happened (A14).
 
+## Part E2: Broadcast moments, Pro / Open (hub still running)
+
+- [ ] On `/staff`, set a name for Rig 1 and save: the TV shows **Now driving** with that name for about
+      4 seconds, then goes back.
+- [ ] Driver 1 sets a clean lap faster than today's best: the TV shows **Record** with the new time, the
+      gap and the old holder. (No record moment for the very first lap of the day: there's nothing to beat.)
+- [ ] Turn every assist off on one rig (traction control, ABS, steering and braking assist, manual gears,
+      racing line off) and drive a clean lap: in the hub's lap debug log the lap is `pro`; with ABS on it is
+      `open` (A16).
+- [ ] On `/staff` press **Show podium**: today's top three for about 10 seconds.
+- [ ] When both drivers' best laps are within 0.3 s, a **Battle** pop-up appears bottom right.
+- [ ] Open `http://192.168.1.64:8000/portrait` on a phone held upright: cafe name, track record, top 10.
+- [ ] Press `5` on the TV PC: the welcome screen. Press `0` to go back to auto.
+
 ## Part F: Restart (leaderboard persistence) and track change
 
 - [ ] Both drivers stay on track, mid-lap. In the hub window press **Ctrl+C**.

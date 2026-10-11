@@ -94,6 +94,7 @@ def staff_router(hub: Hub) -> APIRouter:
             hub.drivers.assign(rig.ip, body.get("name"), body.get("phone"), body.get("email"))
         except DriverError as exc:
             raise HTTPException(400, str(exc)) from None
+        hub.announce_driver(rig.ip)
         return rig_row(rig, time.monotonic())
 
     @router.delete("/api/staff/rigs/{rig_id}/driver", dependencies=[Depends(guard)])
@@ -101,6 +102,13 @@ def staff_router(hub: Hub) -> APIRouter:
         rig = find_rig(rig_id)
         hub.drivers.end(rig.ip)
         return rig_row(rig, time.monotonic())
+
+    @router.post("/api/staff/podium", dependencies=[Depends(guard)])
+    def podium() -> dict[str, Any]:
+        moment = hub.podium("staff")
+        if moment is None:
+            raise HTTPException(409, "Nothing to show yet: no clean laps today on the track the TV shows.")
+        return {"shown": True, "entries": len(moment["entries"])}
 
     return router
 

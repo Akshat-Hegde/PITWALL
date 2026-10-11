@@ -129,10 +129,41 @@ Mock options, combined in the URL, e.g. `http://localhost:5173/?outline=late&mis
   temperature), fuel, ERS, DRS, top speed, slide angle and saves with the "Save!" flash, lap share bars and
   damage.
 
-`?view=race|board|analysis|onboard` fixes the view; the default `?view=auto` rotates while anyone is driving
-(race 40 s, head to head 15 s when available, onboard 15 s) and switches to attract mode after 10 s with
-nobody driving (leaderboard view 20 s, race view 10 s, head to head 10 s if available, repeating). On the TV
-PC's keyboard: `1` race, `2` leaderboard, `3` head to head, `4` onboard, `0` auto.
+- **Welcome (attract mode):** the cafe name, today's top 10 and the track record holder.
+
+`?view=race|board|analysis|onboard|attract` fixes the view; the default `?view=auto` rotates while anyone is
+driving (race 40 s, head to head 15 s when available, onboard 15 s) and switches to attract mode after 10 s
+with nobody driving (welcome 20 s, leaderboard 20 s, race 10 s, head to head 10 s if available, repeating).
+Views change with a short broadcast wipe. On the TV PC's keyboard: `1` race, `2` leaderboard, `3` head to
+head, `4` onboard, `5` welcome, `0` auto.
+
+**Broadcast moments** (full screen for a few seconds, then back to the view):
+
+- **Now driving:** when staff start a session on `/staff`: rig, driver, track, today's record and the
+  driver's personal best there.
+- **Record broken:** a lap beats today's or the all-time record, Pro or Open: the new time, the gap to the
+  old record and who held it.
+- **Podium:** today's top three at the end of every hour (`[moments] podium_every_min`, 0 = off) or when staff
+  press **Show podium** on `/staff`.
+- **Battle pop-ups** (lower third): two best laps within `[moments] battle_margin_ms` (300 ms), or a driver
+  on course to beat the fastest lap (past 40 % of the lap and ahead of it).
+
+**Pro and Open:** a lap is Pro when every assist is off for the whole lap (traction control, ABS, steering
+and braking assist, automatic gears, dynamic racing line; docs/LAP_ASSUMPTIONS.md A16). Pro laps count on
+the Open boards too.
+
+**Portrait screen:** `http://<hub>:8000/portrait` is a 1080×1920 layout for a vertical TV at the entrance:
+cafe name, track record holder, today's top 10 and who's on track.
+
+**Sounds:** `[sounds] enabled = true` plays a short tone when a session starts and a fanfare on a record.
+Browsers only play sound after someone has clicked the page once; on a kiosk PC start Chrome or Edge with
+`--autoplay-policy=no-user-gesture-required` so it works unattended.
+
+**Features:** every optional feature can be switched off in `[features]` (moments, battles, podium, attract,
+portrait, head_to_head, onboard); see `config/hub.example.toml`.
+
+Mock options for demos: `?moment=now_driving|record|podium&momentAfter=5` shows that moment after 5 s;
+`?podium=60` adds a podium every 60 s of simulated time.
 
 Branding comes from `[cafe]` in the hub config: `name`, plus CSS variables in `[cafe.branding]` (e.g.
 `"--brand-accent" = "#0a7cff"`), applied to the page as-is.

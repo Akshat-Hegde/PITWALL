@@ -124,6 +124,10 @@ def _decode_session(header: PacketHeader, data: Buffer, layouts: FormatLayouts) 
         rule_set=s["m_ruleSet"],
         sector2_lap_distance_start=s["m_sector2LapDistanceStart"],
         sector3_lap_distance_start=s["m_sector3LapDistanceStart"],
+        steering_assist=s["m_steeringAssist"],
+        braking_assist=s["m_brakingAssist"],
+        gearbox_assist=s["m_gearboxAssist"],
+        dynamic_racing_line=s["m_dynamicRacingLine"],
     )
 
 
@@ -250,6 +254,8 @@ def _decode_car_status(header: PacketHeader, data: Buffer, layouts: FormatLayout
         drs_allowed=bool(s["m_drsAllowed"]),
         ers_store_energy=s["m_ersStoreEnergy"],
         ers_deploy_mode=s["m_ersDeployMode"],
+        traction_control=s["m_tractionControl"],
+        anti_lock_brakes=bool(s["m_antiLockBrakes"]),
     )
 
 

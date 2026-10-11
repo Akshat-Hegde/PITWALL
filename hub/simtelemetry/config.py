@@ -83,6 +83,30 @@ class DashboardConfig(_Section):
     directory: Path | None = None
 
 
+class FeaturesConfig(_Section):
+    # Every optional feature can be switched off (future licence tiers). Off = not shown or offered.
+    moments: bool = True          # full-screen "now driving" and "record broken" moments on the TV
+    battles: bool = True          # battle pop-ups on the TV
+    podium: bool = True           # podium screen (hourly and on staff command)
+    attract: bool = True          # attract mode when nobody is driving
+    portrait: bool = True         # /portrait layout for vertical screens
+    head_to_head: bool = True     # head-to-head analysis view
+    onboard: bool = True          # onboard view
+
+
+class MomentsConfig(_Section):
+    # Battle pop-up when two drivers' best laps are within this, or one is on course to beat the leader.
+    battle_margin_ms: int = Field(300, ge=0, le=5000)
+    # Podium screen at the end of each period of this many minutes (on the clock; 60 = every full hour).
+    # 0 = only when staff ask for it.
+    podium_every_min: int = Field(60, ge=0, le=24 * 60)
+
+
+class SoundsConfig(_Section):
+    enabled: bool = False         # session start and record-broken sounds on the TV
+    volume: float = Field(0.6, ge=0, le=1)
+
+
 class HealthConfig(_Section):
     summary_interval_s: float = 10.0
     no_motion_after_s: float = 2.0  # packets but no Motion for this long -> "in menu / paused"
@@ -105,6 +129,9 @@ class AppConfig(_Section):
     map: MapConfig = Field(default_factory=MapConfig)
     leaderboard: LeaderboardConfig = Field(default_factory=LeaderboardConfig)
     staff: StaffConfig = Field(default_factory=StaffConfig)
+    features: FeaturesConfig = Field(default_factory=FeaturesConfig)
+    moments: MomentsConfig = Field(default_factory=MomentsConfig)
+    sounds: SoundsConfig = Field(default_factory=SoundsConfig)
     rigs: list[RigConfig] = Field(default_factory=list)
     track_names: dict[int, str] = Field(default_factory=dict)  # trackId -> display name override
 
