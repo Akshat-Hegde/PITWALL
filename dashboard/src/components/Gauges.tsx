@@ -1,4 +1,5 @@
 import type { LapShare } from "../state/lapshare";
+import { SlantBar } from "./Motifs";
 
 // ---- Tyre temperatures -------------------------------------------------------------------------
 
@@ -91,8 +92,8 @@ export function LapShareBars({ share, last }: { share: LapShare | null; last: La
         return (
           <div key={key} className="share__row">
             <span className="share__label">{label}</span>
-            <span className="bar share__bar">
-              <span className="bar__fill" style={{ width: `${Math.min(100, value ?? 0)}%` }} />
+            <span className="share__bar">
+              <SlantBar value={value == null ? null : value / 100} tone="rig" label={label} />
               {prev != null && <span className="share__last" style={{ left: `${Math.min(100, prev)}%` }} />}
             </span>
             <span className="share__pct">{value == null ? "–" : Math.round(value)}<span className="unit">%</span></span>

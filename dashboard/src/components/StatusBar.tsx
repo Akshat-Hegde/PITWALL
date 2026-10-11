@@ -33,6 +33,7 @@ export function StatusBar({ state, trackKey, view, modeNote }: Props) {
   return (
     <>
       <header className="header">
+        <span className="kerb header__kerb" aria-hidden="true" />
         <div className="header__brand">
           <span className="header__mark" aria-hidden="true" />
           {state.cafe.name || "Live timing"}

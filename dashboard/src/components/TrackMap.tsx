@@ -239,22 +239,28 @@ export function TrackMap({ store, state, trackKey, displayOverride, focusRigId =
         const w = ctx.measureText(name).width + rem * 0.5;
         const h = fontPx * 1.3;
         const [dx, dy] = away(centre, sx, sy);
-        // Label off the track, pushed further out until it doesn't cover another label.
-        let dist = rem * 2;
+        // Label off the track: try further out, then above / below, until it doesn't cover another label.
         let lx = 0;
         let ly = 0;
-        const place = () => {
+        const place = (dist: number, shiftY: number) => {
           const ax = sx + dx * dist;
-          const ay = sy + dy * dist;
+          const ay = sy + dy * dist + shiftY;
           lx = Math.max(2, Math.min(width - w - 2, dx >= 0 ? ax : ax - w));
           ly = Math.max(2, Math.min(height - h - 2, ay - h / 2));
         };
-        const overlaps = () => placed.some((p) => lx < p.x + p.w && lx + w > p.x && ly < p.y + p.h && ly + h > p.y);
-        place();
-        for (let tries = 0; tries < 8 && overlaps(); tries++) {
-          dist += h * 0.9;
-          place();
+        const overlaps = () => placed.some((p) => lx < p.x + p.w + 4 && lx + w + 4 > p.x && ly < p.y + p.h + 2 && ly + h + 2 > p.y);
+        const shifts = [0, -1.1, 1.1, -2.2, 2.2, -3.3, 3.3];
+        let found = false;
+        for (let ring = 0; ring < 4 && !found; ring++) {
+          for (const k of shifts) {
+            place(rem * 2 + ring * rem * 2.2, k * h);
+            if (!overlaps()) {
+              found = true;
+              break;
+            }
+          }
         }
+        if (!found) place(rem * 2, 0);
         placed.push({ x: lx, y: ly, w, h });
         const anchorX = dx >= 0 ? lx : lx + w;
         const anchorY = ly + h / 2;

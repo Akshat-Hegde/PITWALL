@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { formatDelta, formatLapTime } from "../format";
 import type { Leaderboard, LeaderboardEntry, RigInfo } from "../schema";
+import { Tab } from "./Motifs";
 
 /** Rows on screen at once: ten fit at 1080p and 4K (sizes scale with screen height). */
 export const BOARD_PAGE_SIZE = 10;
@@ -58,7 +59,7 @@ export function LeaderboardPanel({ leaderboard, rigs, title, showTrack = true, s
   return (
     <section className={`lbcol ${className}`} aria-label={title}>
       <h2 className="lbcol__title">
-        {title}
+        <Tab left={title} right={entries.length ? `${entries.length} ${entries.length === 1 ? "driver" : "drivers"}` : null} />
         {showTrack && leaderboard?.track_name && <span className="t2"> {leaderboard.track_name}</span>}
         {paged && (
           <span className="lbcol__range t3" aria-live="polite">
@@ -88,7 +89,7 @@ export function LeaderboardPanel({ leaderboard, rigs, title, showTrack = true, s
 
 function BoardRow({ entry: e, colour }: { entry: LeaderboardEntry; colour: string | undefined }) {
   return (
-    <li className="lb__row" style={{ "--rig-colour": colour ?? "var(--text-3)" } as React.CSSProperties}>
+    <li className={`lb__row${e.rank === 1 ? " lb__row--p1" : ""}`} style={{ "--rig-colour": colour ?? "var(--text-3)" } as React.CSSProperties}>
       <span className="pos">{e.rank}</span>
       <span className="stripe" aria-hidden="true" />
       <span className="who__text">

@@ -1,11 +1,8 @@
-// One family, self-hosted (DESIGN.md): Barlow for numbers and text, Barlow Condensed for names and labels.
-import "@fontsource/barlow/latin-400.css";
-import "@fontsource/barlow/latin-500.css";
-import "@fontsource/barlow/latin-600.css";
-import "@fontsource/barlow/latin-700.css";
-import "@fontsource/barlow-condensed/latin-500.css";
-import "@fontsource/barlow-condensed/latin-600.css";
-import "@fontsource/barlow-condensed/latin-700.css";
+// Self-hosted (DESIGN.md, SIL OFL): Saira variable (weight and width axes) and Saira Condensed for labels.
+import "@fontsource-variable/saira/wdth.css";
+import "@fontsource/saira-condensed/latin-500.css";
+import "@fontsource/saira-condensed/latin-600.css";
+import "@fontsource/saira-condensed/latin-700.css";
 import "./styles.css";
 
 import { StrictMode } from "react";

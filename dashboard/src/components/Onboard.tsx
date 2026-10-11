@@ -1,16 +1,16 @@
 import { useEffect, useState } from "react";
-import { formatGear, formatLapTime, formatSpeed } from "../format";
+import { formatLapTime } from "../format";
 import type { CarDetail, PerWheel, RigFrame, RigInfo } from "../schema";
 import type { DashboardState } from "../state/reducer";
 import type { DashboardStore } from "../state/store";
 import { GForce, LapShareBars, brakeTempBand, tyreTempBand } from "./Gauges";
-import { DriverName, PedalBars, TyreTag } from "./Timing";
+import { Avatar, Barcode, SlantBar, StripeBundle } from "./Motifs";
+import { DriverName, PedalBars, Speed, TyreTag } from "./Timing";
 
 /** Cars side by side; with more driving, the view pages through them. */
 export const ONBOARD_PER_PAGE = 2;
 export const ONBOARD_PAGE_MS = 7500;
 const SAVE_SHOW_MS = 2500;
-const SPEED_BAR_MAX_KPH = 360;
 
 const ERS_MODE_TEXT: Record<string, string> = { none: "Off", medium: "Medium", hotlap: "Hotlap", overtake: "Overtake" };
 const WHEELS = ["FL", "FR", "RL", "RR"] as const;
@@ -46,6 +46,7 @@ export function OnboardView({ store, state }: { store: DashboardStore; state: Da
   const shown = rigs.slice(page * ONBOARD_PER_PAGE, page * ONBOARD_PER_PAGE + ONBOARD_PER_PAGE);
   return (
     <main className="onboard">
+      <StripeBundle corner="top-right" />
       <header className="viewhead">
         <h1 className="viewhead__title">Onboard</h1>
         {pages > 1 && <span className="viewhead__sub t3">{page + 1} / {pages}</span>}
@@ -80,13 +81,13 @@ function OnboardCar({ rig, frame, trail, share, last, rotationDeg, now = Date.no
   const driving = frame?.state === "driving";
   const car = frame?.car ?? null;
   const lap = frame?.lap ?? null;
-  const kph = driving ? frame?.speed_kph ?? null : null;
   const rpm = driving ? frame?.rpm ?? null : null;
   const maxRpm = frame?.max_rpm ?? null;
   const saving = car?.last_save_at != null && now - car.last_save_at < SAVE_SHOW_MS;
   return (
     <article className="obcar" style={{ "--rig-colour": rig.colour } as React.CSSProperties} aria-label={rig.name}>
       <header className="obcar__head">
+        <Avatar name={frame?.driver ?? rig.name} />
         <DriverName rig={rig} frame={frame} />
         <TyreTag frame={frame} />
         <span className="obcar__lap">
@@ -96,15 +97,8 @@ function OnboardCar({ rig, frame, trail, share, last, rotationDeg, now = Date.no
       </header>
 
       <section className="obcar__drive">
-        <div className="speed speed--xl">
-          <div className="speed__nums">
-            <span className="speed__value">{formatSpeed(kph)}</span>
-            <span className="unit">km/h</span>
-            <span className="speed__gear">{driving ? formatGear(frame?.gear) : "–"}</span>
-          </div>
-          <span className="bar">
-            <span className="bar__fill" style={{ width: `${kph == null ? 0 : Math.min(100, (kph / SPEED_BAR_MAX_KPH) * 100)}%` }} />
-          </span>
+        <div className="speed--xl">
+          <Speed frame={driving ? frame : undefined} ticks={48} />
         </div>
         <div className="obcar__inputs">
           <Meter label="Revs" pct={rpm != null && maxRpm ? (rpm / maxRpm) * 100 : null}
@@ -132,7 +126,7 @@ function OnboardCar({ rig, frame, trail, share, last, rotationDeg, now = Date.no
         <div className="field obcar__ers">
           <span className="label">ERS {car?.ers_mode ? `· ${ERS_MODE_TEXT[car.ers_mode] ?? car.ers_mode}` : ""}</span>
           <span className="field__value">{car?.ers_pct == null ? "–" : Math.round(car.ers_pct)}<span className="unit">%</span></span>
-          <span className="bar"><span className="bar__fill" style={{ width: `${Math.max(0, Math.min(100, car?.ers_pct ?? 0))}%` }} /></span>
+          <SlantBar value={car?.ers_pct == null ? null : car.ers_pct / 100} tone="light" label="ERS" />
         </div>
         <Stat label="DRS" value={!driving ? "–" : car?.drs_open ? "Open" : car?.drs_allowed ? "Ready" : "Off"}
               className={car?.drs_open && driving ? "is-on" : ""} />
@@ -181,7 +175,7 @@ function Meter({ label, pct, value, unit }: { label: string; pct: number | null;
   return (
     <div className="meter">
       <span className="label">{label}</span>
-      <span className="bar"><span className="bar__fill" style={{ width: `${Math.max(0, Math.min(100, pct ?? 0))}%` }} /></span>
+      <Barcode value={pct} max={100} ticks={30} className="barcode--meter" />
       <span className="meter__value">{value}<span className="unit">{unit}</span></span>
     </div>
   );

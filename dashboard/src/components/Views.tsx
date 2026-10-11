@@ -2,7 +2,9 @@ import type { Display } from "../map/geometry";
 import type { DashboardState } from "../state/reducer";
 import type { DashboardStore } from "../state/store";
 import { BattleLine, findBattle } from "./Battle";
+import { formatLapTime } from "../format";
 import { LeaderboardPanel } from "./LeaderboardPanel";
+import { StripeBundle } from "./Motifs";
 import { Summary } from "./Summary";
 import { MAX_CARDS, Timing, runningOrder } from "./Timing";
 import { TrackMap } from "./TrackMap";
@@ -28,6 +30,7 @@ export function RaceView({ store, state, trackKey, mapDisplay, sessionBestMs }: 
   return (
     <main className={`race race--${state.rigs.length <= MAX_CARDS ? "cards" : "tower"}`}>
       <section className="race__map" aria-label="Track map">
+        <TrackCard state={state} trackKey={trackKey} />
         <TrackMap store={store} state={state} trackKey={trackKey} displayOverride={mapDisplay}
                   focusRigId={focus?.rig_id ?? null} />
         {hasOutline && focus && (
@@ -58,11 +61,51 @@ export function RaceView({ store, state, trackKey, mapDisplay, sessionBestMs }: 
   );
 }
 
+/** Track card (layout model from DESIGN.md motif 7): name, length in wide numerals, today's and all-time records. */
+function TrackCard({ state, trackKey }: { state: DashboardState; trackKey: string | null }) {
+  const session = Object.values(state.frames).find((f) => f.session.track_key === trackKey)?.session;
+  const name = session?.track_name ?? state.leaderboards.today?.track_name ?? null;
+  if (!name) return <div className="trackcard trackcard--empty" />;
+  const km = session?.track_length_m ? (session.track_length_m / 1000).toFixed(3) : null;
+  const sameTrack = (period: "today" | "all_time") => {
+    const b = state.leaderboards[period];
+    return b && b.track_key === trackKey ? b.entries[0] ?? null : null;
+  };
+  const today = sameTrack("today");
+  const ever = sameTrack("all_time");
+  return (
+    <header className="trackcard">
+      <div className="trackcard__name">
+        <span className="label">{session?.session_type ?? "Track"}</span>
+        <h1 className="trackcard__title">{name}</h1>
+      </div>
+      {km && (
+        <div className="trackcard__stat">
+          <span className="label">Length</span>
+          <span className="trackcard__km">{km}<span className="unit">km</span></span>
+        </div>
+      )}
+      {[["Today's record", today], ["Track record", ever]].map(([label, e]) => (
+        e && typeof e === "object" ? (
+          <div key={label as string} className="trackcard__stat">
+            <span className="label">{label as string}</span>
+            <span className="trackcard__record">
+              <span className="c-purple">{formatLapTime(e.lap_ms)}</span>
+              <span className="trackcard__holder">{e.driver ?? e.rig_name}</span>
+            </span>
+          </div>
+        ) : null
+      ))}
+    </header>
+  );
+}
+
 /** Full-screen boards: today, this week, all time. */
 export function BoardView({ state }: { state: DashboardState }) {
   const track = state.leaderboards.today?.track_name ?? state.leaderboards.all_time?.track_name ?? null;
   return (
     <main className="boards">
+      <StripeBundle corner="top-right" className="boards__stripes" />
       <header className="viewhead">
         <h1 className="viewhead__title">{track ?? "Best laps"}</h1>
         <span className="viewhead__sub t2">Best lap per driver</span>

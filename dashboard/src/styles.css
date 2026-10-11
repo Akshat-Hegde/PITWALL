@@ -1,19 +1,21 @@
-/* TV dashboard styles. Tokens and rules: docs/DESIGN.md. Components use tokens only.
+/* TV dashboard styles (design v2). Tokens, motifs and rules: docs/DESIGN.md. Components use tokens only.
    Cafe branding from the hub config ([cafe.branding]) overrides any token on :root, e.g. --brand-accent. */
 
 /* ==== Tokens ================================================================================== */
 
 :root {
   /* colour */
-  --bg: #0b0c0f;
-  --panel: #111318;
-  --panel-2: #171a20;
+  --bg: #0c0d11;
+  --panel: #14151b;
+  --panel-2: #1b1c24;
+  --edge: #262731;
   --line: rgba(255, 255, 255, 0.08);
   --line-strong: rgba(255, 255, 255, 0.16);
   --text: #ffffff;
-  --text-2: rgba(255, 255, 255, 0.55);
-  --text-3: rgba(255, 255, 255, 0.35);
-  --brand-accent: #e4202c;
+  --text-2: rgba(255, 255, 255, 0.56);
+  --text-3: rgba(255, 255, 255, 0.34);
+  --brand-accent: #e10600;
+  --brand-accent-2: color-mix(in srgb, var(--brand-accent) 55%, #000);
   --timing-purple: #b46cff;
   --timing-green: #38d97a;
   --timing-yellow: #f2c230;
@@ -28,15 +30,15 @@
   --map-track: rgba(255, 255, 255, 0.24);
 
   /* type */
-  --font-body: "Barlow", "Segoe UI", system-ui, sans-serif;
-  --font-cond: "Barlow Condensed", "Barlow", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Saira Variable", "Saira", "Segoe UI", system-ui, sans-serif;
+  --font-cond: "Saira Condensed", "Saira Variable", "Segoe UI", system-ui, sans-serif;
   --fs-label: 0.6rem;
   --fs-small: 0.75rem;
   --fs-body: 0.9rem;
   --fs-value: 1.2rem;
   --fs-value-l: 1.7rem;
   --fs-name: 1.3rem;
-  --fs-display: 2.8rem;
+  --fs-display: 3rem;
   --fs-title: 2.2rem;
 
   /* spacing, lines */
@@ -50,6 +52,8 @@
   --hairline: 1px solid var(--line);
   --stripe: 3px;
   --bar: 4px;
+  --cut: 0.9rem;
+  --slant: 0.55rem;
 
   /* motion */
   --fade: 200ms ease-out;
@@ -1750,6 +1754,604 @@ ul {
 
 .damage__bar .bar__fill.is-bad {
   background: var(--brand-accent);
+}
+
+/* ==== Design v2: type roles and motifs (DESIGN.md §1–§2) ===================================== */
+
+/* Display: wide heavy numerals. Names: semi-wide bold uppercase. */
+.speed__value,
+.speed__gear,
+.field--clock .field__value,
+.trackcard__km,
+.duel__pos,
+.duel__value,
+.lb__time,
+.summary__big,
+.header__clock,
+.card__head .pos,
+.obcar__lap > span:last-child {
+  font-stretch: 125%;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.who__name,
+.duel__name,
+.battle__name,
+.summary__name,
+.viewhead__title,
+.trackcard__title,
+.header__brand,
+.waiting__title {
+  font-family: var(--font-body);
+  font-stretch: 112%;
+  font-weight: 700;
+}
+
+.viewhead__title,
+.trackcard__title {
+  font-stretch: 125%;
+  font-weight: 800;
+}
+
+/* Motif 1: stripe bundle, one per view, never behind data */
+.app__view > main {
+  position: relative;
+}
+
+.stripes {
+  position: absolute;
+  z-index: 0;
+  width: 26rem;
+  height: 19.5rem;
+  color: var(--brand-accent);
+  opacity: 0.28;
+  pointer-events: none;
+}
+
+.stripes path {
+  fill: none;
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.stripes--top-right {
+  top: calc(-1 * var(--s5));
+  right: calc(-1 * var(--s6));
+  transform: scaleX(-1);
+}
+
+.stripes--bottom-left {
+  bottom: calc(-1 * var(--s6));
+  left: calc(-1 * var(--s6));
+  transform: scaleY(-1);
+}
+
+.stripes--bottom-right {
+  right: calc(-1 * var(--s6));
+  bottom: calc(-1 * var(--s6));
+  transform: scale(-1, -1);
+}
+
+.stripes--top-left {
+  top: calc(-1 * var(--s5));
+  left: calc(-1 * var(--s6));
+}
+
+.app__view > main > :not(.stripes) {
+  position: relative;
+  z-index: 1;
+}
+
+/* Motif 2: double bar with a slanted cut end and a separate cap */
+.slant {
+  --slant-a: var(--text);
+  --slant-b: rgba(255, 255, 255, 0.42);
+  position: relative;
+  display: block;
+  height: 8px;
+  min-width: 2rem;
+}
+
+.slant::before,
+.slant::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  left: 0;
+  height: 3px;
+  background: var(--panel-2);
+}
+
+.slant::before {
+  top: 0;
+}
+
+.slant::after {
+  top: 5px;
+}
+
+.slant--accent {
+  --slant-a: var(--brand-accent);
+  --slant-b: var(--brand-accent-2);
+}
+
+.slant--rig {
+  --slant-a: var(--rig-colour);
+  --slant-b: color-mix(in srgb, var(--rig-colour) 55%, #000);
+}
+
+.slant__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 1;
+  transition: width 120ms linear;
+}
+
+.slant__a,
+.slant__b {
+  position: absolute;
+  left: 0;
+  height: 3px;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 3px) 100%, 0 100%);
+}
+
+.slant__a {
+  top: 0;
+  right: 9px;
+  background: var(--slant-a);
+}
+
+.slant__b {
+  top: 5px;
+  right: 12px;
+  background: var(--slant-b);
+}
+
+.slant__cap {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 8px;
+  background: var(--slant-a);
+  clip-path: polygon(62% 0, 100% 0, 38% 100%, 0 100%);
+}
+
+.slant.is-empty .slant__cap {
+  display: none;
+}
+
+/* Motif 3: faint diagonal light streaks (header, moment cards) */
+.streaks::after,
+.header::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.04) 0 1.6rem, transparent 1.6rem 4rem);
+  -webkit-mask-image: linear-gradient(90deg, transparent 55%, #000 100%);
+  mask-image: linear-gradient(90deg, transparent 55%, #000 100%);
+}
+
+/* Motif 4: barcode meter */
+.barcode {
+  display: block;
+  width: 100%;
+  height: 1.5rem;
+}
+
+.barcode rect {
+  fill: var(--line-strong);
+}
+
+.barcode rect.is-lit {
+  fill: var(--text);
+}
+
+.barcode--meter {
+  height: 0.9rem;
+}
+
+/* Motif 5: angled tab badge, cut-corner cards, avatar */
+.tab-badge {
+  display: inline-flex;
+  align-items: stretch;
+  font-family: var(--font-cond);
+  font-size: var(--fs-small);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.tab-badge__left,
+.tab-badge__right {
+  padding: 0.28rem 0.9rem 0.24rem 0.7rem;
+  clip-path: polygon(0 0, 100% 0, calc(100% - var(--slant)) 100%, 0 100%);
+}
+
+.tab-badge__left {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.tab-badge__right {
+  margin-left: calc(-1 * var(--slant) + 2px);
+  padding-left: calc(var(--slant) + 0.5rem);
+  background: var(--brand-accent);
+  color: var(--text);
+  clip-path: polygon(var(--slant) 0, 100% 0, calc(100% - var(--slant)) 100%, 0 100%);
+}
+
+.tab-badge--muted .tab-badge__left {
+  background: var(--panel-2);
+  color: var(--text-2);
+}
+
+.tab-badge--muted .tab-badge__right {
+  background: var(--edge);
+  color: var(--text-2);
+}
+
+.cutcard,
+.card,
+.trackcard {
+  clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, 0 100%);
+}
+
+.avatar {
+  position: relative;
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  overflow: hidden;
+  border-bottom: 2px solid var(--rig-colour, var(--text-3));
+  background: var(--panel-2);
+  clip-path: polygon(0 0, calc(100% - 0.5rem) 0, 100% 0.5rem, 100% 100%, 0 100%);
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar__initials {
+  color: var(--text-2);
+  font-size: 0.85rem;
+  font-stretch: 125%;
+  font-weight: 800;
+}
+
+.avatar--l {
+  width: 3.6rem;
+  height: 3.6rem;
+}
+
+.avatar--l .avatar__initials {
+  font-size: 1.3rem;
+}
+
+/* Motif 8: kerb strip. Motif 9: chequered edge (P1 only). */
+.kerb {
+  display: block;
+  height: 4px;
+  background: repeating-linear-gradient(90deg, var(--brand-accent) 0 1.4rem, var(--text) 1.4rem 2.8rem);
+}
+
+.header {
+  position: relative;
+}
+
+.header__kerb {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 16rem;
+  -webkit-mask-image: linear-gradient(90deg, #000 60%, transparent);
+  mask-image: linear-gradient(90deg, #000 60%, transparent);
+}
+
+.lb__row--p1 {
+  position: relative;
+}
+
+.lb__row--p1::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 12px;
+  background: repeating-conic-gradient(var(--text) 0 25%, transparent 0 50%) 0 0 / 12px 12px;
+  opacity: 0.55;
+}
+
+/* ---- Cards (race, up to 4 rigs) ---- */
+.timing {
+  border-top: 0;
+  gap: var(--s4);
+}
+
+.card {
+  padding: var(--s5) var(--s5) var(--s4);
+  border: 0;
+  background: var(--panel);
+}
+
+.card__head {
+  grid-template-columns: 2.2rem auto minmax(0, 1fr) auto auto;
+}
+
+.card__body,
+.card__hint {
+  padding-left: 0;
+}
+
+.speed {
+  gap: var(--s3);
+}
+
+.speed__value {
+  min-width: 3ch;
+  text-align: left;
+}
+
+.tyre__letter {
+  display: inline-grid;
+  place-items: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  font-size: 0.62rem;
+  font-weight: 800;
+}
+
+.compound-text--soft { color: var(--compound-soft); }
+.compound-text--medium { color: var(--compound-medium); }
+.compound-text--hard { color: var(--compound-hard); }
+.compound-text--inter { color: var(--compound-inter); }
+.compound-text--wet { color: var(--compound-wet); }
+
+.pedal {
+  grid-template-columns: 4.2rem minmax(0, 1fr) 2rem;
+}
+
+.pedals--bare {
+  gap: 4px;
+}
+
+/* ---- Track card (race view, layout model 7) ---- */
+.race__map {
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  gap: var(--s3);
+}
+
+.trackcard {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--s5);
+  padding: var(--s4) var(--s5);
+  background: var(--panel);
+}
+
+.trackcard--empty {
+  display: none;
+}
+
+.trackcard__name {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  gap: var(--s1);
+}
+
+.trackcard__title {
+  overflow: hidden;
+  font-size: 1.6rem;
+  line-height: 1;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.trackcard__stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  padding-left: var(--s5);
+  border-left: var(--hairline);
+}
+
+.trackcard__km {
+  font-size: var(--fs-value-l);
+  line-height: 1;
+}
+
+.trackcard__record {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s3);
+  font-size: var(--fs-value);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.trackcard__holder {
+  color: var(--text-2);
+  font-family: var(--font-cond);
+  font-size: var(--fs-small);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.race__map .mapkey {
+  position: static;
+  flex-direction: row;
+  align-items: baseline;
+  gap: var(--s5);
+}
+
+/* ---- Leaderboard towers ---- */
+.lbcol {
+  padding: var(--s4) var(--s5) var(--s3);
+  background: var(--panel);
+  clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, 0 100%);
+}
+
+.lbcol__title,
+.lbcol__title .tab-badge {
+  font-size: var(--fs-body);
+}
+
+.lb__head {
+  border-top: 0;
+}
+
+.lb__head,
+.lb__row {
+  padding-right: 22px;
+}
+
+/* ---- Onboard / analysis: new parts ---- */
+.obcar__head {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+}
+
+.speed--xl .speed__value,
+.speed--xl .speed__gear {
+  font-size: 3.4rem;
+}
+
+.speed--xl .barcode {
+  height: 2.2rem;
+}
+
+.share__bar {
+  position: relative;
+  display: block;
+}
+
+.duel__id {
+  align-items: flex-end;
+}
+
+/* v2 fixes */
+.race__map,
+.trackcard,
+.trackcard__name {
+  min-width: 0;
+}
+
+.trackcard {
+  overflow: hidden;
+}
+
+.trackcard__stat {
+  flex: none;
+}
+
+.trackcard__title {
+  font-size: 1.4rem;
+}
+
+.lb__time {
+  font-size: 1.3rem;
+  font-stretch: 108%;
+  font-weight: 700;
+}
+
+.slant {
+  height: 10px;
+}
+
+.slant::before,
+.slant__a {
+  height: 4px;
+}
+
+.slant::after,
+.slant__b {
+  top: 6px;
+  height: 4px;
+}
+
+.stripes--top-right {
+  top: calc(-1 * var(--s5) - 2.6rem);
+}
+
+/* v2 fixes, round 2 */
+.stripes {
+  width: 24rem;
+  height: 6rem;
+  opacity: 0.5;
+}
+
+.stripes path {
+  stroke-width: 3.5;
+}
+
+.stripes--top-right {
+  top: calc(-1 * var(--s5));
+  right: calc(-1 * var(--s6));
+  transform: scaleX(-1);
+}
+
+.trackcard {
+  display: grid;
+  grid-template-columns: auto repeat(3, auto) minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  row-gap: var(--s3);
+  align-items: end;
+}
+
+.trackcard__name {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  align-items: baseline;
+  gap: var(--s4);
+}
+
+.trackcard__stat:first-of-type {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.trackcard__title {
+  font-size: 1.5rem;
+}
+
+.duel__times {
+  display: grid;
+  grid-template-columns: auto auto auto;
+  justify-content: space-between;
+}
+
+.duel--b .duel__times {
+  direction: rtl;
+}
+
+.duel--b .duel__times > * {
+  direction: ltr;
+}
+
+.duel__value {
+  font-size: 1.45rem;
+}
+
+.duel__name {
+  font-size: 1.7rem;
+}
+
+/* towers: names fit next to the times */
+.lbcol .who__name {
+  font-size: 1.1rem;
 }
 
 /* ==== Misc =================================================================================== */

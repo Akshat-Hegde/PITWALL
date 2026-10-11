@@ -3,6 +3,7 @@ import type { ComparisonEntry, RigFrame, RigInfo, SectorTime } from "../schema";
 import { MINI_SECTORS, type MiniRating } from "../state/laptrace";
 import type { DashboardState } from "../state/reducer";
 import type { DashboardStore } from "../state/store";
+import { Avatar, Barcode, SlantBar, Tab } from "./Motifs";
 
 /** Cards (two lines of detail per car) up to this many rigs; a one-line-per-car tower above it. */
 export const MAX_CARDS = 4;
@@ -76,9 +77,10 @@ function Card({ rig, position, frame, delta, sessionBestMs, minis }: RowProps) {
              aria-label={`${rig.name}: ${frame?.driver ?? rig.name}`}>
       <header className="card__head">
         <Position position={position} />
+        <Avatar name={frame?.driver ?? rig.name} />
         <DriverName rig={rig} frame={frame} />
         <TyreTag frame={frame} />
-        <span className="card__state">{driving && lap ? `Lap ${lap.number}` : STATE_TEXT[state]}</span>
+        <LapTab frame={frame} />
       </header>
       {state === "no_data" ? (
         <p className="card__hint">
@@ -145,6 +147,16 @@ function TowerRow({ rig, position, frame, delta, sessionBestMs, minis }: RowProp
 
 // ---- Pieces --------------------------------------------------------------------------------------
 
+/** Motif 5 angled tab: LAP 4 | PUSH, LAP 4 | INVALID, IN MENU, NO DATA. */
+function LapTab({ frame }: { frame: RigFrame | undefined }) {
+  const state = frame?.state ?? "no_data";
+  const lap = frame?.lap ?? null;
+  if (state !== "driving" || !lap) return <Tab left={STATE_TEXT[state]} className="tab-badge--muted" />;
+  if (lap.distance_m < 0) return <Tab left={`Lap ${lap.number}`} right="Out lap" className="tab-badge--muted" />;
+  return <Tab left={`Lap ${lap.number}`} right={lap.valid ? "Push" : "Invalid"}
+              className={lap.valid ? "" : "tab-badge--muted"} />;
+}
+
 function Position({ position }: { position: number | null }) {
   return <span className="pos">{position ?? "–"}</span>;
 }
@@ -167,12 +179,16 @@ export function DriverName({ rig, frame, sub = true }: { rig: RigInfo; frame: Ri
   );
 }
 
+const COMPOUND_LETTER: Record<string, string> = { soft: "S", medium: "M", hard: "H", inter: "I", wet: "W" };
+
 export function TyreTag({ frame }: { frame: RigFrame | undefined }) {
   const tyre = frame?.tyre;
   if (!tyre || frame?.state === "no_data") return <span className="tyre" />;
   return (
     <span className="tyre" title={`${tyre.label} (${tyre.compound})`}>
-      <span className={`tyre__dot compound--${tyre.compound}`} aria-hidden="true" />
+      <span className={`tyre__letter compound-text--${tyre.compound}`} aria-hidden="true">
+        {COMPOUND_LETTER[tyre.compound] ?? "?"}
+      </span>
       <span className="tyre__label">{tyre.label}</span>
       {tyre.age_laps != null && <span className="tyre__age">{tyre.age_laps}L</span>}
     </span>
@@ -267,37 +283,35 @@ function Sectors({ frame, minis, bare = false }: { frame: RigFrame | undefined; 
   );
 }
 
-function Speed({ frame }: { frame: RigFrame | undefined }) {
+export function Speed({ frame, ticks = 36 }: { frame: RigFrame | undefined; ticks?: number }) {
   const kph = frame?.speed_kph ?? null;
-  const pct = kph == null ? 0 : Math.min(100, (kph / SPEED_BAR_MAX_KPH) * 100);
   return (
     <div className="speed">
+      <Barcode value={kph} max={SPEED_BAR_MAX_KPH} ticks={ticks} />
       <div className="speed__nums">
         <span className="speed__value">{formatSpeed(kph)}</span>
         <span className="unit">km/h</span>
         <span className="speed__gear">{formatGear(frame?.gear)}</span>
       </div>
-      <span className="bar"><span className="bar__fill" style={{ width: `${pct}%` }} /></span>
     </div>
   );
 }
 
 export function PedalBars({ frame, bare = false }: { frame: RigFrame | undefined; bare?: boolean }) {
-  const pct = (v: number | null | undefined) => Math.round(Math.min(1, Math.max(0, v ?? 0)) * 100);
-  const thr = frame ? pct(frame.throttle) : null;
-  const brk = frame ? pct(frame.brake) : null;
+  const thr = frame ? Math.min(1, Math.max(0, frame.throttle ?? 0)) : null;
+  const brk = frame ? Math.min(1, Math.max(0, frame.brake ?? 0)) : null;
   return (
     <div className={`pedals${bare ? " pedals--bare" : ""}`}>
       {(
         [
-          ["Throttle", "thr", thr],
-          ["Brake", "brk", brk],
+          ["Throttle", "thr", thr, "light"],
+          ["Brake", "brk", brk, "accent"],
         ] as const
-      ).map(([label, kind, value]) => (
+      ).map(([label, kind, value, tone]) => (
         <div key={kind} className={`pedal pedal--${kind}`}>
           {!bare && <span className="label">{label}</span>}
-          <span className="bar"><span className="bar__fill" style={{ width: `${value ?? 0}%` }} /></span>
-          {!bare && <span className="pedal__pct">{value ?? "–"}</span>}
+          <SlantBar value={value} tone={tone} label={label} />
+          {!bare && <span className="pedal__pct">{value == null ? "–" : Math.round(value * 100)}</span>}
         </div>
       ))}
     </div>

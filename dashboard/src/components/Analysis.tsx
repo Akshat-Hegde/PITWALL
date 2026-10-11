@@ -20,6 +20,7 @@ import {
 } from "../state/laptrace";
 import type { DashboardState } from "../state/reducer";
 import type { DashboardStore } from "../state/store";
+import { Avatar, StripeBundle, Tab } from "./Motifs";
 import { away } from "./TrackMap";
 import { runningOrder } from "./Timing";
 
@@ -70,6 +71,7 @@ export function AnalysisView({ store, state, trackKey }: { store: DashboardStore
   const trackName = outline?.track_name ?? state.leaderboards.today?.track_name ?? null;
   return (
     <main className="analysis">
+      <StripeBundle corner="top-right" className="analysis__stripes" />
       <header className="viewhead">
         <h1 className="viewhead__title">Head to head</h1>
         {duel && (
@@ -124,6 +126,7 @@ function Side({ duel, side }: { duel: Duel; side: "a" | "b" }) {
     <section className={`duel duel--${side}`} style={{ "--rig-colour": me.rig.colour } as React.CSSProperties}
              aria-label={me.name}>
       <div className="duel__id">
+        <Avatar name={me.name} className="avatar--l" />
         <div className="field">
           <span className="label">Position</span>
           <span className="duel__pos">{me.position ?? "–"}</span>
@@ -157,7 +160,7 @@ function Side({ duel, side }: { duel: Duel; side: "a" | "b" }) {
         </div>
       </div>
       <div className="duel__share">
-        <span className="label">% of lap time</span>
+        <Tab left="% of lap time" />
         {SHARE_ROWS.map(([key, label]) => {
           const v = me.trace.share[key];
           return (
