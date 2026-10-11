@@ -65,6 +65,7 @@ Compatibility rules:
 | `lap_completed` | A rig finishes a lap | `{ "lap": LapRecord }` |
 | `head_to_head` *(added in v1, optional)* | The closest pair on the shown track changes | `{ "head_to_head": HeadToHead \| null }` |
 | `competition` *(added in v1, optional)* | The challenge or the corporate event changes (also when their boards change) | `{ "competition": Competition }` |
+| `tv` *(added in v1, optional)* | Staff change the TV page, the pinned rig or the view over the page | `{ "tv": TvSetting }` |
 | `queue` *(added in v1, optional)* | The waiting queue changes | `{ "queue": [QueueEntry] }`: full replacement |
 | `moment` *(added in v1, optional)* | A broadcast moment: a driver starts, a record falls, the podium | `{ "moment": Moment }` |
 | `leaderboard` | A board of the shown track changes | `{ "leaderboard": Leaderboard }`: full replacement of the board for its `period`. Boards for another track replace all boards. |
@@ -97,7 +98,11 @@ Compatibility rules:
   steering wheel graphic, from `[dashboard] steering_wheel_rotation_deg`.
 - `cafe.branding`: CSS custom properties from `[cafe.branding]` in the hub config. The dashboard applies
   them to `:root` as-is (keys must start with `--`; others are ignored).
-- `outlines`: every outline the hub has (one per track that has had a complete valid lap).
+- `outlines`: every outline the hub has (bundled track files, and tracks where a full lap was driven).
+- `tv` *(added in v1, optional)*: TvSetting, what staff chose for the TV: `page` (`"live"` or `"multi"`),
+  `pinned_rig` (rig id for the LIVE trace strip, or null for automatic), `overlay` (`"head_to_head"`,
+  `"teams"` or null: a view shown over the page) and `updated_at` (Unix ms). The page and pinned rig are
+  kept across hub restarts; the overlay is not.
 - `head_to_head` *(added in v1, optional)*: the two drivers on the shown track whose best traced laps today
   are closest, or null. `{ "track_key", "track_name", "day", "a", "b" }`, `a` the faster; each side: `rig_id`,
   `driver`, `lap_ms`, `lap_number`, `lap_class`, `minis` (24 mini-sector times, ms), `speed` (200 values,
@@ -272,7 +277,10 @@ live lap vs your best lap at the same distance"; with more rigs, each rig is com
 | `track_key` | string | |
 | `track_name` | string \| null | |
 | `points` | `[[x, z], ...]` | Closed loop in the same coordinate space as `RigFrame.position`; `points[0]` is the start/finish line, in driving direction. |
-| `source` | string | `"first_valid_lap"` (recorded by the hub) or `"bundled"`. |
+| `source` | string | `"laps"` (learned by the hub from driven laps), `"bundled"` (a track file shipped with the hub) or, from older hubs, `"first_valid_lap"`. |
+| `laps` | int (optional) | `"laps"` outlines: how many laps were averaged into it (up to 5). Added in v1. |
+| `step_m` | number (optional) | `"laps"` outlines: lap distance between points. Added in v1. |
+| `length_m` | number (optional) | Lap length the points span. Added in v1. |
 | `sector_starts` | `[int, int, int]` \| null | Indices into `points` where sectors 1–3 start. |
 | `display` | `{ "flip_x": bool, "flip_z": bool, "rotate_deg": number }` | How to draw the world: screen right = +x, screen down = +z, **after** applying these. From the hub's `[map]` config, so the map matches the in-game minimap. The dashboard's `?map=` URL option overrides it, for finding the right config value. |
 
@@ -357,8 +365,9 @@ restarts.
 
 ## 6. Dashboard behaviour notes (non-normative)
 
-- Interpolate `position` between frames for smooth dots; draw a fading trail from recent positions; clear
-  the trail on `session_changed`.
-- Until an outline exists for a track, draw only trails (the map auto-fits to the points seen so far).
+- Interpolate `position` (and inputs) between frames so dots and needles move at display rate.
+- Until an outline exists for a track, draw the path driven so far (the map auto-fits to it).
 - Sector colours: `session_best` purple, `personal_best` green, `normal` yellow.
-- `no_data` rigs stay listed (greyed) so staff can see a rig is down.
+- `no_data` rigs are left off the TV; staff see them on `/staff` (Health tab).
+- `status.warnings` and rig addresses are for staff tools; the TV never displays them.
+- The page is `tv.page` unless a key on the TV PC chose another one more recently than `tv.updated_at`.

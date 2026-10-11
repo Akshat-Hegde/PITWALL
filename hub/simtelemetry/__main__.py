@@ -91,6 +91,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--save-laps", action="store_true",
                    help="store the replayed laps in the lap database (default: kept in memory only)")
     p.add_argument("--duration", type=float, help="stop after this many seconds")
+    p.add_argument("--rigs", type=int, default=None,
+                   help="play this many rigs at once from the recordings' sources (each source reused, staggered "
+                        "round the track, as 10.30.0.<n>); loops. For screenshots and demos with real data")
+    p.add_argument("--names", default=None, help="with --rigs: comma-separated driver names for the rigs")
 
     p = sub.add_parser("seed-demo", help="fill a separate demo data folder with a busy cafe's history "
                                          "(for demoing the staff and owner pages)")
@@ -129,6 +133,15 @@ async def print_status_lines(hub: Hub) -> None:
 
 
 async def replay_and_report(args: argparse.Namespace, hub: Hub, selection: SourceSelection) -> None:
+    if getattr(args, "rigs", None):
+        from .tools.replay import CLONE_NET, load_streams, replay_rigs
+        streams = load_streams(args.files, args.from_ip)
+        names = [n.strip() for n in (args.names or "").split(",") if n.strip()]
+        for n, name in enumerate(names[:args.rigs], start=1):
+            hub.drivers.assign(f"{CLONE_NET}{n}", name)
+        log.info("Replaying %d rigs from %d recorded sources", args.rigs, len(streams))
+        await replay_rigs(streams, hub.on_datagram, args.rigs, args.speed)
+        return
     try:
         await replay(args.files, hub.on_datagram, args.speed, selection)
     except Exception:  # with --live nothing awaits this task, so report here

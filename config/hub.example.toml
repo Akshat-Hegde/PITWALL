@@ -39,10 +39,10 @@ steering_wheel_rotation_deg = 360       # lock-to-lock rotation of the TV's whee
 # moments = true                       # "now driving" and "record broken" full-screen moments
 # battles = true                       # battle pop-ups
 # podium = true                        # podium screen (hourly and on staff command)
-# attract = true                       # attract mode when nobody is driving
+# attract = true                       # attract mode after 60 s with nobody driving
 # portrait = true                      # /portrait layout for vertical screens
-# head_to_head = true
-# onboard = true
+# head_to_head = true                  # head to head, put on the TV from /staff
+# onboard = true                       # the MULTIVIEW page (one tile per rig); off = LIVE only
 # sharing = true                       # story card + QR code when a session ends
 # challenges = true                    # weekly challenges
 # events = true                        # corporate events with teams

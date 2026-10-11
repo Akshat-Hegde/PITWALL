@@ -110,32 +110,37 @@ Mock options, combined in the URL, e.g. `http://localhost:5173/?outline=late&mis
 | `rigs=N` | Number of driving rigs, 1–10 (default 2). |
 | `idle=1` | Every rig stays in the menu: shows attract mode. |
 
-**TV views.** Four views, sized for 1080p and 4K; the look is specified in [docs/DESIGN.md](docs/DESIGN.md):
+**TV pages.** The TV is drawn on a fixed 1920 x 1080 canvas scaled to the screen (letterboxed if the shape
+differs), so nothing overflows on any TV, 1080p or 4K. Names up to 16 characters shrink to fit before they
+are ever cut. Rigs the hub has no data from are left off the TV (they show on `/staff`). The look is
+specified in [docs/DESIGN.md](docs/DESIGN.md).
 
-- **Race view:** the track map (a thin line coloured by the lead car's mini-sectors: purple fastest, green
-  personal best, yellow slower) with each car's dot and name, the closest battle underneath, and the timing:
-  per car position, name, tyre, lap time, sectors with mini-sectors, last, best, gap, speed, gear and thin
-  throttle / brake bars. Cards for up to 4 rigs, a one-line-per-car tower for 5–10. A strip along the bottom
-  shows today's top three, the speed trap and the conditions.
-- **Leaderboard view:** today, this week and all time side by side, ten rows each, paging every 8 s when a
-  board has more than ten drivers.
-- **Head to head:** the two drivers closest on best lap, left and right, with the map coloured by who is
-  faster in each of 24 mini-sectors, LOW / MEDIUM / HIGH SPEED corner labels, mirrored full throttle /
-  heavy braking / cornering bars, and both speed traces with the delta per mini-sector. The hub works these
-  out from each lap it traced from start to finish and keeps every driver's best per track and day, so the
-  view is there straight after a TV reload or hub restart.
-- **Onboard:** two cars at a time (paging through the rest): speed, gear, revs, throttle, brake, steering,
-  g-force circle with trail, the four tyres (temperature, wear, inner temperature, pressure, brake
-  temperature), fuel, ERS, DRS, top speed, slide angle and saves with the "Save!" flash, lap share bars and
-  damage.
+- **LIVE** (default): a large track map on the left (a thin outline with sector marks, each 1/24 of the lap
+  in the colour of the rig fastest through it, car dots with name labels on leader lines, and only the track,
+  its length and today's record in one corner). On the right, one card per active rig: name, lap, lap time,
+  the live delta to the driver's own best (green ahead, red behind), speed and gear, a steering wheel turning
+  with the driver's input (angle in degrees: steer x `[display] steering_rotation_deg`, 360 by default),
+  throttle and brake bars and the four tyres (temperature as colour, pressure as the number). Along the
+  bottom, for one rig: throttle and brake over the last 10 s, and speed this lap against the driver's best lap
+  by distance with the gap shaded. That rig is the one on the fastest lap, unless staff picked one.
+- **MULTIVIEW:** one tile per active rig (1 full screen, 2 side by side, 3-4 in a 2 x 2 grid, 5-6 in 3 x 2):
+  name, speed and gear, steering wheel, pedal bars, a small map with only that car, lap time and delta.
+- **Welcome and leaderboard (attract mode):** the cafe name, today's top 10 and the track record holder;
+  today, this week and all time side by side.
+- **Head to head** (staff-triggered): the two drivers closest on best lap, with the map coloured by who is
+  faster in each of 24 mini-sectors, corner labels, lap share bars and both speed traces. The hub keeps every
+  driver's best traced lap per track and day, so it is there straight after a TV reload or hub restart.
 
-- **Welcome (attract mode):** the cafe name, today's top 10 and the track record holder.
+The fuel, ERS, g-force, damage, brake temperature and tyre wear values are still in the feed
+(docs/WS_SCHEMA.md) but no longer on the TV.
 
-`?view=race|board|analysis|onboard|attract` fixes the view; the default `?view=auto` rotates while anyone is
-driving (race 40 s, head to head 15 s when available, onboard 15 s) and switches to attract mode after 10 s
-with nobody driving (welcome 20 s, leaderboard 20 s, race 10 s, head to head 10 s if available, repeating).
-Views change with a short broadcast wipe. On the TV PC's keyboard: `1` race, `2` leaderboard, `3` head to
-head, `4` onboard, `5` welcome, `0` auto.
+**Switching.** Staff choose the page on `/staff` (Rigs tab, **TV** panel: LIVE or MULTIVIEW, the rig for
+the trace strip, and **Show head to head** / **Show teams** over the page until **Back to the page**). On the
+TV PC's keyboard, `1` is LIVE and `2` MULTIVIEW. The newer choice wins, and it is kept across a reload or a
+hub restart. Nothing rotates while anyone drives. With nobody driving for 60 s the TV goes to attract mode
+(welcome, leaderboard, and the team board during an event), and back to the page as soon as a car drives.
+Moments (below) play over the page and never change it. `?view=live|multi|board|attract` fixes the view for
+testing.
 
 **Broadcast moments** (full screen for a few seconds, then back to the view):
 
@@ -189,7 +194,7 @@ For a TV PC that should come back by itself after a power cut, also set Windows 
 
 ## Staff page and driver profiles
 
-Open `http://<hub>:8000/staff` on a phone or tablet. Three tabs (a link like `/staff#queue` opens one):
+Open `http://<hub>:8000/staff` on a phone or tablet. Tabs (a link like `/staff#queue` opens one):
 
 - **Rigs:** start a session for a walk-in name, the next person in the queue, or a driver profile, with a
   session time (10–60 min or no timer). The TV shows "8 min left" next to the driver; from 5 minutes left the
@@ -201,6 +206,9 @@ Open `http://<hub>:8000/staff` on a phone or tablet. Three tabs (a link like `/s
   events have a name only. A profile shows visits, best
   lap per track and the improvement since the last visit. **Delete profile** removes the profile, its phone
   number, its sessions and all its laps (they leave the leaderboards too).
+- **Health:** technical diagnostics, for staff only: warnings (another program on the telemetry port, a rig
+  sending nothing, a wrong UDP format, low disk), each rig's address, state and packet rate, and the UDP IP
+  and port to enter in the games. None of this is ever shown on the TV; it is also in the hub log.
 - **Show podium** (top right) puts today's top three on the TV.
 
 Laps are saved under the session's driver, else the game's player name, else the rig name; changing the
@@ -293,7 +301,16 @@ restarts. "Today" starts at `[leaderboard] day_start_hour` (local time, default 
 Monday. To start the boards from scratch, stop the hub and delete or rename `laps.db`.
 
 `replay` keeps its laps in memory, so replaying a capture never changes the real boards; add `--save-laps`
-to store them.
+to store them. `replay --rigs 6 --names "Maya,Kofi,..."` plays six rigs at once from a capture's sources
+(reused and staggered round the track): real data for demos and screenshots.
+
+**Track outlines.** The map outline is learned from the first lap whose path covers the whole lap (valid or
+not, with no flashback) and refined by averaging in the next four. To ship a good outline with the hub:
+
+    python -m simtelemetry save-outline              # list the learned outlines
+    python -m simtelemetry save-outline Silverstone  # write hub/simtelemetry/tracks/F1-7.json
+
+A bundled track file is used straight away on every hub and never replaced by a learned outline.
 
 ## Python on the dev machine
 

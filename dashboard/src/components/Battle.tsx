@@ -1,7 +1,4 @@
-import { formatDelta, formatLapTime } from "../format";
 import type { DashboardState } from "../state/reducer";
-
-const HOLDING_MS = 50; // last laps within this of each other: "holding"
 
 export interface Battle {
   leader: { rigId: string; name: string; colour: string; bestMs: number };
@@ -41,41 +38,4 @@ export function findBattle(state: DashboardState, trackKey: string | null): Batt
     ratePerLapMs: leader.lastMs != null && chaser.lastMs != null ? chaser.lastMs - leader.lastMs : null,
     liveMs: live?.live_delta_ms ?? null,
   };
-}
-
-/** One line under the map: the closest pair, the gap, and whether it is closing (no box, DESIGN.md). */
-export function BattleLine({ battle }: { battle: Battle }) {
-  const rate = battle.ratePerLapMs;
-  const trend = rate == null ? "none" : rate <= -HOLDING_MS ? "closing" : rate >= HOLDING_MS ? "opening" : "holding";
-  const trendText =
-    trend === "closing" ? `Closing ${(Math.abs(rate!) / 1000).toFixed(2)} s / lap`
-      : trend === "opening" ? `Gap growing ${(rate! / 1000).toFixed(2)} s / lap`
-        : trend === "holding" ? "Holding the gap" : "Trend after the next laps";
-  return (
-    <section className="battle" aria-label="Battle">
-      <div className="battle__row">
-        <span className="label">Battle</span>
-        {[battle.leader, battle.chaser].map((d) => (
-          <span key={d.rigId} className="battle__who" style={{ "--rig-colour": d.colour } as React.CSSProperties}>
-            <span className="stripe" aria-hidden="true" />
-            <span className="battle__name">{d.name}</span>
-            <span className="battle__time">{formatLapTime(d.bestMs)}</span>
-          </span>
-        ))}
-      </div>
-      <div className="battle__row">
-      <span className="battle__gap">{formatDelta(battle.gapMs)}</span>
-      <span className={`battle__trend ${trend === "closing" ? "c-green" : trend === "opening" ? "c-yellow" : "t2"}`}>
-        <span aria-hidden="true">{trend === "closing" ? "▼ " : trend === "opening" ? "▲ " : ""}</span>
-        {trendText}
-      </span>
-      {battle.liveMs != null && (
-        <span className="battle__live">
-          <span className="label">This lap</span>
-          <span className={battle.liveMs <= 0 ? "c-green" : "c-yellow"}>{formatDelta(battle.liveMs, 2)}</span>
-        </span>
-      )}
-      </div>
-    </section>
-  );
 }

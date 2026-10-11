@@ -17,6 +17,7 @@ from fastapi.responses import HTMLResponse
 
 from ..core.drivers import EXTEND_PROMPT_MS, DriverError
 from ..core.feed import FeedBuilder, lan_address
+from ..core.tv import TvError
 from ..core.health import RigState
 
 if TYPE_CHECKING:
@@ -114,6 +115,25 @@ def staff_router(hub: Hub) -> APIRouter:
         return {"warnings": warnings, "rigs": snapshot["rigs"], "uptime_s": snapshot["uptime_s"],
                 "recorder": snapshot.get("recorder"),
                 "target": {"address": lan_address(), "port": hub.config.network.udp_port}}
+
+    @router.get("/api/staff/tv", dependencies=[Depends(guard)])
+    def tv() -> dict[str, Any]:
+        return hub.tv.to_json()
+
+    @router.put("/api/staff/tv", dependencies=[Depends(guard)])
+    def set_tv(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+        """{"page": "live" | "multi"}, {"pinned_rig": rig_id | null}, {"overlay": "head_to_head" | "teams" | null}."""
+        fields = {k: body[k] for k in ("page", "pinned_rig", "overlay") if k in body}
+        if fields.get("pinned_rig"):
+            find_rig(str(fields["pinned_rig"]))
+        if fields.get("overlay") == "head_to_head" and not hub.config.features.head_to_head:
+            raise HTTPException(400, "Head to head is switched off in [features].")
+        if fields.get("overlay") == "teams" and not hub.config.features.events:
+            raise HTTPException(400, "Events are switched off in [features].")
+        try:
+            return hub.tv.set(**fields)
+        except TvError as exc:
+            raise HTTPException(400, str(exc)) from None
 
     @router.post("/api/staff/demo/{action}", dependencies=[Depends(guard)])
     def demo(action: str, body: dict[str, Any] = Body(default={})) -> dict[str, Any]:

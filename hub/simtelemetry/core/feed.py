@@ -301,6 +301,7 @@ class FeedBuilder:
             "queue": self.queue(),
             "competition": self.competition(self.active_track(frame["rigs"])),
             "head_to_head": self.head_to_head(self.active_track(frame["rigs"])),
+            "tv": self.hub.tv.to_json(),
         }
 
 
@@ -320,6 +321,7 @@ class FeedConnection:
         self._queue: list[dict[str, Any]] = []                # queue last sent
         self._competition: dict[str, Any] | None = None       # competition state last sent
         self._h2h: dict[str, Any] | None = None               # head to head last sent
+        self._tv: dict[str, Any] | None = None                # TV page setting last sent
 
     def _message(self, type_: str, body: dict[str, Any]) -> dict[str, Any]:
         msg = {"v": SCHEMA_VERSION, "type": type_, "seq": self.seq, "ts": round(self._clock() * 1000)}
@@ -338,6 +340,7 @@ class FeedConnection:
         self._queue = body["queue"]
         self._competition = body["competition"]
         self._h2h = body["head_to_head"]
+        self._tv = body["tv"]
         return self._message("snapshot", body)
 
     def tick(self, now: float) -> list[dict[str, Any]]:
@@ -369,6 +372,10 @@ class FeedConnection:
         if competition != self._competition:
             self._competition = competition
             out.append(self._message("competition", {"competition": competition}))
+        tv = self.builder.hub.tv.to_json()
+        if tv != self._tv:
+            self._tv = tv
+            out.append(self._message("tv", {"tv": tv}))
         queue = self.builder.queue()
         if queue != self._queue:
             self._queue = queue

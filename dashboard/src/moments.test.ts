@@ -8,7 +8,6 @@ import type { HubMessage, Moment } from "./schema";
 import { ALL_FEATURES, applyMessage, initialState, type DashboardState } from "./state/reducer";
 import { DashboardStore } from "./state/store";
 import { validateMessage } from "./testing/validate";
-import { ATTRACT_HERO_MS, IDLE_AFTER_MS, chooseView } from "./views";
 
 function run(seconds: number, options = DEFAULT_MOCK_OPTIONS): HubMessage[] {
   let clock = 1_791_300_000_000;
@@ -75,16 +74,6 @@ describe("battle pop-ups", () => {
     expect(close?.title).toBe("Close fight");
     expect(battleCandidate({ ...s, battleMarginMs: 60_000, features: { ...ALL_FEATURES, battles: false } }, track))
       .toBeNull();
-  });
-});
-
-describe("attract rotation", () => {
-  test("idle: the branded attract screen comes first when switched on", () => {
-    const idle = IDLE_AFTER_MS + 1;
-    expect(chooseView("auto", idle, 0, { analysis: false, onboard: false, attract: true }).view).toBe("attract");
-    expect(chooseView("auto", idle + ATTRACT_HERO_MS, 0, { analysis: false, onboard: false, attract: true }).view)
-      .toBe("board");
-    expect(chooseView("auto", idle, 0, { analysis: false, onboard: false, attract: false }).view).toBe("board");
   });
 });
 

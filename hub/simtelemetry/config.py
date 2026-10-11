@@ -107,7 +107,7 @@ class FeaturesConfig(_Section):
     attract: bool = True          # attract mode when nobody is driving
     portrait: bool = True         # /portrait layout for vertical screens
     head_to_head: bool = True     # head-to-head analysis view
-    onboard: bool = True          # onboard view
+    onboard: bool = True          # the MULTIVIEW page (one tile per rig); off = LIVE only
     sharing: bool = True          # story card + QR code when a session ends
     challenges: bool = True       # weekly challenges on the TV
     events: bool = True           # corporate events: teams, team leaderboard, company branding

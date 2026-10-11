@@ -167,7 +167,24 @@
     <a id="card-link" class="muted" target="_blank" rel="noopener"></a>
   </section>
 
-  <section id="tab-rigs" role="tabpanel"><div id="rigs"></div></section>
+  <section id="tab-rigs" role="tabpanel">
+    <section class="panel" id="tv-panel">
+      <div class="row"><span class="title">TV</span><span class="faint">Also keys 1 / 2 on the TV PC</span></div>
+      <div class="actions">
+        <button class="btn" type="button" data-tv-page="live">LIVE</button>
+        <button class="btn" type="button" data-tv-page="multi">MULTIVIEW</button>
+      </div>
+      <label for="tv-pin">Trace strip on LIVE</label>
+      <select id="tv-pin"><option value="">Automatic: the rig on the fastest lap</option></select>
+      <div class="actions">
+        <button class="btn" type="button" data-tv-overlay="head_to_head">Show head to head</button>
+        <button class="btn" type="button" data-tv-overlay="teams" id="tv-teams">Show teams</button>
+        <button class="btn" type="button" data-tv-overlay="" id="tv-back" hidden>Back to the page</button>
+      </div>
+      <p class="msg" id="tv-msg" role="status"></p>
+    </section>
+    <div id="rigs"></div>
+  </section>
 
   <section id="tab-health" role="tabpanel" hidden>
     <section class="panel">
@@ -802,6 +819,39 @@
     $("health-port").textContent = String(h.target.port);
   }
 
+  // --- TV page -------------------------------------------------------------------------------
+  let tv = null;
+  function renderTv() {
+    if (!tv) return;
+    document.querySelectorAll("[data-tv-page]").forEach((b) => b.classList.toggle("primary", b.dataset.tvPage === tv.page));
+    document.querySelectorAll("[data-tv-overlay]").forEach((b) => b.classList.toggle("primary", !!tv.overlay && b.dataset.tvOverlay === tv.overlay));
+    $("tv-back").hidden = !tv.overlay;
+    $("tv-teams").hidden = !(state.features && state.features.events);
+    const select = $("tv-pin");
+    const wanted = tv.pinned_rig || "";
+    const options = [["", "Automatic: the rig on the fastest lap"], ...state.rigs.map((r) => [r.rig_id, r.rig_name])];
+    if (select.options.length !== options.length || [...select.options].some((o, i) => o.value !== options[i][0])) {
+      select.textContent = "";
+      for (const [value, text] of options) {
+        const o = document.createElement("option");
+        o.value = value;
+        o.textContent = text;
+        select.appendChild(o);
+      }
+    }
+    if (document.activeElement !== select) select.value = wanted;
+  }
+  async function setTv(body) {
+    try { tv = await api("PUT", "/api/staff/tv", body); renderTv(); say($("tv-msg"), "", ""); }
+    catch (err) { fail($("tv-msg"), err); }
+  }
+  document.querySelectorAll("[data-tv-page]").forEach((b) => b.addEventListener("click", () => setTv({ page: b.dataset.tvPage })));
+  document.querySelectorAll("[data-tv-overlay]").forEach((b) => b.addEventListener("click", () => setTv({ overlay: b.dataset.tvOverlay || null })));
+  $("tv-pin").addEventListener("change", (e) => setTv({ pinned_rig: e.target.value || null }));
+  async function loadTv() {
+    try { tv = await api("GET", "/api/staff/tv"); renderTv(); } catch { /* shown by load() */ }
+  }
+
   // --- podium --------------------------------------------------------------------------------
   $("podium-btn").addEventListener("click", async () => {
     try { await api("POST", "/api/staff/podium"); say($("top-msg"), "The TV is showing today's podium.", "ok"); }
@@ -819,6 +869,7 @@
       renderRigs();
       renderQueue();
       loadHealth();
+      loadTv();
       if (currentTab === "compete" && !compete) loadCompete();
     } catch (err) {
       if (err.message === "locked") return;

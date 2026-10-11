@@ -438,6 +438,17 @@ export interface SnapshotMessage extends Envelope<"snapshot"> {
   queue?: QueueEntry[];
   competition?: Competition;
   head_to_head?: HeadToHead | null;
+  /** Added in v1 (optional): what staff chose for the TV. */
+  tv?: TvSetting;
+}
+
+/** Added in v1: the TV page chosen on the staff page, the rig pinned to the LIVE strip, a view over the page. */
+export interface TvSetting {
+  page: "live" | "multi";
+  pinned_rig: string | null;
+  overlay: "head_to_head" | "teams" | null;
+  /** Unix ms of the last change (a newer key press on the TV PC wins over an older staff choice). */
+  updated_at: number;
 }
 
 export interface FrameMessage extends Envelope<"frame"> {
@@ -486,6 +497,10 @@ export interface HeadToHeadMessage extends Envelope<"head_to_head"> {
   head_to_head: HeadToHead | null;
 }
 
+export interface TvMessage extends Envelope<"tv"> {
+  tv: TvSetting;
+}
+
 export type HubMessage =
   | SnapshotMessage
   | FrameMessage
@@ -498,7 +513,8 @@ export type HubMessage =
   | MomentMessage
   | QueueMessage
   | CompetitionMessage
-  | HeadToHeadMessage;
+  | HeadToHeadMessage
+  | TvMessage;
 
 /** Message types this client knows; others must be ignored (schema rule). */
 export const KNOWN_TYPES: ReadonlySet<string> = new Set<HubMessage["type"]>([
@@ -514,4 +530,5 @@ export const KNOWN_TYPES: ReadonlySet<string> = new Set<HubMessage["type"]>([
   "queue",
   "competition",
   "head_to_head",
+  "tv",
 ]);

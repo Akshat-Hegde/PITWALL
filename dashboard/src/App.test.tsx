@@ -67,20 +67,20 @@ describe("TV view transitions", () => {
     expect(host.querySelectorAll(".app__view")).toHaveLength(1);
     expect(host.querySelector(".wipe")).toBeNull(); // no wipe on first load
 
-    for (const key of ["4", "1", "4", "1", "2", "1"]) {
+    for (const key of ["2", "1", "2", "1", "3", "1"]) {
       press(key);
       expect(host.querySelectorAll(".app__view")).toHaveLength(1);
       advance(WIPE_MS + 50);
       expect(host.querySelectorAll(".app__view")).toHaveLength(1);
       expect(host.querySelectorAll(".wipe")).toHaveLength(0);
     }
-    expect(host.querySelector(".app__view > main")?.className).toContain("race");
+    expect(host.querySelector(".app__view > main")?.className).toContain("live");
   });
 
   test("after switching views, every speed shown is the rig's live speed", () => {
     const { store, tick } = fedStore();
     act(() => root.render(<App store={store} />));
-    press("4");
+    press("2");
     advance(WIPE_MS + 50);
     press("1");
     advance(WIPE_MS + 50);
@@ -89,7 +89,7 @@ describe("TV view transitions", () => {
     });
     const frames = Object.values(store.getState().frames).filter((f) => f.state === "driving");
     expect(frames.length).toBeGreaterThan(0);
-    const shown = [...host.querySelectorAll(".speed__value")].map((e) => e.textContent);
+    const shown = [...host.querySelectorAll(".spg__speed")].map((e) => e.textContent);
     expect(shown.sort()).toEqual(frames.map((f) => formatSpeed(f.speed_kph)).sort());
   });
 });
@@ -105,9 +105,48 @@ describe("TV never shows technical diagnostics", () => {
       },
     } as unknown as HubMessage);
     act(() => root.render(<App store={store} />));
-    const text = host.textContent ?? "";
-    expect(text).not.toMatch(/\b\d{1,3}(\.\d{1,3}){3}\b/);
+    // Text per element, so neighbouring numbers (four tyre pressures) don't run together.
+    const text = [...host.querySelectorAll("*")].filter((e) => e.children.length === 0).map((e) => e.textContent).join(" | ");
+    expect(text.match(/\b\d{1,3}(\.\d{1,3}){3}\b/)?.[0] ?? null).toBeNull();
     expect(text).not.toContain("simpro");
     expect(host.querySelector(".tabs")).toBeNull(); // view switching is on /staff and the keys, not the TV
+  });
+});
+
+describe("TV pages and switching", () => {
+  test("a key press on the TV PC picks the page, and it survives a reload", () => {
+    localStorage.clear();
+    const { store } = fedStore();
+    act(() => root.render(<App store={store} />));
+    expect(host.querySelector(".app__view > main")?.className).toContain("live");
+    press("2");
+    expect(host.querySelector(".app__view > main")?.className).toContain("multi");
+    act(() => root.unmount());
+    root = createRoot(host);
+    act(() => root.render(<App store={store} />));
+    expect(host.querySelector(".app__view > main")?.className).toContain("multi");
+    localStorage.clear();
+  });
+
+  test("a newer staff choice from the hub switches the page", () => {
+    localStorage.clear();
+    const { store } = fedStore();
+    act(() => root.render(<App store={store} />));
+    act(() => store.dispatch({ v: 1, type: "tv", seq: 0, ts: 0,
+      tv: { page: "multi", pinned_rig: null, overlay: null, updated_at: Date.now() } } as HubMessage));
+    expect(host.querySelector(".app__view > main")?.className).toContain("multi");
+  });
+
+  test("a moment is an overlay: the page underneath stays", () => {
+    localStorage.clear();
+    const { store, hub } = fedStore();
+    act(() => root.render(<App store={store} />));
+    const rig = store.getState().rigs[0]!;
+    act(() => store.dispatch({ v: 1, type: "moment", seq: 0, ts: 0, moment: {
+      kind: "now_driving", at: Date.now(), rig_id: rig.rig_id, rig_name: rig.name, driver: "Maya", track_name: null,
+      record: null, personal_best: null } } as unknown as HubMessage));
+    void hub;
+    expect(host.querySelectorAll(".app__view")).toHaveLength(1);
+    expect(host.querySelector(".app__view > main")?.className).toContain("live");
   });
 });

@@ -19,6 +19,7 @@ import {
   type RigFrame,
   type RigInfo,
   type TrackOutline,
+  type TvSetting,
 } from "../schema";
 import { softenColour } from "../colour";
 
@@ -48,6 +49,7 @@ export interface DashboardState {
   competition: Competition;
   /** Head to head from the hub (survives TV reloads); null until two drivers have a traced lap today. */
   headToHead: HeadToHead | null;
+  tv: TvSetting;
   recentLaps: LapRecord[];
   lastFrameAt: number | null;
   /** Optional features from the hub config (missing = on). */
@@ -91,6 +93,7 @@ export function initialState(source: DashboardState["source"]): DashboardState {
     proLeaderboards: {},
     competition: { challenge: null, event: null },
     headToHead: null,
+    tv: { page: "live", pinned_rig: null, overlay: null, updated_at: 0 },
     recentLaps: [],
     lastFrameAt: null,
     features: ALL_FEATURES,
@@ -170,6 +173,7 @@ export function applyMessage(state: DashboardState, msg: HubMessage, now: number
         proLeaderboards: boardsByPeriod(msg.leaderboards, true),
         competition: msg.competition ?? { challenge: null, event: null },
         headToHead: msg.head_to_head ?? null,
+        tv: msg.tv ?? state.tv,
         recentLaps: msg.recent_laps.slice(0, RECENT_LAPS_MAX),
         queue: msg.queue ?? [],
         lastFrameAt: now,
@@ -191,6 +195,8 @@ export function applyMessage(state: DashboardState, msg: HubMessage, now: number
       return { ...state, recentLaps: [msg.lap, ...state.recentLaps].slice(0, RECENT_LAPS_MAX) };
     case "head_to_head":
       return { ...state, headToHead: msg.head_to_head };
+    case "tv":
+      return { ...state, tv: msg.tv };
     case "competition":
       return { ...state, competition: msg.competition };
     case "queue":

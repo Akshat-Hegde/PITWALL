@@ -34,6 +34,8 @@ class Hub:
         self.laps = LapBook(outline_display=config.map.model_dump(), store=store,
                             day_start_hour=config.leaderboard.day_start_hour, bundled_outlines=bundled_outlines)
         self.drivers = DriverRegistry(store)
+        from .core.tv import TvControl
+        self.tv = TvControl(config.data_dir / "tv.json" if store is not None and store.path is not None else None)
         from .core.competitions import Competitions
         self.competitions = Competitions(self.drivers.store, config.data_dir, config.leaderboard.day_start_hour)
         # Other programs listening on the telemetry port on a specific address (see net/udp.py).

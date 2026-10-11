@@ -5,10 +5,10 @@ import { CardQr } from "./components/CardQr";
 import { BracketPreview, TeamsView } from "./components/Competition";
 import { BattlePopups, MomentLayer } from "./components/Moments";
 import { KineticType } from "./components/Motifs";
-import { OnboardView, onboardRigs } from "./components/Onboard";
+import { LivePage, MultiviewPage } from "./components/Live";
 import { TvStage } from "./components/Stage";
 import { StatusBar } from "./components/StatusBar";
-import { BoardView, RaceView } from "./components/Views";
+import { BoardView } from "./components/Views";
 import type { Display } from "./map/geometry";
 import type { DashboardState } from "./state/reducer";
 import { useDashboard, type DashboardStore } from "./state/store";
@@ -87,7 +87,7 @@ interface Props {
 }
 
 const VIEW_NAME: Record<string, string> = {
-  race: "Live timing", board: "Leaderboard", analysis: "Head to head", onboard: "Onboard", attract: "Welcome",
+  live: "Live", multi: "Multiview", board: "Leaderboard", analysis: "Head to head", attract: "Welcome",
   teams: "Teams", bracket: "Hotlap cup",
 };
 
@@ -133,14 +133,14 @@ export function App({ store, mapDisplay = null, viewMode = "auto", layout = "tv"
   const f = state.features;
   const available = {
     analysis: f.head_to_head && chooseDuel(state, store.laps, trackKey) !== null,
-    onboard: f.onboard && onboardRigs(state).length > 0,
     attract: f.attract,
     teams: f.events && state.competition.event !== null,
     bracket: demo,
   };
   const event = f.events ? state.competition.event : null;
   useEventAccent(event?.accent ?? null);
-  const { view } = useView(viewMode, anyDriving || nothingYet, available);
+  const chosen = useView(viewMode, anyDriving || nothingYet, available, state.tv).view;
+  const view = chosen === "multi" && !f.onboard ? "live" : chosen; // [features] onboard = the MULTIVIEW page
   const wipe = useWipe(view);
 
   if (state.link === "version_mismatch") {
@@ -175,13 +175,13 @@ export function App({ store, mapDisplay = null, viewMode = "auto", layout = "tv"
       <StatusBar state={state} trackKey={trackKey} />
       {/* Keys are unique among siblings: one view is mounted at a time, whatever the transition. */}
       <div className="app__view" key={`view:${view}`}>
-        {view === "race" && (
-          <RaceView store={store} state={state} trackKey={trackKey} mapDisplay={mapDisplay}
-                    sessionBestMs={sessionBest(state, trackKey)} />
+        {view === "live" && (
+          <LivePage store={store} state={state} trackKey={trackKey} mapDisplay={mapDisplay}
+                    pinnedRigId={state.tv.pinned_rig} />
         )}
+        {view === "multi" && <MultiviewPage store={store} state={state} trackKey={trackKey} />}
         {view === "board" && <BoardView state={state} />}
         {view === "analysis" && <AnalysisView store={store} state={state} trackKey={trackKey} />}
-        {view === "onboard" && <OnboardView store={store} state={state} />}
         {view === "attract" && <AttractView state={state} />}
         {view === "teams" && <TeamsView state={state} />}
         {view === "bracket" && <BracketPreview />}

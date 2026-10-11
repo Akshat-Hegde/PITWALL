@@ -3,6 +3,7 @@ import type { HubMessage } from "../schema";
 import { applyMessage, initialState, type DashboardState, type LinkState } from "./reducer";
 import { LapShareTracker } from "./lapshare";
 import { LapTraceTracker } from "./laptrace";
+import { LiveTelemetry } from "./live";
 import { PathTrace } from "./paths";
 import { TrailBuffer } from "./trails";
 
@@ -18,6 +19,8 @@ export class DashboardStore {
   readonly lapShare = new LapShareTracker();
   /** Mini-sectors and speed traces per lap (race map colours, head to head). */
   readonly laps = new LapTraceTracker();
+  /** Input history, delta to own best and speed traces per rig (LIVE and MULTIVIEW pages). */
+  readonly live = new LiveTelemetry();
   /** Recent (lateral, longitudinal) g per rig, newest last: the friction-circle trail. */
   readonly gTrail = new Map<string, [number, number][]>();
 
@@ -39,6 +42,7 @@ export class DashboardStore {
       this.lapShare.clear();
       this.gTrail.clear();
       this.laps.clear();
+      this.live.clear();
     }
     if (msg.type === "session_changed") {
       this.trails.clear(msg.rig_id);
@@ -54,6 +58,7 @@ export class DashboardStore {
       for (const frame of frames) {
         this.lapShare.add(frame);
         this.laps.add(frame);
+        this.live.add(frame, now);
         this.addG(frame.rig_id, frame.state === "driving" ? frame.car ?? null : null);
         if (!frame.position) continue;
         this.trails.add(frame.rig_id, now, frame.position.x, frame.position.z);

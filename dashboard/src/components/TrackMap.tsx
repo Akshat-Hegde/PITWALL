@@ -22,21 +22,23 @@ interface Props {
   trackKey: string | null;
   /** From ?map=...: overrides the outline's display transform (orientation check). */
   displayOverride: Display | null;
-  /** Rig whose current-lap mini-sectors colour the track (the lead car). */
-  focusRigId?: string | null;
+  /** "live": every car with its name label, mini-sectors in the colour of the rig fastest through each.
+   *  "mini": a small map with one car (MULTIVIEW tiles), no labels. */
+  variant?: "live" | "mini";
+  /** Only this rig's car (mini maps). */
+  onlyRigId?: string | null;
 }
-
-const TRAIL_MS = 3000;
 
 function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
 /**
- * Canvas map (DESIGN.md): a thin neutral line, coloured only by meaning (the lead car's mini-sectors on this
- * lap), small car dots with name labels off the track on thin leader lines. Redrawn every animation frame.
+ * Canvas map (DESIGN.md): a thin neutral line, mini-sectors in the colour of the rig fastest through each,
+ * small car dots with name labels off the track on thin leader lines. Redrawn every animation frame; dots are
+ * interpolated between the 15 Hz frames.
  */
-export function TrackMap({ store, state, trackKey, displayOverride, focusRigId = null }: Props) {
+export function TrackMap({ store, state, trackKey, displayOverride, variant = "live", onlyRigId = null }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // Latest React state for the draw loop, without restarting it on every frame message.
   const stateRef = useRef(state);
@@ -45,8 +47,9 @@ export function TrackMap({ store, state, trackKey, displayOverride, focusRigId =
   trackKeyRef.current = trackKey;
   const overrideRef = useRef(displayOverride);
   overrideRef.current = displayOverride;
-  const focusRef = useRef(focusRigId);
-  focusRef.current = focusRigId;
+  const onlyRef = useRef(onlyRigId);
+  onlyRef.current = onlyRigId;
+  const mini = variant === "mini";
   // Without an outline the map fits everything driven so far; the bounds only ever grow.
   const seenBounds = useRef<Bounds>(emptyBounds());
   const seenTrackKey = useRef<string | null>(null);
@@ -129,12 +132,12 @@ export function TrackMap({ store, state, trackKey, displayOverride, focusRigId =
       ctx.clearRect(0, 0, width, height);
       if (isEmpty(bounds)) return;
       // Room round the track for the name labels.
-      const fit = fitBounds(bounds, width, height, rem * 3.4);
+      const fit = fitBounds(bounds, width, height, mini ? rem * 0.6 : rem * 3.4);
       const toScreen = (x: number, z: number) => {
         const [px, py] = toMapPlane(x, z, display);
         return project(fit, px, py);
       };
-      const lineW = rem * 0.2;
+      const lineW = mini ? rem * 0.14 : rem * 0.18;
       ctx.lineJoin = "round";
       ctx.lineCap = "round";
 
@@ -149,13 +152,12 @@ export function TrackMap({ store, state, trackKey, displayOverride, focusRigId =
         ctx.lineWidth = lineW;
         ctx.stroke();
 
-        // The lead car's mini-sectors on this lap, coloured by meaning.
-        const focus = focusRef.current;
-        const minis = focus ? store.laps.liveMinis(focus) : null;
-        if (minis && minis.trackKey === key) {
-          const colourOf = { purple: c.purple, green: c.green, yellow: c.yellow, invalid: c.text3 };
+        // Mini-sectors in the colour of the rig fastest through each (live map only).
+        const owners = !mini && key ? store.laps.miniOwners(key) : null;
+        if (owners) {
+          const colours = new Map(s.rigs.map((r) => [r.rig_id, r.colour]));
           const n = pts.length;
-          minis.ratings.forEach((r, k) => {
+          owners.forEach((rigId, k) => {
             const from = Math.floor((k / MINI_SECTORS) * n);
             const to = Math.floor(((k + 1) / MINI_SECTORS) * n);
             ctx.beginPath();
@@ -164,7 +166,7 @@ export function TrackMap({ store, state, trackKey, displayOverride, focusRigId =
               if (i === from) ctx.moveTo(x, y);
               else ctx.lineTo(x, y);
             }
-            ctx.strokeStyle = colourOf[r];
+            ctx.strokeStyle = colours.get(rigId) ?? c.track;
             ctx.lineWidth = lineW;
             ctx.stroke();
           });
@@ -172,7 +174,7 @@ export function TrackMap({ store, state, trackKey, displayOverride, focusRigId =
 
         // Start/finish: a short white tick across the track. Sector lines: grey ticks with S2 / S3.
         tick(ctx, pts, 0, rem * 0.7, c.text, rem * 0.18);
-        const starts = outline.sector_starts;
+        const starts = mini ? null : outline.sector_starts;
         if (starts) {
           ctx.font = `600 ${rem * 0.6}px ${c.font}`;
           ctx.textAlign = "center";
@@ -203,31 +205,8 @@ export function TrackMap({ store, state, trackKey, displayOverride, focusRigId =
         }
       }
 
-      // Short fading trails in the rig colour, then the dots and labels on top.
-      const rigs = s.rigs;
-      ctx.lineWidth = rem * 0.12;
-      for (const rig of rigs) {
-        const frame = s.frames[rig.rig_id];
-        if (!frame || frame.state !== "driving" || frame.session.track_key !== key) continue;
-        const trail = store.trails.get(rig.rig_id);
-        for (let i = 1; i < trail.length; i++) {
-          const a = trail[i - 1]!;
-          const b = trail[i]!;
-          const age = now - b.t;
-          if (age > TRAIL_MS) continue;
-          if (Math.hypot(b.x - a.x, b.z - a.z) > 200) continue; // don't draw across a reset or flashback
-          const [ax, ay] = toScreen(a.x, a.z);
-          const [bx, by] = toScreen(b.x, b.z);
-          ctx.globalAlpha = 0.7 * (1 - age / TRAIL_MS);
-          ctx.strokeStyle = rig.colour;
-          ctx.beginPath();
-          ctx.moveTo(ax, ay);
-          ctx.lineTo(bx, by);
-          ctx.stroke();
-        }
-      }
-      ctx.globalAlpha = 1;
-
+      // The dots and labels on top.
+      const rigs = onlyRef.current ? s.rigs.filter((r) => r.rig_id === onlyRef.current) : s.rigs;
       const placed: { x: number; y: number; w: number; h: number }[] = [];
       const fontPx = rem * 0.75;
       const r = rem * 0.32;
@@ -237,6 +216,16 @@ export function TrackMap({ store, state, trackKey, displayOverride, focusRigId =
         const pos = store.trails.positionAt(rig.rig_id, renderAt);
         if (!pos) continue;
         const [sx, sy] = toScreen(pos.x, pos.z);
+        if (mini) {
+          ctx.beginPath();
+          ctx.arc(sx, sy, r * 1.2, 0, Math.PI * 2);
+          ctx.fillStyle = rig.colour;
+          ctx.fill();
+          ctx.lineWidth = rem * 0.1;
+          ctx.strokeStyle = c.bg;
+          ctx.stroke();
+          continue;
+        }
         const name = (frame.driver ?? rig.name).toUpperCase();
         ctx.font = `700 ${fontPx}px ${c.font}`;
         const w = ctx.measureText(name).width + rem * 0.5;
@@ -299,16 +288,23 @@ export function TrackMap({ store, state, trackKey, displayOverride, focusRigId =
       observer.disconnect();
       window.removeEventListener("resize", resize);
     };
-  }, [store]);
+  }, [store, mini]);
 
   const hasOutline = trackKey ? Boolean(state.outlines[trackKey]) : false;
   const anyDriving = Object.values(state.frames).some((f) => f.state === "driving");
+  if (mini) {
+    return (
+      <div className="track-map track-map--mini">
+        <canvas ref={canvasRef} className="track-map__canvas" aria-hidden="true" />
+      </div>
+    );
+  }
   return (
     <div className="track-map">
       <canvas ref={canvasRef} className="track-map__canvas" aria-label="Track map with live car positions" />
       {!anyDriving && <Waiting state={state} />}
       {anyDriving && !hasOutline && (
-        <p className="track-map__note track-map__note--corner">Track outline appears after the first clean lap.</p>
+        <p className="track-map__note track-map__note--corner">The track outline appears after the first full lap.</p>
       )}
       {displayOverride && (
         <p className="track-map__note track-map__note--top">Map orientation: {describeDisplay(displayOverride)}</p>

@@ -1,45 +1,40 @@
 import { describe, expect, test } from "vitest";
-import {
-  ATTRACT_BOARD_MS, ATTRACT_RACE_MS, IDLE_AFTER_MS, LIVE_ANALYSIS_MS, LIVE_RACE_MS, chooseView, viewModeFromQuery,
-} from "./views";
+import type { TvSetting } from "./schema";
+import { ATTRACT_HERO_MS, IDLE_AFTER_MS, chooseView, currentPage, viewModeFromQuery } from "./views";
 
-describe("TV views", () => {
-  test("URL picks the mode; anything else is auto", () => {
+const TV: TvSetting = { page: "live", pinned_rig: null, overlay: null, updated_at: 1000 };
+const ALL = { analysis: true, attract: true, teams: true };
+
+describe("TV pages", () => {
+  test("URL fixes the view; anything else is auto", () => {
     const mode = (q: string) => viewModeFromQuery(new URLSearchParams(q));
-    expect([mode("view=race"), mode("view=board"), mode("view=x"), mode("")]).toEqual(["race", "board", "auto", "auto"]);
-    expect([mode("view=analysis"), mode("view=onboard")]).toEqual(["analysis", "onboard"]);
+    expect([mode("view=live"), mode("view=multi"), mode("view=race"), mode("")]).toEqual(["live", "multi", "auto", "auto"]);
   });
 
-  test("auto: race while someone drives or just stopped", () => {
-    expect(chooseView("auto", null)).toEqual({ view: "race", attract: false });
-    expect(chooseView("auto", IDLE_AFTER_MS - 1)).toEqual({ view: "race", attract: false });
+  test("while anyone drives: the chosen page, never rotating", () => {
+    for (const page of ["live", "multi"] as const) {
+      expect(chooseView("auto", page, null, null, ALL)).toEqual({ view: page, attract: false });
+    }
   });
 
-  test("auto: attract mode alternates leaderboard and race", () => {
-    expect(chooseView("auto", IDLE_AFTER_MS)).toEqual({ view: "board", attract: true });
-    expect(chooseView("auto", IDLE_AFTER_MS + ATTRACT_BOARD_MS)).toEqual({ view: "race", attract: true });
-    const cycle = ATTRACT_BOARD_MS + ATTRACT_RACE_MS;
-    expect(chooseView("auto", IDLE_AFTER_MS + cycle + 1).view).toBe("board");
+  test("attract mode only after 60 s with nobody driving, and back to the page when someone drives", () => {
+    expect(IDLE_AFTER_MS).toBe(60_000);
+    expect(chooseView("auto", "multi", null, IDLE_AFTER_MS - 1, ALL).view).toBe("multi");
+    expect(chooseView("auto", "multi", null, IDLE_AFTER_MS, ALL)).toEqual({ view: "attract", attract: true });
+    expect(chooseView("auto", "multi", null, IDLE_AFTER_MS + ATTRACT_HERO_MS, ALL).view).toBe("board");
+    expect(chooseView("auto", "multi", null, null, ALL).view).toBe("multi");
+    expect(chooseView("auto", "live", null, IDLE_AFTER_MS * 5, { analysis: false, attract: false }).view).toBe("live");
   });
 
-  test("a fixed view ignores driving and idling", () => {
-    expect(chooseView("board", null)).toEqual({ view: "board", attract: false });
-    expect(chooseView("race", 10 * 60_000)).toEqual({ view: "race", attract: false });
+  test("staff can put head to head or the teams over the page, when there is one", () => {
+    expect(chooseView("auto", "live", "head_to_head", null, ALL).view).toBe("analysis");
+    expect(chooseView("auto", "live", "head_to_head", null, { analysis: false }).view).toBe("live");
+    expect(chooseView("auto", "live", "teams", IDLE_AFTER_MS * 2, ALL).view).toBe("teams");
   });
 
-  test("while driving: race, then head to head and onboard when they have something to show", () => {
-    const both = { analysis: true, onboard: true };
-    const at = (t: number, available = both) => chooseView("auto", null, t, available).view;
-    expect(at(0)).toBe("race");
-    expect(at(LIVE_RACE_MS)).toBe("analysis");
-    expect(at(LIVE_RACE_MS + LIVE_ANALYSIS_MS)).toBe("onboard");
-    expect(at(LIVE_RACE_MS, { analysis: false, onboard: true })).toBe("onboard");
-    expect(at(LIVE_RACE_MS, { analysis: false, onboard: false })).toBe("race");
-  });
-
-  test("attract mode adds head to head when there is one", () => {
-    const idle = IDLE_AFTER_MS + ATTRACT_BOARD_MS + ATTRACT_RACE_MS;
-    expect(chooseView("auto", idle, 0, { analysis: true, onboard: false }).view).toBe("analysis");
-    expect(chooseView("auto", idle, 0, { analysis: false, onboard: false }).view).toBe("board");
+  test("the newer of the staff choice and a key press on the TV PC wins", () => {
+    expect(currentPage(TV, null)).toBe("live");
+    expect(currentPage(TV, { page: "multi", at: 2000 })).toBe("multi");
+    expect(currentPage({ ...TV, page: "live", updated_at: 3000 }, { page: "multi", at: 2000 })).toBe("live");
   });
 });

@@ -94,3 +94,51 @@ async def replay(paths: Iterable[Path], sink: Callable[[bytes, str, float], None
             count += 1
     log.info("Replay finished: %d packets", count)
     return count
+
+
+CLONE_NET = "10.30.0."  # --rigs: each copy plays as its own rig at 10.30.0.<n>
+MIN_STREAM_PACKETS = 2000  # ignore sources that only sent a handful of packets
+
+
+def load_streams(paths: Iterable[Path], from_ip: str | None = None) -> list[list[tuple[float, bytes]]]:
+    """Each source IP of each recording (or only from_ip) as one stream of (wall_time, packet), in order."""
+    streams: list[list[tuple[float, bytes]]] = []
+    for path in paths:
+        by_ip: dict[str, list[tuple[float, bytes]]] = {}
+        try:
+            for wall_time, ip, data in read_recording(path):
+                if from_ip is None or ip == from_ip:
+                    by_ip.setdefault(ip, []).append((wall_time, data))
+        except (OSError, ValueError) as exc:
+            raise ReplayError(f"Cannot read recording {path}: {exc}") from None
+        streams += [s for s in by_ip.values() if len(s) >= MIN_STREAM_PACKETS]
+    if not streams:
+        raise ReplayError("The recordings have no source with enough packets to replay.")
+    return streams
+
+
+async def replay_rigs(streams: list[list[tuple[float, bytes]]], sink: Callable[[bytes, str, float], None], rigs: int,
+                      speed: float = 1.0, stagger_s: float = 23.0) -> None:
+    """Play `rigs` copies of the recorded streams at once, each as its own rig (10.30.0.1, .2, ...), every copy
+    starting stagger_s later into its stream so the cars spread round the track. Loops until cancelled."""
+    speed = speed if speed > 0 else 1.0
+
+    async def one(n: int) -> None:
+        stream = streams[(n - 1) % len(streams)]
+        ip = f"{CLONE_NET}{n}"
+        span = stream[-1][0] - stream[0][0]
+        skip = ((n - 1) // len(streams) * stagger_s + (n - 1) * 3.0) % max(span, 1.0)
+        loop = asyncio.get_running_loop()
+        while True:
+            start = loop.time()
+            first = stream[0][0] + skip
+            for wall_time, data in stream:
+                if wall_time < first:
+                    continue
+                delay = (wall_time - first) / speed - (loop.time() - start)
+                if delay > 0.002:
+                    await asyncio.sleep(delay)
+                sink(data, ip, wall_time)
+            skip = 0.0
+
+    await asyncio.gather(*(one(n) for n in range(1, rigs + 1)))

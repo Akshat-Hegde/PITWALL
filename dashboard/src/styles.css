@@ -447,32 +447,7 @@ ul {
   white-space: nowrap;
 }
 
-/* ==== Race view ============================================================================== */
-
-.race {
-  display: grid;
-  grid-template-areas:
-    "map timing"
-    "summary summary";
-  grid-template-rows: minmax(0, 1fr) auto;
-  gap: var(--s4) var(--s6);
-}
-
-.race--cards {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
-}
-
-.race--tower {
-  grid-template-columns: minmax(0, 0.55fr) minmax(0, 1fr);
-}
-
-.race__map {
-  grid-area: map;
-  position: relative;
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
-  min-height: 0;
-}
+/* ==== Track map ================================================================================ */
 
 .track-map {
   position: relative;
@@ -499,480 +474,6 @@ ul {
 .track-map__note--top {
   top: 0;
   right: 0;
-}
-
-.mapkey {
-  position: absolute;
-  top: 0;
-  left: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-}
-
-.mapkey__items {
-  display: flex;
-  gap: var(--s4);
-  font-family: var(--font-cond);
-  font-size: var(--fs-small);
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-/* Battle under the map: who, then the gap and its trend */
-.battle {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s3);
-  padding-top: var(--s4);
-  border-top: var(--hairline);
-}
-
-.battle__row {
-  display: flex;
-  align-items: center;
-  gap: var(--s5);
-  min-width: 0;
-  white-space: nowrap;
-}
-
-.battle__row .label {
-  width: 3.4rem;
-}
-
-.battle__who {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s3);
-}
-
-.battle__who .stripe {
-  height: 1.1rem;
-}
-
-.battle__name {
-  font-family: var(--font-cond);
-  font-size: var(--fs-body);
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-}
-
-.battle__time {
-  color: var(--text-2);
-}
-
-.battle__gap {
-  min-width: 3.4rem;
-  font-size: var(--fs-value);
-  font-weight: 600;
-}
-
-.battle__trend {
-  font-size: var(--fs-small);
-  font-weight: 600;
-}
-
-.battle__live {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--s2);
-  margin-left: auto;
-  font-weight: 600;
-}
-
-/* Timing: shared */
-.timing {
-  grid-area: timing;
-  display: grid;
-  min-height: 0;
-  border-top: var(--hairline);
-}
-
-.timing--empty {
-  align-content: center;
-  gap: var(--s3);
-}
-
-.sectors {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--s3);
-}
-
-.sector {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  gap: var(--s1);
-}
-
-.sector__time {
-  font-size: var(--fs-value);
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.sector.is-current .label {
-  color: var(--text);
-}
-
-.minis {
-  display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
-  gap: 2px;
-  margin-top: var(--s1);
-}
-
-.mini {
-  height: 3px;
-  background: var(--line-strong);
-  transition: background-color var(--fade);
-}
-
-.mini--purple { background: var(--timing-purple); }
-.mini--green { background: var(--timing-green); }
-.mini--yellow { background: var(--timing-yellow); }
-.mini--invalid { background: var(--text-3); }
-
-.speed {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-  min-width: 0;
-}
-
-.speed__nums {
-  display: flex;
-  align-items: baseline;
-  white-space: nowrap;
-}
-
-.speed__value {
-  min-width: 2.2ch;
-  font-size: var(--fs-display);
-  font-weight: 600;
-  line-height: 0.9;
-  text-align: right;
-}
-
-.speed__gear {
-  margin-left: auto;
-  padding-left: var(--s4);
-  font-size: var(--fs-display);
-  font-weight: 600;
-  line-height: 0.9;
-}
-
-.pedals {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: var(--s3);
-  min-width: 0;
-}
-
-.pedal {
-  display: grid;
-  grid-template-columns: 4.6rem minmax(0, 1fr) 2rem;
-  align-items: center;
-  gap: var(--s3);
-}
-
-.pedal__pct {
-  font-weight: 600;
-  text-align: right;
-}
-
-.pedal--brk .bar__fill {
-  background: var(--brand-accent);
-}
-
-.pedals--bare {
-  gap: 3px;
-}
-
-.pedals--bare .pedal {
-  grid-template-columns: 1fr;
-}
-
-/* Timing: cards (up to 4 rigs) */
-.timing--l,
-.timing--m {
-  grid-template-rows: repeat(var(--rows), minmax(0, 1fr));
-}
-
-.card {
-  display: grid;
-  grid-template-rows: auto auto;
-  align-content: center;
-  row-gap: var(--s5);
-  min-height: 0;
-  padding: var(--s5) 0 var(--s4);
-  border-bottom: var(--hairline);
-  transition: opacity var(--fade);
-}
-
-.card.is-no-data {
-  opacity: 0.6;
-}
-
-.card__head {
-  display: grid;
-  grid-template-columns: 2rem minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: var(--s4);
-}
-
-.card__head .pos {
-  font-size: var(--fs-value-l);
-  text-align: left;
-}
-
-.card__state {
-  min-width: 4.5rem;
-  color: var(--text-2);
-  font-family: var(--font-cond);
-  font-size: var(--fs-small);
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-align: right;
-  text-transform: uppercase;
-}
-
-.card__hint {
-  align-self: center;
-  padding-left: 2.8rem;
-  color: var(--text-2);
-}
-
-.card__body {
-  display: grid;
-  align-content: center;
-  min-width: 0;
-  padding-left: 2.8rem;
-}
-
-/* two rigs: speed / pedals / lap time, then sectors and times */
-.timing--l .card {
-  row-gap: var(--s6);
-}
-
-.timing--l .card__body {
-  grid-template-columns: repeat(3, minmax(0, 1fr)) repeat(2, minmax(0, 1.2fr)) minmax(0, 0.8fr);
-  gap: var(--s7) var(--s5);
-}
-
-.timing--l .speed,
-.timing--l .pedals,
-.timing--l .field--clock {
-  grid-column: span 2;
-}
-
-.timing--l .sectors {
-  grid-column: span 3;
-}
-
-.timing--l .speed__value,
-.timing--l .speed__gear {
-  font-size: 4rem;
-}
-
-.timing--l .field--clock .field__value {
-  font-size: 3rem;
-  line-height: 0.95;
-}
-
-.timing--l .pedals {
-  gap: var(--s4);
-}
-
-.timing--l .field--clock {
-  align-items: flex-end;
-}
-
-.timing--l .field__value,
-.timing--l .sector__time {
-  font-size: 1.75rem;
-}
-
-.timing--l .who__name {
-  font-size: 1.8rem;
-}
-
-.timing--l .card__head .pos {
-  font-size: 2.2rem;
-}
-
-/* three or four rigs: one row */
-.timing--m .card {
-  row-gap: var(--s3);
-  padding: var(--s4) 0;
-}
-
-.timing--m .card__body {
-  grid-template-columns: 6.6rem 5.4rem 6.4rem minmax(0, 2.6fr) repeat(3, minmax(0, 1fr));
-  align-items: end;
-  gap: var(--s4);
-}
-
-.timing--m .pedal {
-  grid-template-columns: minmax(0, 1fr) 1.6rem;
-}
-
-.timing--m .pedal .label,
-.timing--m .pedal__pct {
-  display: none;
-}
-
-.timing--m .pedal {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.timing--m .speed .unit {
-  display: none;
-}
-
-.timing--m .speed__value,
-.timing--m .speed__gear {
-  font-size: 1.9rem;
-}
-
-.timing--m .field--clock .field__value {
-  font-size: 1.5rem;
-}
-
-.timing--m .field__value,
-.timing--m .sector__time {
-  font-size: 1.05rem;
-}
-
-/* Timing: tower (5-10 rigs) */
-.timing--s {
-  grid-template-rows: auto repeat(var(--rows), minmax(0, 1fr));
-}
-
-.trow {
-  display: grid;
-  grid-template-columns: 1.6rem minmax(7rem, 1fr) 3.6rem 5.4rem 11rem 5.2rem 5.2rem 4rem 4.2rem 3rem;
-  align-items: center;
-  gap: var(--s3);
-  min-height: 0;
-  border-bottom: var(--hairline);
-  font-size: var(--fs-body);
-  font-weight: 600;
-}
-
-.trow.is-no-data,
-.trow.is-in-menu-paused {
-  color: var(--text-2);
-}
-
-.trow--head {
-  padding: var(--s2) 0;
-  color: var(--text-2);
-  font-family: var(--font-cond);
-  font-size: var(--fs-label);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.trow .who {
-  align-self: stretch;
-  padding: var(--s3) 0;
-}
-
-.trow .who__name {
-  font-size: 1.05rem;
-}
-
-.trow .who__sub {
-  font-size: 0.65rem;
-}
-
-.trow .pos {
-  font-size: var(--fs-body);
-}
-
-.trow .tyre__age {
-  display: none;
-}
-
-.trow__clock {
-  font-size: var(--fs-value);
-}
-
-.trow .sector__time {
-  font-size: var(--fs-small);
-}
-
-.trow__speed {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--s2);
-}
-
-.trow__gear {
-  min-width: 0.8em;
-  color: var(--text-2);
-}
-
-/* Summary strip */
-.summary {
-  grid-area: summary;
-  display: flex;
-  align-items: baseline;
-  gap: var(--s6);
-  padding-top: var(--s4);
-  border-top: var(--hairline);
-  white-space: nowrap;
-}
-
-.summary__group {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s3);
-}
-
-.summary__group + .summary__group {
-  padding-left: var(--s6);
-  border-left: var(--hairline);
-}
-
-.summary__today {
-  flex: 1;
-  min-width: 0;
-  gap: var(--s5);
-  overflow: hidden;
-}
-
-.summary__entry {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--s3);
-  font-weight: 600;
-}
-
-.summary__entry .stripe {
-  align-self: center;
-  height: 0.9rem;
-}
-
-.summary__pos {
-  color: var(--text-2);
-}
-
-.summary__name {
-  font-family: var(--font-cond);
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-}
-
-.summary__big {
-  font-size: var(--fs-value);
-  font-weight: 600;
 }
 
 /* Waiting overlay on the map */
@@ -1457,303 +958,6 @@ ul {
 .trace__foot {
   grid-column: 2;
   padding-top: var(--s2);
-}
-
-/* ==== Onboard ================================================================================ */
-
-.onboard {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: var(--s5);
-}
-
-.onboard__grid {
-  display: grid;
-  gap: var(--s7);
-  min-height: 0;
-}
-
-.onboard__grid--2 {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.onboard__grid--1 {
-  grid-template-columns: minmax(0, 52rem);
-  justify-content: center;
-}
-
-.obcar {
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
-  min-height: 0;
-  border-top: 2px solid var(--rig-colour);
-}
-
-.obcar > section,
-.obcar > header {
-  padding: var(--s4) 0;
-}
-
-.obcar > section {
-  border-top: var(--hairline);
-}
-
-.obcar__head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: var(--s5);
-}
-
-.obcar__head .who__name {
-  font-size: 1.6rem;
-}
-
-.obcar__lap {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: var(--s1);
-  font-size: var(--fs-value);
-  font-weight: 600;
-}
-
-.obcar__drive {
-  display: grid;
-  grid-template-columns: 14rem minmax(0, 1fr);
-  gap: var(--s6);
-  align-items: center;
-}
-
-.speed--xl .speed__value,
-.speed--xl .speed__gear {
-  font-size: 3.6rem;
-}
-
-.obcar__inputs {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s3);
-}
-
-.meter,
-.obcar__inputs .pedal {
-  display: grid;
-  grid-template-columns: 4.6rem minmax(0, 1fr) 4.6rem;
-  align-items: center;
-  gap: var(--s3);
-}
-
-.obcar__inputs .pedals {
-  gap: var(--s3);
-}
-
-.meter__value,
-.obcar__inputs .pedal__pct {
-  font-weight: 600;
-  text-align: right;
-  white-space: nowrap;
-}
-
-.bar--centred .bar__fill {
-  right: auto;
-}
-
-.bar__centre {
-  position: absolute;
-  top: -2px;
-  bottom: -2px;
-  left: 50%;
-  width: 1px;
-  background: var(--text-2);
-}
-
-.obcar__mid {
-  display: grid;
-  grid-template-columns: 11rem minmax(0, 1fr);
-  gap: var(--s6);
-  min-height: 0;
-}
-
-.obcar__block {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s3);
-  min-width: 0;
-}
-
-.obcar__title {
-  color: var(--text-2);
-}
-
-.gforce {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s3);
-}
-
-.gforce svg {
-  width: 9rem;
-  height: 9rem;
-}
-
-.gforce__ring {
-  fill: none;
-  stroke: var(--line);
-  stroke-width: 0.8;
-}
-
-.gforce__ring.is-major {
-  stroke: var(--line-strong);
-}
-
-.gforce__axis {
-  stroke: var(--line);
-  stroke-width: 0.8;
-}
-
-.gforce__trail {
-  stroke: var(--rig-colour);
-  stroke-width: 2;
-  stroke-linecap: round;
-}
-
-.gforce__dot {
-  fill: var(--text);
-}
-
-.gforce__nums {
-  display: flex;
-  gap: var(--s4);
-  font-weight: 600;
-}
-
-.gforce__value {
-  font-weight: 600;
-}
-
-.tyres {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s2);
-}
-
-.tyre-block {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: baseline;
-  gap: var(--s1) var(--s5);
-  padding: var(--s3) var(--s4);
-  background: var(--panel);
-}
-
-.tyre-block__temp {
-  font-size: var(--fs-value-l);
-  font-weight: 600;
-  text-align: right;
-}
-
-.tyre-block__row {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--s2);
-  font-size: var(--fs-small);
-  font-weight: 600;
-}
-
-.obcar__systems {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: var(--s5);
-}
-
-.obcar__ers .bar {
-  margin-top: var(--s1);
-}
-
-.obcar__ers .bar__fill {
-  background: var(--text-2);
-}
-
-.is-on .field__value {
-  text-decoration: underline 2px var(--brand-accent);
-  text-underline-offset: 0.25em;
-}
-
-.obcar__slide {
-  position: relative;
-}
-
-.save {
-  margin-left: var(--s3);
-  color: var(--brand-accent);
-  font-family: var(--font-cond);
-  font-size: var(--fs-value-l);
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  animation: view-in 200ms ease-out;
-}
-
-.obcar__bottom {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s6);
-}
-
-.share,
-.damage {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s3);
-}
-
-.share__row,
-.damage__row {
-  display: grid;
-  grid-template-columns: 6.6rem minmax(0, 1fr) 2.8rem;
-  align-items: center;
-  gap: var(--s3);
-  font-weight: 600;
-}
-
-.share__label {
-  color: var(--text-2);
-  font-family: var(--font-cond);
-  font-size: var(--fs-small);
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.share__pct,
-.damage__row > span:last-child {
-  text-align: right;
-}
-
-.share__bar {
-  overflow: visible;
-}
-
-.share__bar .bar__fill {
-  background: var(--rig-colour);
-}
-
-.share__last {
-  position: absolute;
-  top: -3px;
-  bottom: -3px;
-  width: 2px;
-  background: var(--text);
-}
-
-.damage__bar .bar__fill {
-  background: var(--text-2);
-}
-
-.damage__bar .bar__fill.is-bad {
-  background: var(--brand-accent);
 }
 
 /* ==== Design v2: type roles and motifs (DESIGN.md §1–§2) ===================================== */
@@ -3524,4 +2728,555 @@ html:has(.tvstage) {
 
 .who__text {
   min-width: 0;
+}
+
+/* ==== TV pages: LIVE and MULTIVIEW (DESIGN.md "TV pages") =========================================== */
+
+:root {
+  --gutter: 24px;
+  --throttle: #38d97a;
+  --brake: #ff4a4a;
+  --delta-ahead: #38d97a;
+  --delta-behind: #ff5a4f;
+  --tyre-ok: #2f9e5a;
+}
+
+.tvstage .app {
+  padding: 0 var(--gutter) var(--gutter);
+}
+
+.tvstage .header {
+  margin: 0 calc(-1 * var(--gutter));
+  padding: 0 var(--gutter);
+}
+
+.tvstage .app__view {
+  padding-top: var(--gutter);
+}
+
+.c-thr { color: var(--throttle); }
+.c-brk { color: var(--brake); }
+.c-ahead { color: var(--delta-ahead); }
+.c-behind { color: var(--delta-behind); }
+
+.delta { color: var(--text); }
+.delta--ahead { color: var(--delta-ahead); }
+.delta--behind { color: var(--delta-behind); }
+.delta--none { color: var(--text-3); }
+
+/* An invalid lap: the time stays readable, dimmed, with a small tag by the lap number. */
+.lapclock.is-invalid {
+  color: var(--text-2);
+}
+
+.invalid-tag {
+  margin-left: 8px;
+  color: var(--delta-behind);
+}
+
+/* Hero numerals: wide Saira, tabular so values never jitter. */
+.lapclock,
+.delta,
+.spg__speed,
+.spg__gear {
+  font-family: var(--font-body);
+  font-stretch: 125%;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.rcard__stripe {
+  display: none;
+}
+
+/* Steering wheel (generic yoke shape) with the angle under it */
+.wheel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.wheel__svg {
+  width: var(--wheel, 3.4rem);
+  height: var(--wheel, 3.4rem);
+  overflow: visible;
+}
+
+.wheel__turn {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+}
+
+.wheel__rim {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 6;
+}
+
+.wheel__spoke {
+  fill: none;
+  stroke: var(--text-2);
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+
+.wheel__hub {
+  fill: var(--panel-2);
+  stroke: var(--text-2);
+  stroke-width: 3;
+}
+
+.wheel__mark {
+  fill: var(--rig-colour, var(--text));
+}
+
+.wheel__deg {
+  min-width: 3.2em;
+  color: var(--text-2);
+  font-family: var(--font-cond);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+  text-align: center;
+}
+
+/* Throttle and brake: two thin vertical bars */
+.vpedals {
+  display: flex;
+  gap: 4px;
+  height: var(--pedal-h, 3.4rem);
+}
+
+.vpedal {
+  position: relative;
+  width: 8px;
+  height: 100%;
+  overflow: hidden;
+  background: var(--line);
+}
+
+.vpedal__fill {
+  position: absolute;
+  inset: 0;
+  transform: scaleY(0);
+  transform-origin: bottom;
+}
+
+.vpedal--thr .vpedal__fill { background: var(--throttle); }
+.vpedal--brk .vpedal__fill { background: var(--brake); }
+
+/* Four tyre blocks: temperature as colour, pressure as the number */
+.tyres4 {
+  display: grid;
+  grid-template-columns: repeat(2, var(--tyre-w, 2.6rem));
+  grid-auto-rows: var(--tyre-h, 1.6rem);
+  gap: 4px;
+}
+
+.tyre4 {
+  display: grid;
+  place-items: center;
+  background: var(--panel-2);
+  color: var(--text-3);
+  font-family: var(--font-cond);
+  font-size: var(--fs-label);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.tyre4--cold { background: var(--temp-cold); color: var(--bg); }
+.tyre4--cool { background: color-mix(in srgb, var(--temp-cold) 45%, var(--tyre-ok)); color: var(--bg); }
+.tyre4--ok { background: var(--tyre-ok); color: var(--text); }
+.tyre4--warm { background: var(--temp-warm); color: var(--bg); }
+.tyre4--hot { background: var(--temp-hot); color: var(--bg); }
+
+/* Speed and gear */
+.spg {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3em;
+}
+
+.spg__speed {
+  min-width: 2.1em;
+  text-align: right;
+}
+
+.spg__unit {
+  color: var(--text-3);
+  font-family: var(--font-cond);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.spg__gear {
+  min-width: 0.9em;
+  margin-left: 0.2em;
+}
+
+/* ---- LIVE: map (8 columns) | rig cards (4 columns), trace strip under both ---- */
+
+.live {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr) 216px;
+  gap: var(--gutter);
+  height: 100%;
+}
+
+.live__map {
+  position: relative;
+  grid-column: 1 / 9;
+  min-height: 0;
+}
+
+.live__map .track-map {
+  height: 100%;
+}
+
+.mapinfo {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  pointer-events: none;
+}
+
+.mapinfo__track {
+  font-family: var(--font-cond);
+  font-size: var(--fs-body);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mapinfo__len,
+.mapinfo__rec {
+  color: var(--text-2);
+  font-size: var(--fs-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.mapinfo__rec {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+}
+
+.live__cards {
+  grid-column: 9 / 13;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+}
+
+.live__cards--4,
+.live__cards--5,
+.live__cards--6 {
+  gap: 12px;
+}
+
+.live__empty {
+  color: var(--text-3);
+}
+
+/* Rig card: the only boxed element on the page */
+.rcard {
+  --hero: 2.4rem;
+  --wheel: 3.6rem;
+  --pedal-h: 3.6rem;
+  display: grid;
+  flex: 1 1 0;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-areas:
+    "head head head head"
+    "time time delta delta"
+    "spg wheel pedals tyres";
+  align-items: center;
+  column-gap: 20px;
+  row-gap: 10px;
+  min-height: 0;
+  max-height: 300px;
+  padding: 14px 18px;
+  background: var(--panel);
+  border-left: var(--stripe) solid var(--rig-colour);
+}
+
+.rcard.is-selected {
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+
+.rcard__head {
+  grid-area: head;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+}
+
+.rcard__name {
+  flex: 1;
+  font-family: var(--font-cond);
+  font-size: var(--fs-name);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.rcard__lap {
+  color: var(--text-2);
+  font-family: var(--font-cond);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.rcard__head .lapclock {
+  display: none;
+}
+
+.rcard__time {
+  grid-area: time;
+  font-size: var(--hero);
+}
+
+.rcard__delta {
+  grid-area: delta;
+  justify-self: end;
+  font-size: var(--hero);
+}
+
+.rcard__spg {
+  grid-area: spg;
+  font-size: var(--hero);
+}
+
+.rcard .wheel { grid-area: wheel; }
+.rcard .vpedals { grid-area: pedals; }
+.rcard .tyres4 { grid-area: tyres; }
+
+/* 4-6 rigs: the lap time joins the name line, the rest on one line under it */
+.rcard--compact {
+  --hero: 1.55rem;
+  --wheel: 2.6rem;
+  --pedal-h: 2.6rem;
+  --tyre-w: 2.1rem;
+  --tyre-h: 1.2rem;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  grid-template-areas:
+    "head head head head head"
+    "delta spg wheel pedals tyres";
+  column-gap: 14px;
+  row-gap: 4px;
+  padding: 8px 14px;
+}
+
+.rcard--compact .rcard__delta {
+  justify-self: start;
+  min-width: 4.2em;
+}
+
+.rcard--compact .rcard__spg {
+  justify-self: end;
+}
+
+.rcard--compact .rcard__time {
+  display: none;
+}
+
+.rcard--compact .rcard__head .lapclock {
+  display: inline;
+  font-size: var(--hero);
+}
+
+.rcard--compact .rcard__name {
+  font-size: var(--fs-value);
+}
+
+.rcard--compact .wheel__deg {
+  display: none;
+}
+
+/* Trace strip */
+.strip {
+  grid-column: 1 / 13;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--gutter);
+  min-height: 0;
+  padding-top: 16px;
+  border-top: var(--hairline);
+}
+
+.strip__who {
+  grid-column: 1 / 3;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding-left: 12px;
+  border-left: var(--stripe) solid var(--rig-colour, var(--line));
+}
+
+.strip__name {
+  font-family: var(--font-cond);
+  font-size: var(--fs-name);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.strip__panel {
+  grid-column: 3 / 7;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.strip__panel--wide {
+  grid-column: 7 / 13;
+}
+
+.strip__label {
+  display: flex;
+  gap: 12px;
+}
+
+.strip__label > span:first-of-type {
+  margin-left: auto;
+}
+
+.strip__canvas {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+}
+
+/* 1-2 rigs: bigger cards so the column isn't half empty */
+.rcard--large {
+  --hero: 2.8rem;
+  --wheel: 4.4rem;
+  --pedal-h: 4.4rem;
+  --tyre-w: 2.8rem;
+  --tyre-h: 2rem;
+  max-height: 400px;
+  row-gap: 18px;
+  padding: 20px 24px;
+}
+
+.rcard--large .tyre4 {
+  font-size: var(--fs-small);
+}
+
+/* ---- MULTIVIEW: one tile per active rig ---- */
+
+.multi {
+  display: grid;
+  gap: var(--gutter);
+  height: 100%;
+}
+
+.multi--1 { grid-template-columns: minmax(0, 1fr); }
+.multi--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.multi--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); }
+.multi--6 { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); }
+
+.tile {
+  --hero: 2rem;
+  --big: 4.4rem;
+  --wheel: 4.6rem;
+  --pedal-h: 4.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  min-height: 0;
+  padding: 18px 22px;
+  background: var(--panel);
+  border-left: var(--stripe) solid var(--rig-colour);
+}
+
+.multi--1 .tile { --hero: 3.2rem; --big: 10rem; --wheel: 8rem; --pedal-h: 8rem; padding: 28px 36px; }
+.multi--2 .tile { --hero: 2.4rem; --big: 7rem; --wheel: 6.4rem; --pedal-h: 6.4rem; padding: 24px 28px; }
+.multi--6 .tile { --hero: 1.5rem; --big: 3.2rem; --wheel: 3.4rem; --pedal-h: 3.4rem; gap: 10px; padding: 14px 16px; }
+
+.tile__head {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  min-width: 0;
+}
+
+.tile__name {
+  flex: 1;
+  font-family: var(--font-cond);
+  font-size: var(--fs-name);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.multi--1 .tile__name,
+.multi--2 .tile__name {
+  font-size: var(--fs-title);
+}
+
+.tile__head .lapclock,
+.tile__head .delta {
+  font-size: var(--hero);
+}
+
+.tile__head .delta {
+  min-width: 3.6em;
+  text-align: right;
+}
+
+.tile__body {
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+  min-height: 0;
+}
+
+.multi--2 .tile__body {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.tile__drive {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 20px;
+  min-width: 0;
+}
+
+.tile__spg {
+  font-size: var(--big);
+}
+
+.tile__ctl {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.tile__map {
+  min-width: 0;
+  min-height: 0;
+}
+
+.tile__map .track-map {
+  height: 100%;
 }

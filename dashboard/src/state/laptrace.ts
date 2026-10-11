@@ -56,6 +56,7 @@ export class LapTraceTracker {
   private readonly last = new Map<string, LapTrace>();
   private readonly rigBestMinis = new Map<string, number[]>(); // `${rig}|${track}` -> best per mini
   private readonly trackBestMinis = new Map<string, number[]>(); // track -> fastest per mini, any rig
+  private readonly trackBestOwner = new Map<string, string[]>(); // track -> rig with the fastest time, per mini
   private readonly live = new Map<string, LiveMinis>();
   /** Bumped when a lap completes: lets views memoise on it. */
   version = 0;
@@ -134,6 +135,9 @@ export class LapTraceTracker {
       const prev = this.best.get(rigId);
       if (!prev || prev.trackKey !== trace.trackKey || trace.lapMs < prev.lapMs) this.best.set(rigId, trace);
       mergeBest(this.rigBestMinis, `${rigId}|${p.trackKey}`, minis);
+      const before = this.trackBestMinis.get(p.trackKey);
+      const owners = this.trackBestOwner.get(p.trackKey) ?? minis.map(() => rigId);
+      this.trackBestOwner.set(p.trackKey, owners.map((o, i) => (before && before[i]! <= minis[i]! ? o : rigId)));
       mergeBest(this.trackBestMinis, p.trackKey, minis);
     }
     this.version += 1;
@@ -142,6 +146,11 @@ export class LapTraceTracker {
   /** Mini-sector colours of the rig's current lap so far. */
   liveMinis(rigId: string): LiveMinis | null {
     return this.live.get(rigId) ?? null;
+  }
+
+  /** Per mini-sector, the rig with the fastest time on it (clean valid laps this page saw); null before any. */
+  miniOwners(trackKey: string): readonly string[] | null {
+    return this.trackBestOwner.get(trackKey) ?? null;
   }
 
   bestLap(rigId: string, trackKey: string): LapTrace | null {
@@ -161,6 +170,7 @@ export class LapTraceTracker {
       this.last.clear();
       this.rigBestMinis.clear();
       this.trackBestMinis.clear();
+      this.trackBestOwner.clear();
       this.live.clear();
     } else {
       this.progress.delete(rigId);

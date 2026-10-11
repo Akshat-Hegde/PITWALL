@@ -149,3 +149,18 @@ def test_cli_replay_live_warns_on_ip_collision(tmp_path):
     assert code == 0
     log_text = (data / "logs" / "hub.log").read_text(encoding="utf-8")
     assert log_text.count("the same IP the recording is replayed as") == 1
+
+
+async def test_replay_rigs_plays_each_copy_as_its_own_rig():
+    import asyncio
+    from simtelemetry.tools.replay import replay_rigs
+    streams = [[(100.0 + i * 0.01, b"a%d" % i) for i in range(300)], [(50.0 + i * 0.01, b"b%d" % i) for i in range(300)]]
+    got: list[tuple[bytes, str]] = []
+    task = asyncio.create_task(replay_rigs(streams, lambda data, ip, t: got.append((data, ip)), rigs=3, speed=50))
+    await asyncio.sleep(0.3)
+    task.cancel()
+    ips = {ip for _, ip in got}
+    assert ips == {"10.30.0.1", "10.30.0.2", "10.30.0.3"}
+    assert {d[:1] for d, ip in got if ip == "10.30.0.2"} == {b"b"}        # second rig plays the second source
+    first3 = next(d for d, ip in got if ip == "10.30.0.3")
+    assert first3 != b"a0"                                                 # a later copy starts further into it
