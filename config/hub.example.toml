@@ -55,6 +55,11 @@ podium_every_min = 60                  # podium at the end of every N minutes on
 enabled = false                        # session start and record sounds on the TV
 volume = 0.6
 
+[owner]
+pin = ""                               # PIN for /owner (analytics); empty = the page stays locked
+open_hour = 10                         # opening hours, for rig utilisation
+close_hour = 22
+
 [staff]
 pin = ""                               # PIN for the /staff page (driver names); empty = no PIN
 

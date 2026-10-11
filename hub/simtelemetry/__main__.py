@@ -61,6 +61,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("run", parents=[common], help="hub + TV dashboard and API")
     add_record_flags(p)
+    p.add_argument("--owner-pin", help="PIN for the /owner page (overrides [owner] pin; handy for demos)")
     p.add_argument("--duration", type=float, help="stop after this many seconds")
 
     p = sub.add_parser("listen", parents=[common], help="debug: no API, one status line per rig per second")
@@ -87,6 +88,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--save-laps", action="store_true",
                    help="store the replayed laps in the lap database (default: kept in memory only)")
     p.add_argument("--duration", type=float, help="stop after this many seconds")
+
+    p = sub.add_parser("seed-demo", help="fill a separate demo data folder with a busy cafe's history "
+                                         "(for demoing the staff and owner pages)")
+    p.add_argument("--data-dir", type=Path, default=Path("data-demo"),
+                   help="demo data folder (default data-demo); must be empty or made by seed-demo before")
+    p.add_argument("--days", type=int, default=60, help="days of history (default 60)")
     return parser
 
 
@@ -97,6 +104,8 @@ def apply_overrides(config: AppConfig, args: argparse.Namespace) -> AppConfig:
         config.network.udp_port = args.port
     if args.http_port is not None:
         config.network.http_port = args.http_port
+    if getattr(args, "owner_pin", None):
+        config.owner.pin = args.owner_pin
     return config
 
 
@@ -213,6 +222,17 @@ def port_in_use_message(exc: PortInUseError) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "seed-demo":
+        from .tools.seed_demo import DemoTargetError, seed
+        try:
+            counts = seed(args.data_dir, args.days)
+        except DemoTargetError as exc:
+            print(f"\nERROR: {exc}\n", file=sys.stderr)
+            return 2
+        print(f"Demo data in {args.data_dir}: {counts['sessions']} sessions, {counts['laps']} laps, "
+              f"{counts['drivers']} drivers ({counts['profiles']} with profiles).\n"
+              f"Run it with:  python -m simtelemetry run --data-dir {args.data_dir} --owner-pin 0000")
+        return 0
     try:
         config = apply_overrides(load_config(args.config), args)
     except ConfigError as exc:

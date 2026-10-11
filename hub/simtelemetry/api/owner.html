@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0c0d11">
+<title>Owner</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0c0d11;
+    --surface-1: #14151b;
+    --surface-2: #1b1c24;
+    --line: rgba(255, 255, 255, 0.08);
+    --grid: rgba(255, 255, 255, 0.07);
+    --text-primary: #f0efec;
+    --text-secondary: #c3c2b7;
+    --text-muted: rgba(240, 239, 236, 0.5);
+    --accent: #e10600;
+    --series-1: #3987e5;   /* categorical slot 1 (blue): single-series bars, "new" drivers */
+    --series-2: #d95926;   /* categorical slot 2 (orange): "returning" drivers */
+    --seq-0: #1b1c24;      /* sequential (blue), empty -> full */
+    --seq-1: #183252;
+    --seq-2: #1f4f86;
+    --seq-3: #2e6dba;
+    --seq-4: #4a8fe3;
+    --seq-5: #8dbdf5;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text-primary);
+    font: 15px/1.4 "Saira", "Segoe UI", system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
+  }
+  .kerb { height: 4px; background: repeating-linear-gradient(90deg, var(--accent) 0 18px, #fff 18px 36px); }
+  header.top { max-width: 1200px; margin: 0 auto; padding: 14px 16px 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  h1 { flex: 1; margin: 0; font-size: 1.4rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+  h1 small { display: block; color: var(--text-muted); font-size: 0.8rem; letter-spacing: 0.08em; }
+  main { max-width: 1200px; margin: 0 auto; padding: 0 16px 32px; }
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0 16px; }
+  .seg { display: inline-flex; border: 1px solid var(--line); }
+  .seg button, .btn {
+    padding: 8px 14px; border: 0; background: var(--surface-2); color: var(--text-secondary);
+    font: inherit; font-weight: 700; cursor: pointer;
+  }
+  .seg button[aria-pressed="true"] { background: var(--text-primary); color: var(--bg); }
+  .btn { border: 1px solid var(--line); text-decoration: none; display: inline-block; }
+  .spacer { flex: 1; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 16px; }
+  .tile { background: var(--surface-1); padding: 12px 14px; }
+  .tile .k { color: var(--text-muted); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+  .tile .v { font-size: 1.9rem; font-weight: 800; line-height: 1.1; }
+  .tile .s { color: var(--text-secondary); font-size: 0.85rem; }
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .card { background: var(--surface-1); padding: 14px 16px; min-width: 0; }
+  .card.wide { grid-column: 1 / -1; }
+  .card h2 { margin: 0 0 2px; font-size: 1rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+  .card p.sub { margin: 0 0 10px; color: var(--text-muted); font-size: 0.85rem; }
+  .legend { display: flex; gap: 14px; margin: 0 0 8px; color: var(--text-secondary); font-size: 0.85rem; }
+  .legend i { display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -1px; border-radius: 2px; }
+  svg { display: block; width: 100%; height: auto; overflow: visible; }
+  svg text { fill: var(--text-muted); font-size: 11px; font-family: inherit; }
+  svg .label { fill: var(--text-secondary); font-weight: 600; }
+  svg .grid-line { stroke: var(--grid); stroke-width: 1; }
+  svg .hit { fill: transparent; }
+  svg .hit:hover + .mark, svg .cell:hover { opacity: 0.85; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th { text-align: left; color: var(--text-muted); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 6px 4px; }
+  td { padding: 7px 4px; border-top: 1px solid var(--line); }
+  td.r, th.r { text-align: right; }
+  details { margin-top: 12px; }
+  summary { cursor: pointer; color: var(--text-secondary); font-weight: 700; }
+  .tip {
+    position: fixed; z-index: 10; pointer-events: none; padding: 8px 10px; background: #000; border: 1px solid var(--line);
+    color: var(--text-primary); font-size: 0.85rem; white-space: pre; display: none;
+  }
+  .msg { color: var(--text-secondary); }
+  .error { color: #ff6b6b; }
+  form.pin { max-width: 360px; background: var(--surface-1); padding: 16px; margin: 24px auto; }
+  form.pin input { width: 100%; padding: 10px; font: inherit; color: var(--text-primary); background: var(--surface-2); border: 1px solid var(--line); margin: 8px 0; }
+  .empty { color: var(--text-muted); padding: 24px 0; text-align: center; }
+  @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="kerb"></div>
+<header class="top">
+  <h1><span id="cafe">Owner</span><small>Business overview · data from this hub only</small></h1>
+</header>
+<main>
+  <form class="pin" id="pin-form" hidden>
+    <strong>Owner PIN</strong>
+    <input id="pin" type="password" inputmode="numeric" autocomplete="off" aria-label="Owner PIN">
+    <button class="btn" type="submit">Unlock</button>
+    <p class="error" id="pin-msg" role="alert"></p>
+  </form>
+  <p class="msg" id="msg" role="status"></p>
+
+  <div id="report" hidden>
+    <div class="filters" role="group" aria-label="Period">
+      <div class="seg" id="range">
+        <button type="button" data-days="7" aria-pressed="false">7 days</button>
+        <button type="button" data-days="30" aria-pressed="true">30 days</button>
+        <button type="button" data-days="90" aria-pressed="false">90 days</button>
+      </div>
+      <span class="msg" id="period"></span>
+      <span class="spacer"></span>
+      <a class="btn" data-csv="daily">Daily CSV</a>
+      <a class="btn" data-csv="sessions">Sessions CSV</a>
+      <a class="btn" data-csv="laps">Laps CSV</a>
+    </div>
+
+    <div class="tiles" id="tiles"></div>
+
+    <div class="grid">
+      <section class="card wide">
+        <h2>Driving hours per day</h2>
+        <p class="sub">Staff-started sessions, all rigs</p>
+        <div id="hours"></div>
+      </section>
+      <section class="card">
+        <h2>Peak hours</h2>
+        <p class="sub">Average rigs in use, by weekday and hour</p>
+        <div id="heat"></div>
+      </section>
+      <section class="card">
+        <h2>New vs returning drivers</h2>
+        <div class="legend"><span><i style="background:var(--series-1)"></i>New</span><span><i style="background:var(--series-2)"></i>Returning</span></div>
+        <div id="drivers"></div>
+      </section>
+      <section class="card wide">
+        <h2>Rig utilisation</h2>
+        <p class="sub" id="util-sub"></p>
+        <div id="util"></div>
+      </section>
+      <section class="card">
+        <h2>Popular tracks</h2>
+        <p class="sub">Laps driven</p>
+        <div id="tracks"></div>
+      </section>
+      <section class="card">
+        <h2>Busiest days</h2>
+        <p class="sub">By driving hours</p>
+        <div id="busiest"></div>
+      </section>
+    </div>
+
+    <details>
+      <summary>Table: every day</summary>
+      <div id="table"></div>
+    </details>
+  </div>
+</main>
+<div class="tip" id="tip" role="tooltip"></div>
+
+<script>
+(() => {
+  const KEY = "simtelemetry-owner-pin";
+  const $ = (id) => document.getElementById(id);
+  const NS = "http://www.w3.org/2000/svg";
+  let days = 30;
+  let data = null;
+
+  const pin = () => { try { return sessionStorage.getItem(KEY) || ""; } catch { return ""; } };
+  const setPin = (v) => { try { sessionStorage.setItem(KEY, v); } catch {} };
+  // A link like /owner#pin=1234 unlocks the page on this tab (the # part never reaches the hub); drop it at once.
+  const hashPin = /^#pin=(\w+)$/.exec(location.hash);
+  if (hashPin) { setPin(hashPin[1]); history.replaceState(null, "", location.pathname); }
+
+  async function api(path) {
+    const res = await fetch(path, { headers: { "X-Owner-Pin": pin() } });
+    const body = await res.json().catch(() => null);
+    if (res.status === 401 || res.status === 429) { showPin(body && body.detail); throw new Error("locked"); }
+    if (!res.ok) throw new Error((body && body.detail) || `The hub answered ${res.status}.`);
+    return body;
+  }
+  function showPin(message) { $("pin-form").hidden = false; $("report").hidden = true; $("pin-msg").textContent = message || ""; $("pin").focus(); }
+  $("pin-form").addEventListener("submit", (e) => { e.preventDefault(); setPin($("pin").value); $("pin-form").hidden = true; load(); });
+
+  // --- tooltip ---------------------------------------------------------------------------------
+  const tip = $("tip");
+  document.addEventListener("pointermove", (e) => {
+    const t = e.target.closest && e.target.closest("[data-tip]");
+    if (!t) { tip.style.display = "none"; return; }
+    tip.textContent = t.getAttribute("data-tip");
+    tip.style.display = "block";
+    const x = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8);
+    tip.style.left = x + "px";
+    tip.style.top = (e.clientY + 14) + "px";
+  });
+
+  // --- svg helpers -----------------------------------------------------------------------------
+  function el(name, attrs, parent) {
+    const n = document.createElementNS(NS, name);
+    for (const [k, v] of Object.entries(attrs || {})) n.setAttribute(k, v);
+    if (parent) parent.appendChild(n);
+    return n;
+  }
+  function text(parent, x, y, s, attrs) { const t = el("text", { x, y, ...attrs }, parent); t.textContent = s; return t; }
+  function niceMax(v) {
+    if (v <= 0) return 1;
+    const p = Math.pow(10, Math.floor(Math.log10(v)));
+    for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= v) return m * p;
+    return 10 * p;
+  }
+  /** Bar top with 4px rounded data end, square at the baseline. */
+  function barPath(x, y, w, h, r) {
+    r = Math.min(r, w / 2, h);
+    return `M${x},${y + h} V${y + r} Q${x},${y} ${x + r},${y} H${x + w - r} Q${x + w},${y} ${x + w},${y + r} V${y + h} Z`;
+  }
+  const shortDate = (iso) => { const d = new Date(iso + "T12:00:00"); return d.toLocaleDateString(undefined, { day: "numeric", month: "short" }); };
+  const hours = (h) => h >= 10 ? Math.round(h) + " h" : h.toFixed(1) + " h";
+
+  /** Vertical bars over days; series: [{key, colour, label}]; stacked when more than one. */
+  function bars(box, rows, series, fmt) {
+    box.textContent = "";
+    const W = Math.max(320, box.clientWidth || 900), H = 220, L = 44, B = 22, T = 8;
+    const totals = rows.map((r) => series.reduce((s, ser) => s + r[ser.key], 0));
+    const max = 4 * niceMax(Math.max(...totals, 0) / 4); // four round steps
+    if (Math.max(...totals) === 0) { box.innerHTML = '<p class="empty">Nothing in this period yet</p>'; return; }
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": series.map((s) => s.label).join(" and ") + " per day" }, box);
+    const ph = H - B - T;
+    for (let i = 0; i <= 4; i++) {
+      const y = T + ph - (ph * i) / 4;
+      el("line", { x1: L, x2: W, y1: y, y2: y, class: "grid-line" }, svg);
+      text(svg, L - 6, y + 4, fmt(max * i / 4), { "text-anchor": "end" });
+    }
+    const step = (W - L) / rows.length;
+    const bw = Math.max(2, step - 2); // 2px gap between bars
+    const every = Math.ceil(rows.length / Math.max(3, Math.floor((W - L) / 80)));
+    rows.forEach((r, i) => {
+      const x = L + i * step + 1;
+      let base = T + ph;
+      const tipText = `${r.weekday} ${shortDate(r.date)}\n` + series.map((s) => `${s.label}: ${fmt(r[s.key])}`).join("\n");
+      series.forEach((s, k) => {
+        const v = r[s.key];
+        if (!v) return;
+        const h = (ph * v) / max;
+        const top = k === series.length - 1 || series.slice(k + 1).every((n) => !r[n.key]);
+        const y = base - h;
+        const gap = k > 0 ? 2 : 0; // 2px surface gap between stacked segments
+        if (top) el("path", { d: barPath(x, y, bw, h - gap, 4), fill: s.colour }, svg);
+        else el("rect", { x, y, width: bw, height: Math.max(0, h - gap), fill: s.colour }, svg);
+        base = y;
+      });
+      el("rect", { x: L + i * step, y: T, width: step, height: ph, class: "hit", "data-tip": tipText }, svg);
+      if (i % every === 0) text(svg, x + bw / 2, H - 6, shortDate(r.date), { "text-anchor": "middle" });
+    });
+  }
+
+  function seqColour(v, max) {
+    if (!v) return "var(--seq-0)";
+    const k = Math.min(5, Math.max(1, Math.ceil((v / max) * 5)));
+    return `var(--seq-${k})`;
+  }
+
+  /** Grid of cells: rows x cols, sequential colour. */
+  function heat(box, rowLabels, colLabels, values, fmtTip, everyCol) {
+    box.textContent = "";
+    const max = Math.max(...values.flat(), 0);
+    const W = Math.max(320, box.clientWidth || 900), L = 56, cell = (W - L) / colLabels.length, ch = Math.min(28, Math.max(16, cell * 1.2)), T = 4;
+    const H = T + ch * rowLabels.length + 20;
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Heatmap" }, box);
+    rowLabels.forEach((rl, r) => {
+      text(svg, L - 8, T + r * ch + ch / 2 + 4, rl, { "text-anchor": "end", class: "label" });
+      colLabels.forEach((cl, c) => {
+        const v = values[r][c];
+        el("rect", { x: L + c * cell + 1, y: T + r * ch + 1, width: cell - 2, height: ch - 2, rx: 2,
+                     fill: seqColour(v, max), class: "cell", "data-tip": fmtTip(rl, cl, v) }, svg);
+      });
+    });
+    const every = Math.max(everyCol, Math.ceil(colLabels.length / Math.max(3, Math.floor((W - L) / 70))));
+    colLabels.forEach((cl, c) => { if (c % every === 0) text(svg, L + c * cell + cell / 2, H - 4, cl, { "text-anchor": "middle" }); });
+    if (max === 0) { box.insertAdjacentHTML("beforeend", '<p class="empty">Nothing in this period yet</p>'); return; }
+    // Colour key: the five steps from little to a lot.
+    const key = document.createElement("div");
+    key.className = "legend";
+    key.innerHTML = "<span>Less</span>" + [1, 2, 3, 4, 5].map((k) => `<i style="background:var(--seq-${k});margin:0"></i>`).join("") + "<span>More</span>";
+    box.appendChild(key);
+  }
+
+  function hbars(box, rows) {
+    box.textContent = "";
+    if (!rows.length) { box.innerHTML = '<p class="empty">No laps in this period yet</p>'; return; }
+    const W = 440, rowH = 26, L = 150, R = 60, H = rows.length * rowH;
+    const max = Math.max(...rows.map((r) => r.laps));
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Laps per track" }, box);
+    rows.forEach((r, i) => {
+      const y = i * rowH;
+      text(svg, L - 8, y + rowH / 2 + 4, r.track_name.length > 22 ? r.track_name.slice(0, 21) + "…" : r.track_name, { "text-anchor": "end", class: "label" });
+      const w = Math.max(3, ((W - L - R) * r.laps) / max);
+      el("path", { d: `M${L},${y + 5} H${L + w - 4} Q${L + w},${y + 5} ${L + w},${y + 9} V${y + rowH - 9} Q${L + w},${y + rowH - 5} ${L + w - 4},${y + rowH - 5} H${L} Z`, fill: "var(--series-1)" }, svg);
+      text(svg, L + w + 6, y + rowH / 2 + 4, String(r.laps), { class: "label" });
+      el("rect", { x: 0, y, width: W, height: rowH, class: "hit",
+                   "data-tip": `${r.track_name}\n${r.laps} laps · ${r.drivers} drivers` + (r.best_ms ? `\nBest ${fmtLap(r.best_ms)}` : "") }, svg);
+    });
+  }
+
+  function fmtLap(ms) {
+    const m = Math.floor(ms / 60000), rest = ms % 60000;
+    return `${m}:${String(Math.floor(rest / 1000)).padStart(2, "0")}.${String(rest % 1000).padStart(3, "0")}`;
+  }
+
+  function table(box, head, rows) {
+    const t = document.createElement("table");
+    t.innerHTML = "<tr>" + head.map(([h, r]) => `<th class="${r ? "r" : ""}">${h}</th>`).join("") + "</tr>";
+    for (const cells of rows) {
+      const tr = document.createElement("tr");
+      cells.forEach((c, i) => { const td = document.createElement("td"); td.textContent = c; if (head[i][1]) td.className = "r"; tr.appendChild(td); });
+      t.appendChild(tr);
+    }
+    box.textContent = "";
+    box.appendChild(t);
+  }
+
+  // --- render ----------------------------------------------------------------------------------
+  function render() {
+    const d = data;
+    $("cafe").textContent = d.cafe || "Owner";
+    $("period").textContent = `${shortDate(d.from)} – ${shortDate(d.to)}`;
+    const s = d.summary;
+    const tiles = [
+      ["Driving hours", hours(s.hours), `${s.sessions} sessions`],
+      ["Rig utilisation", s.utilisation_pct + "%", `of opening hours (${d.open_hours[0]}:00–${d.open_hours[1]}:00)`],
+      ["Drivers", String(s.drivers), `${s.new_drivers} new`],
+      ["Average session", s.avg_session_min == null ? "–" : Math.round(s.avg_session_min) + " min", ""],
+      ["Laps driven", String(s.laps), ""],
+    ];
+    $("tiles").innerHTML = "";
+    for (const [k, v, sub] of tiles) {
+      const div = document.createElement("div");
+      div.className = "tile";
+      div.innerHTML = '<div class="k"></div><div class="v"></div><div class="s"></div>';
+      div.querySelector(".k").textContent = k; div.querySelector(".v").textContent = v; div.querySelector(".s").textContent = sub;
+      $("tiles").appendChild(div);
+    }
+    bars($("hours"), d.daily, [{ key: "hours", colour: "var(--series-1)", label: "Driving hours" }], (v) => hours(v));
+    bars($("drivers"), d.daily, [{ key: "new", colour: "var(--series-1)", label: "New" },
+                                 { key: "returning", colour: "var(--series-2)", label: "Returning" }], (v) => String(Math.round(v)));
+    const [open, close] = d.open_hours;
+    const hoursRange = [];
+    for (let h = Math.max(0, open - 1); h < Math.min(24, close + 1); h++) hoursRange.push(h);
+    heat($("heat"), d.heatmap.weekdays, hoursRange.map((h) => String(h).padStart(2, "0")),
+         d.heatmap.rigs_in_use.map((row) => hoursRange.map((h) => row[h])),
+         (wd, h, v) => `${wd} ${h}:00\n${v.toFixed(1)} rigs in use on average`, 2);
+    $("util-sub").textContent = `Share of opening hours each rig was booked (${open}:00–${close}:00)`;
+    if (d.utilisation.length) {
+      heat($("util"), d.utilisation.map((u) => u.rig_id), d.daily.map((r) => shortDate(r.date)),
+           d.utilisation.map((u) => u.days), (rig, day, v) => `${rig} · ${day}\n${v}% booked`, Math.ceil(d.daily.length / 10));
+    } else {
+      $("util").innerHTML = '<p class="empty">No sessions in this period yet</p>';
+    }
+    hbars($("tracks"), d.tracks);
+    table($("busiest"), [["Day"], ["Hours", 1], ["Sessions", 1], ["Drivers", 1]],
+          d.busiest_days.map((r) => [`${r.weekday} ${shortDate(r.date)}`, hours(r.hours), String(r.sessions), String(r.new + r.returning)]));
+    if (!d.busiest_days.length) $("busiest").innerHTML = '<p class="empty">Nothing in this period yet</p>';
+    table($("table"), [["Day"], ["Sessions", 1], ["Hours", 1], ["Utilisation", 1], ["New", 1], ["Returning", 1], ["Laps", 1]],
+          d.daily.map((r) => [`${r.weekday} ${shortDate(r.date)}`, String(r.sessions), String(r.hours), r.utilisation_pct + "%", String(r.new), String(r.returning), String(r.laps)]));
+    document.querySelectorAll("[data-csv]").forEach((a) => {
+      a.onclick = async (e) => {
+        e.preventDefault();
+        const res = await fetch(`/api/owner/export.csv?kind=${a.dataset.csv}&days=${days}`, { headers: { "X-Owner-Pin": pin() } });
+        if (!res.ok) { $("msg").textContent = "Export failed: " + res.status; return; }
+        const url = URL.createObjectURL(await res.blob());
+        const link = document.createElement("a");
+        link.href = url; link.download = `${a.dataset.csv}-last-${days}-days.csv`; link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+      };
+    });
+  }
+
+  async function load() {
+    try {
+      data = await api(`/api/owner/report?days=${days}`);
+      $("report").hidden = false;
+      $("msg").textContent = "";
+      render();
+    } catch (err) {
+      if (err.message === "locked") return;
+      $("report").hidden = true;
+      $("msg").textContent = err.message;
+      $("msg").className = "msg error";
+    }
+  }
+  let resizeTimer = 0;
+  addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => data && render(), 200); });
+  $("range").addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    days = Number(b.dataset.days);
+    $("range").querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    load();
+  });
+  load();
+})();
+</script>
+</body>
+</html>

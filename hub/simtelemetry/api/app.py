@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from ..core.feed import FeedBuilder, FeedConnection
 from ..hub import Hub
 from .cards import card_router
+from .owner import owner_router
 from .staff import staff_router
 
 log = logging.getLogger(__name__)
@@ -49,6 +50,7 @@ def create_app(hub: Hub, dashboard_dir: Path | None = None) -> FastAPI:
 
     app.include_router(staff_router(hub))
     app.include_router(card_router(hub))
+    app.include_router(owner_router(hub))
 
     @app.websocket("/ws")
     async def feed(websocket: WebSocket) -> None:

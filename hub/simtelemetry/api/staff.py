@@ -30,8 +30,9 @@ STATE_TEXT = {RigState.DRIVING: "On track", RigState.IN_MENU: "In menu", RigStat
 
 
 class PinGuard:
-    def __init__(self, pin: str, clock=time.monotonic) -> None:
+    def __init__(self, pin: str, clock=time.monotonic, header: str = PIN_HEADER) -> None:
         self.pin = pin
+        self.header = header
         self._clock = clock
         self._failures: dict[str, deque[float]] = defaultdict(deque)
 
@@ -45,7 +46,7 @@ class PinGuard:
             failures.popleft()
         if len(failures) >= MAX_FAILURES:
             raise HTTPException(429, "Too many wrong PINs. Wait a minute, then try again.")
-        given = request.headers.get(PIN_HEADER, "")
+        given = request.headers.get(self.header, "")
         if not hmac.compare_digest(given.encode(), self.pin.encode()):
             if given:
                 failures.append(now)

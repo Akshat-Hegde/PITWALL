@@ -356,6 +356,36 @@ class LapStore:
                 (track_key, since_ms, *driver_keys)).fetchall()
         return {r["driver_key"]: r["lap_ms"] for r in rows}
 
+    # --- owner analytics -------------------------------------------------------------------------
+
+    def sessions_between(self, start_ms: int, end_ms: int) -> list[dict[str, Any]]:
+        """Staff sessions overlapping [start, end), oldest first."""
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT rig_id, name, driver_id, started_at, ended_at FROM driver_sessions"
+                " WHERE started_at < ? AND (ended_at IS NULL OR ended_at > ?) ORDER BY started_at",
+                (end_ms, start_ms)).fetchall()
+        return [dict(r) for r in rows]
+
+    def laps_between(self, start_ms: int, end_ms: int) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT rig_id, rig_name, driver, driver_key, track_key, track_name, lap_ms, valid, out_lap,"
+                " lap_class, completed_at FROM laps WHERE completed_at >= ? AND completed_at < ? ORDER BY completed_at",
+                (start_ms, end_ms)).fetchall()
+        return [dict(r) for r in rows]
+
+    def first_session_per_driver(self) -> dict[str, int]:
+        """When each driver (profile, else name) first had a session: new vs returning drivers."""
+        with self._lock:
+            rows = self._db.execute("SELECT name, driver_id, MIN(started_at) AS first FROM driver_sessions"
+                                    " GROUP BY name, driver_id").fetchall()
+        first: dict[str, int] = {}
+        for r in rows:
+            key = f"profile:{r['driver_id']}" if r["driver_id"] else f"name:{r['name'].casefold()}"
+            first[key] = min(first.get(key, r["first"]), r["first"])
+        return first
+
     # --- challenges ----------------------------------------------------------------------------
 
     def create_challenge(self, **c: Any) -> dict[str, Any]:

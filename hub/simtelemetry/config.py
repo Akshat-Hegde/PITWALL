@@ -70,6 +70,22 @@ class StaffConfig(_Section):
     pin: str = ""
 
 
+class OwnerConfig(_Section):
+    # PIN for the /owner analytics page. Empty = the owner page is locked (it shows business figures).
+    pin: str = ""
+    # Opening hours, for rig utilisation (local hours, close after open).
+    open_hour: int = Field(10, ge=0, le=23)
+    close_hour: int = Field(22, ge=1, le=24)
+
+    @field_validator("close_hour")
+    @classmethod
+    def _close_after_open(cls, value: int, info: ValidationInfo) -> int:
+        opens = info.data.get("open_hour")
+        if opens is not None and value <= opens:
+            raise ValueError(f"must be after open_hour ({opens})")
+        return value
+
+
 class LeaderboardConfig(_Section):
     # "Today" starts at this hour (local time), so a session running past midnight stays on one day.
     day_start_hour: int = Field(0, ge=0, le=23)
@@ -95,6 +111,7 @@ class FeaturesConfig(_Section):
     sharing: bool = True          # story card + QR code when a session ends
     challenges: bool = True       # weekly challenges on the TV
     events: bool = True           # corporate events: teams, team leaderboard, company branding
+    owner: bool = True            # /owner analytics page
 
 
 class MomentsConfig(_Section):
@@ -132,6 +149,7 @@ class AppConfig(_Section):
     map: MapConfig = Field(default_factory=MapConfig)
     leaderboard: LeaderboardConfig = Field(default_factory=LeaderboardConfig)
     staff: StaffConfig = Field(default_factory=StaffConfig)
+    owner: OwnerConfig = Field(default_factory=OwnerConfig)
     features: FeaturesConfig = Field(default_factory=FeaturesConfig)
     moments: MomentsConfig = Field(default_factory=MomentsConfig)
     sounds: SoundsConfig = Field(default_factory=SoundsConfig)

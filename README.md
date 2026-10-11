@@ -209,12 +209,30 @@ On `/staff`, the **Compete** tab:
 
 `[features] challenges` and `[features] events` switch these off.
 
+## Owner analytics
+
+`http://<hub>:8000/owner` (its own PIN: `[owner] pin`; the page stays locked until one is set) shows, for the
+last 7, 30 or 90 days: driving hours and sessions per day, rig utilisation (session time over the opening
+hours `[owner] open_hour`–`close_hour`, per rig per day), a peak-hours heatmap (average rigs in use by
+weekday and hour), new vs returning drivers, popular tracks and the busiest days. **Daily / Sessions / Laps
+CSV** download the figures. Everything comes from the hub's own database; nothing leaves the PC.
+A bookmark like `/owner#pin=1234` unlocks it on the owner's own device (the part after `#` never reaches the
+hub). `[features] owner = false` turns the page off.
+
 ## Demo mode
 
 `http://<hub or dev server>/?source=mock&demo=1` runs a busy cafe without any rig: six simulated drivers, a
 full leaderboard with Pro and Open boards, a weekly challenge, a corporate event with four teams, a podium
 every three minutes and a scripted loop of moments (now driving, a story card QR, a record, a challenge
 winner), plus the tournament preview in the rotation. `/card/demo` shows a sample story card.
+
+For the staff and owner pages, fill a separate demo folder and run the hub on it:
+
+```
+python -m simtelemetry seed-demo                         # 60 days of a busy cafe in data-demopython -m simtelemetry run --data-dir data-demo --owner-pin 0000
+```
+
+`seed-demo` only writes to an empty folder (or one it made before), never to your real `data\`.
 
 ## Sharing: session story cards
 
