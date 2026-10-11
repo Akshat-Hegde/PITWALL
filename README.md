@@ -121,9 +121,9 @@ Mock options, combined in the URL, e.g. `http://localhost:5173/?outline=late&mis
   board has more than ten drivers.
 - **Head to head:** the two drivers closest on best lap, left and right, with the map coloured by who is
   faster in each of 24 mini-sectors, LOW / MEDIUM / HIGH SPEED corner labels, mirrored full throttle /
-  heavy braking / cornering bars, and both speed traces with the delta per mini-sector. It compares best laps
-  this screen saw from start to finish (the dashboard works mini-sectors out from the 15 Hz feed), so it
-  appears once two drivers have each completed a lap with the TV on.
+  heavy braking / cornering bars, and both speed traces with the delta per mini-sector. The hub works these
+  out from each lap it traced from start to finish and keeps every driver's best per track and day, so the
+  view is there straight after a TV reload or hub restart.
 - **Onboard:** two cars at a time (paging through the rest): speed, gear, revs, throttle, brake, steering,
   g-force circle with trail, the four tyres (temperature, wear, inner temperature, pressure, brake
   temperature), fuel, ERS, DRS, top speed, slide angle and saves with the "Save!" flash, lap share bars and

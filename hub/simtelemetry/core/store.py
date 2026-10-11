@@ -113,6 +113,15 @@ CREATE TABLE IF NOT EXISTS team_members (
     name       TEXT NOT NULL,
     driver_key TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS lap_analyses (
+    track_key    TEXT NOT NULL,
+    day          TEXT NOT NULL,
+    driver_key   TEXT NOT NULL,
+    lap_ms       INTEGER NOT NULL,
+    data         TEXT NOT NULL,
+    completed_at INTEGER NOT NULL,
+    PRIMARY KEY (track_key, day, driver_key)
+);
 CREATE TABLE IF NOT EXISTS outlines (
     track_key  TEXT PRIMARY KEY,
     outline    TEXT NOT NULL,
@@ -286,6 +295,7 @@ class LapStore:
             sessions = self._db.execute("DELETE FROM driver_sessions WHERE driver_id = ?", (driver_id,)).rowcount
             self._db.execute("DELETE FROM queue WHERE driver_id = ?", (driver_id,))
             self._db.execute("DELETE FROM cards WHERE driver_id = ?", (driver_id,))
+            self._db.execute("DELETE FROM lap_analyses WHERE driver_key = ?", (f"profile:{driver_id}",))
             self._db.execute("DELETE FROM drivers WHERE id = ?", (driver_id,))
         return {"laps": laps, "sessions": sessions}
 
@@ -355,6 +365,24 @@ class LapStore:
                 f" AND out_lap = 0 AND completed_at >= ? AND driver_key IN ({marks}) GROUP BY driver_key",
                 (track_key, since_ms, *driver_keys)).fetchall()
         return {r["driver_key"]: r["lap_ms"] for r in rows}
+
+    # --- head to head ---------------------------------------------------------------------------
+
+    def save_analysis(self, entry: dict[str, Any]) -> None:
+        """Keep a driver's best traced lap per track and day (replaced only by a faster one)."""
+        with self._lock, self._db:
+            self._db.execute(
+                "INSERT INTO lap_analyses (track_key, day, driver_key, lap_ms, data, completed_at) VALUES (?,?,?,?,?,?)"
+                " ON CONFLICT (track_key, day, driver_key) DO UPDATE SET lap_ms = excluded.lap_ms,"
+                " data = excluded.data, completed_at = excluded.completed_at WHERE excluded.lap_ms < lap_analyses.lap_ms",
+                (entry["track_key"], entry["day"], entry["driver_key"], entry["lap_ms"], json.dumps(entry),
+                 entry["completed_at"]))
+
+    def analyses(self, track_key: str, day: str) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self._db.execute("SELECT data FROM lap_analyses WHERE track_key = ? AND day = ?",
+                                    (track_key, day)).fetchall()
+        return [json.loads(r["data"]) for r in rows]
 
     # --- owner analytics -------------------------------------------------------------------------
 

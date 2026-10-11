@@ -42,6 +42,10 @@ OUTLINE_MAX_GAP_M = 120       # no bigger gap between consecutive points
 OUTLINE_MIN_POINTS = 50
 OUTLINE_STEP_M = 6            # outline point spacing
 MINI_SECTORS = 24             # per lap, by distance (story cards; the dashboard uses the same count)
+SPEED_BINS = 200              # speed trace resolution for head to head (one value per 0.5 % of the lap)
+FULL_THROTTLE = 0.98          # lap share thresholds, the same as the dashboard's
+HEAVY_BRAKING = 0.6
+CORNERING_G = 1.5
 
 PRO_CLASS = "pro"             # every assist off for the whole lap (LAP_ASSUMPTIONS A16)
 OPEN_CLASS = "open"           # anything else; the Open boards include Pro laps too
@@ -160,6 +164,9 @@ class LapContext:
     sector_starts_m: tuple[float, float, float] | None = None
     pro: bool | None = None                            # all assists off right now (None: unknown)
     driver_id: int | None = None                       # driver profile, if the session has one
+    throttle: float | None = None                      # latest inputs, for the head-to-head lap share
+    brake: float | None = None
+    g_lat: float | None = None
 
 
 @dataclass(slots=True)
@@ -171,19 +178,28 @@ class Trace:
     t: list[int] = field(default_factory=list)
     x: list[float] = field(default_factory=list)
     z: list[float] = field(default_factory=list)
+    # Inputs per point (None where unknown): lap share for head to head.
+    thr: list[float | None] = field(default_factory=list)
+    brk: list[float | None] = field(default_factory=list)
+    glat: list[float | None] = field(default_factory=list)
 
-    def add(self, d: float, t: int, x: float, z: float) -> None:
+    def add(self, d: float, t: int, x: float, z: float, thr: float | None = None, brk: float | None = None,
+            glat: float | None = None) -> None:
         if self.d and d <= self.d[-1]:
             return  # standing still or noise: keep distance strictly increasing
         self.d.append(d)
         self.t.append(t)
         self.x.append(x)
         self.z.append(z)
+        self.thr.append(thr)
+        self.brk.append(brk)
+        self.glat.append(glat)
 
     def cut_to(self, d: float) -> None:
         """Flashback: forget everything driven after distance d."""
         keep = bisect.bisect_right(self.d, d)
         del self.d[keep:], self.t[keep:], self.x[keep:], self.z[keep:]
+        del self.thr[keep:], self.brk[keep:], self.glat[keep:]
 
     def time_at(self, d: float) -> float | None:
         """Lap time at a distance, interpolated; None outside the trace."""
@@ -226,6 +242,7 @@ class LapRecord:
     lap_class: str = OPEN_CLASS                                            # "pro" or "open"
     driver_id: int | None = None                                           # driver profile
     minis: list[int] | None = field(default=None, repr=False)              # mini-sector times (ms), if traced
+    analysis: dict[str, Any] | None = field(default=None, repr=False)     # speed trace + lap share, if traced
 
     @property
     def counted(self) -> bool:
@@ -309,6 +326,8 @@ class LapBook:
         self._session: dict[str, Bests] = {}                  # track_key -> bests across all rigs
         self._personal: dict[tuple[str, str], Bests] = {}     # (track_key, driver_key) -> bests
         self._lap_version = 0                                  # bumps on every recorded/removed lap
+        self.analysis_version = 0                              # bumps when a head-to-head lap is kept
+        self._analyses: dict[tuple[str, str, str], dict[str, Any]] = {}  # no store: (track, day, driver) -> lap
         self._sector_cache: dict[tuple, list[int | None]] = {}
 
     def rig(self, rig_id: str) -> RigLaps:
@@ -361,7 +380,8 @@ class LapBook:
             trace = rig.traces[live.number] = Trace(live.number)
             for old in sorted(rig.traces)[:-3]:  # keep the lap in progress and a few before it
                 del rig.traces[old]
-        trace.add(live.distance_m, live.current_ms, ctx.position[0], ctx.position[1])
+        trace.add(live.distance_m, live.current_ms, ctx.position[0], ctx.position[1], ctx.throttle, ctx.brake,
+                  ctx.g_lat)
 
     def publish(self, type_: str, body: dict[str, Any]) -> None:
         """Queue a message for every dashboard connection (lap_completed, track_outline, moment)."""
@@ -399,6 +419,7 @@ class LapBook:
             driver_id=ctx.driver_id,
         )
         record.minis = mini_sector_times(record.trace, ctx.track_length_m, record.lap_ms)
+        record.analysis = lap_analysis(record.trace, ctx.track_length_m) if record.minis else None
         broken = self._records_broken(record) if record.counted else []
         session = self._session.setdefault(record.track_key, Bests())
         personal = self._personal.setdefault((record.track_key, record.driver_key), Bests())
@@ -433,6 +454,8 @@ class LapBook:
                                 records=broken)
         if record.counted:
             self._bump_board(record.track_key)
+            if record.minis and record.analysis:
+                self._keep_analysis(record)
             if record.track_key not in self.outlines:
                 self._make_outline(record, ctx)
         if rig.best.get(record.track_key) is not record:
@@ -458,6 +481,9 @@ class LapBook:
     def forget_driver(self, driver_id: int) -> None:
         """A deleted profile: drop its laps from this hub session too (the store has deleted them)."""
         gone = [r for r in self.laps if r.driver_id == driver_id]
+        for key in [k for k in self._analyses if k[2] == f"profile:{driver_id}"]:
+            del self._analyses[key]
+        self.analysis_version += 1
         if not gone:
             return
         for record in gone:
@@ -490,6 +516,50 @@ class LapBook:
         minis = [r.minis for r in self.laps if r.counted and r.minis and r.track_key == track_key
                  and r.completed_at >= since]
         return [min(ms) for ms in zip(*minis)] if minis else None
+
+    # --- head to head (persisted per track and day) -------------------------------------------
+
+    def _keep_analysis(self, record: LapRecord) -> None:
+        """Keep the driver's best traced lap of the day on this track for head to head."""
+        day = self._today()
+        entry = {"track_key": record.track_key, "track_name": record.track_name, "day": day,
+                 "driver_key": record.driver_key, "driver": record.driver, "rig_id": record.rig_id,
+                 "lap_ms": record.lap_ms, "lap_number": record.lap_number, "lap_class": record.lap_class,
+                 "minis": record.minis, "speed": record.analysis["speed"], "share": record.analysis["share"],
+                 "completed_at": record.completed_at}
+        if self.store is not None:
+            self.store.save_analysis(entry)
+        else:
+            key = (record.track_key, day, record.driver_key)
+            old = self._analyses.get(key)
+            if old is None or entry["lap_ms"] < old["lap_ms"]:
+                self._analyses[key] = entry
+        self.analysis_version += 1
+
+    def _today(self) -> str:
+        start = self.period_starts()["today"] or 0
+        return dt.datetime.fromtimestamp(start / 1000).date().isoformat()
+
+    def head_to_head(self, track_key: str | None) -> dict[str, Any] | None:
+        """Schema HeadToHead for a track today: the two drivers whose best traced laps are closest."""
+        if track_key is None:
+            return None
+        day = self._today()
+        if self.store is not None:
+            laps = self.store.analyses(track_key, day)
+        else:
+            laps = [e for (t, d, _), e in self._analyses.items() if t == track_key and d == day]
+        laps = sorted(laps, key=lambda e: (e["lap_ms"], e["completed_at"]))
+        if len(laps) < 2:
+            return None
+        pair = (laps[0], laps[1])
+        for a, b in zip(laps[1:], laps[2:]):
+            if b["lap_ms"] - a["lap_ms"] < pair[1]["lap_ms"] - pair[0]["lap_ms"]:
+                pair = (a, b)
+        side = lambda e: {k: e[k] for k in ("rig_id", "driver", "lap_ms", "lap_number", "lap_class", "minis",
+                                            "speed", "share")}
+        return {"track_key": track_key, "track_name": pair[0]["track_name"], "day": day,
+                "a": side(pair[0]), "b": side(pair[1])}
 
     # --- records -----------------------------------------------------------------------------
 
@@ -750,3 +820,28 @@ def mini_sector_times(trace: Trace | None, track_length: float | None, lap_ms: i
     edges.append(float(lap_ms))
     times = [round(b - a) for a, b in zip(edges, edges[1:])]
     return times if all(t > 0 for t in times) else None
+
+
+def lap_analysis(trace: Trace | None, track_length: float | None) -> dict[str, Any] | None:
+    """Speed trace (km/h per 0.5 % of the lap) and lap share (% of samples) from a complete lap trace."""
+    if trace is None or not track_length or not trace.complete(track_length):
+        return None
+    speed: list[float | None] = []
+    for i in range(SPEED_BINS):
+        d0, d1 = track_length * i / SPEED_BINS, track_length * (i + 1) / SPEED_BINS
+        t0, t1 = trace.time_at(max(d0, trace.d[0])), trace.time_at(min(d1, trace.d[-1]))
+        if t0 is None or t1 is None or t1 <= t0:
+            speed.append(None)
+            continue
+        span = min(d1, trace.d[-1]) - max(d0, trace.d[0])
+        speed.append(round(span / (t1 - t0) * 3600, 1) if span > 0 else None)  # m/ms -> km/h
+
+    def share(values: list[float | None], hit) -> float | None:
+        known = [v for v in values if v is not None]
+        return round(100 * sum(1 for v in known if hit(v)) / len(known), 1) if known else None
+
+    return {"speed": speed, "share": {
+        "full_throttle": share(trace.thr, lambda v: v >= FULL_THROTTLE),
+        "heavy_braking": share(trace.brk, lambda v: v >= HEAVY_BRAKING),
+        "cornering": share(trace.glat, lambda v: abs(v) >= CORNERING_G),
+    }}

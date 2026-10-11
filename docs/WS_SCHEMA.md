@@ -63,6 +63,7 @@ Compatibility rules:
 | `session_changed` | A rig starts a new game session (e.g. new track, restart) | `{ "rig_id", "session": SessionInfo }` |
 | `track_outline` | An outline becomes available (generated or loaded) | `{ "outline": TrackOutline }` |
 | `lap_completed` | A rig finishes a lap | `{ "lap": LapRecord }` |
+| `head_to_head` *(added in v1, optional)* | The closest pair on the shown track changes | `{ "head_to_head": HeadToHead \| null }` |
 | `competition` *(added in v1, optional)* | The challenge or the corporate event changes (also when their boards change) | `{ "competition": Competition }` |
 | `queue` *(added in v1, optional)* | The waiting queue changes | `{ "queue": [QueueEntry] }`: full replacement |
 | `moment` *(added in v1, optional)* | A broadcast moment: a driver starts, a record falls, the podium | `{ "moment": Moment }` |
@@ -97,6 +98,12 @@ Compatibility rules:
 - `cafe.branding`: CSS custom properties from `[cafe.branding]` in the hub config. The dashboard applies
   them to `:root` as-is (keys must start with `--`; others are ignored).
 - `outlines`: every outline the hub has (one per track that has had a complete valid lap).
+- `head_to_head` *(added in v1, optional)*: the two drivers on the shown track whose best traced laps today
+  are closest, or null. `{ "track_key", "track_name", "day", "a", "b" }`, `a` the faster; each side: `rig_id`,
+  `driver`, `lap_ms`, `lap_number`, `lap_class`, `minis` (24 mini-sector times, ms), `speed` (200 values,
+  km/h per 0.5 % of the lap, null where unknown), `share` (`full_throttle`, `heavy_braking`, `cornering`,
+  % of the lap). The hub keeps each driver's best traced lap per track and day in its database, so the view
+  survives TV reloads and hub restarts.
 - `competition` *(added in v1, optional)*: `{ "challenge": Challenge | null, "event": Event | null }`.
   Challenge: `id`, `title`, `track_key`, `track_name`, `lap_class`, `starts_at`, `ends_at` (Unix ms, end
   exclusive), `prize`, `state` (`"upcoming"`, `"running"`, `"ended"`), `entries` (`rank`, `driver`, `lap_ms`,

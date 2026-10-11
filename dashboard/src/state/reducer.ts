@@ -8,6 +8,7 @@ import {
   MOMENT_KINDS,
   type CardMoment,
   type Competition,
+  type HeadToHead,
   type Moment,
   type QueueEntry,
   type HubMessage,
@@ -44,6 +45,8 @@ export interface DashboardState {
   proLeaderboards: Partial<Record<BoardPeriod, Leaderboard>>;
   /** Current challenge and running corporate event. */
   competition: Competition;
+  /** Head to head from the hub (survives TV reloads); null until two drivers have a traced lap today. */
+  headToHead: HeadToHead | null;
   recentLaps: LapRecord[];
   lastFrameAt: number | null;
   /** Optional features from the hub config (missing = on). */
@@ -84,6 +87,7 @@ export function initialState(source: DashboardState["source"]): DashboardState {
     leaderboards: {},
     proLeaderboards: {},
     competition: { challenge: null, event: null },
+    headToHead: null,
     recentLaps: [],
     lastFrameAt: null,
     features: ALL_FEATURES,
@@ -161,6 +165,7 @@ export function applyMessage(state: DashboardState, msg: HubMessage, now: number
         leaderboards: boardsByPeriod(msg.leaderboards),
         proLeaderboards: boardsByPeriod(msg.leaderboards, true),
         competition: msg.competition ?? { challenge: null, event: null },
+        headToHead: msg.head_to_head ?? null,
         recentLaps: msg.recent_laps.slice(0, RECENT_LAPS_MAX),
         queue: msg.queue ?? [],
         lastFrameAt: now,
@@ -180,6 +185,8 @@ export function applyMessage(state: DashboardState, msg: HubMessage, now: number
       return { ...state, outlines: { ...state.outlines, [msg.outline.track_key]: msg.outline } };
     case "lap_completed":
       return { ...state, recentLaps: [msg.lap, ...state.recentLaps].slice(0, RECENT_LAPS_MAX) };
+    case "head_to_head":
+      return { ...state, headToHead: msg.head_to_head };
     case "competition":
       return { ...state, competition: msg.competition };
     case "queue":

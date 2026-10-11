@@ -263,6 +263,20 @@ export function validateMessage(msg: unknown): string[] {
       case "leaderboard":
         leaderboard(c, m.leaderboard, `${p}.leaderboard`);
         break;
+      case "head_to_head":
+        if (m.head_to_head !== null) {
+          c.object(m.head_to_head, `${p}.head_to_head`, (h) => {
+            c.field(h, "track_key", isStr, `${p}.head_to_head`);
+            for (const side of ["a", "b"]) {
+              c.object(h[side], `${p}.head_to_head.${side}`, (s) => {
+                c.field(s, "lap_ms", isInt, `${p}.head_to_head.${side}`);
+                c.field(s, "minis", Array.isArray, `${p}.head_to_head.${side}`);
+                c.field(s, "speed", Array.isArray, `${p}.head_to_head.${side}`);
+              });
+            }
+          });
+        }
+        break;
       case "competition":
         c.object(m.competition, `${p}.competition`, (co) => {
           if (!("challenge" in co)) c.errors.push(`${p}.competition.challenge: missing`);

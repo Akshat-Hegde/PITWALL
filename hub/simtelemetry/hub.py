@@ -96,6 +96,9 @@ class Hub:
             sector_starts_m=s.sector_starts_m if s else None,
             pro=s.pro if s else None,
             driver_id=self.drivers.driver_id(ip),
+            throttle=s.throttle if s else None,
+            brake=s.brake if s else None,
+            g_lat=s.g_lat if s else None,
         )
 
     # --- broadcast moments -----------------------------------------------------------

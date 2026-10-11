@@ -1,5 +1,7 @@
 import { describe, expect, test } from "vitest";
+import { chooseDuel } from "./components/Analysis";
 import { challengeWhen } from "./components/Competition";
+import { LapTraceTracker } from "./state/laptrace";
 import { battleCandidate } from "./components/Moments";
 import { DEFAULT_MOCK_OPTIONS, MockHub } from "./mock/sim";
 import type { HubMessage, Moment } from "./schema";
@@ -116,5 +118,23 @@ describe("Pro boards and challenges", () => {
     expect(challengeWhen({ ...base, state: "running", starts_at: 0, ends_at: 3 * day }, 0.5 * day)).toBe("3 days left");
     expect(challengeWhen({ ...base, state: "running", starts_at: 0, ends_at: day }, day - 2 * 3600_000)).toBe("Ends in 2 h");
     expect(challengeWhen({ ...base, state: "upcoming", starts_at: 2 * day, ends_at: 9 * day }, 0)).toBe("Starts in 2 days");
+  });
+});
+
+describe("head to head from the hub", () => {
+  test("a fresh page shows the hub's pair at once, without having seen any lap", () => {
+    const side = (rig: string, driver: string, ms: number, mini: number) => ({
+      rig_id: rig, driver, lap_ms: ms, lap_number: 3, lap_class: "open", minis: Array(24).fill(mini),
+      speed: Array.from({ length: 200 }, (_, i) => 200 + 80 * Math.sin(i / 10)),
+      share: { full_throttle: 61, heavy_braking: 12, cornering: 30 } });
+    let s: DashboardState = { ...initialState("hub"), link: "live", receivedVersion: 1 };
+    s = applyMessage(s, { v: 1, type: "head_to_head", seq: 1, ts: 0, head_to_head: { track_key: "F1:7",
+      track_name: "Silverstone", day: "2026-10-12", a: side("r1", "Maya", 88000, 3600), b: side("r2", "Kofi", 88200, 3610) },
+    } as unknown as HubMessage, 0);
+    const duel = chooseDuel(s, new LapTraceTracker(), "F1:7")!;
+    expect([duel.a.name, duel.b.name]).toEqual(["Maya", "Kofi"]);
+    expect(new Set(duel.who)).toEqual(new Set(["a"]));
+    expect(duel.a.trace.share.fullThrottle).toBe(61);
+    expect(chooseDuel(s, new LapTraceTracker(), "F1:10")).toBeNull();
   });
 });

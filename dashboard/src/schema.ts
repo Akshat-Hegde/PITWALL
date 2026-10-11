@@ -368,6 +368,27 @@ export interface CorporateEvent {
   teams: Team[];
 }
 
+/** One driver's best traced lap of the day (head to head). */
+export interface HeadToHeadSide {
+  rig_id: string;
+  driver: string | null;
+  lap_ms: number;
+  lap_number: number;
+  lap_class: LapClass | string;
+  minis: number[];
+  speed: (number | null)[];
+  share: { full_throttle: number | null; heavy_braking: number | null; cornering: number | null };
+}
+
+/** Added in v1 (optional): the two closest drivers on the shown track today, kept by the hub. */
+export interface HeadToHead {
+  track_key: string;
+  track_name: string | null;
+  day: string;
+  a: HeadToHeadSide;
+  b: HeadToHeadSide;
+}
+
 /** Added in v1 (optional): the current challenge and the running corporate event. */
 export interface Competition {
   challenge: Challenge | null;
@@ -406,6 +427,7 @@ export interface SnapshotMessage extends Envelope<"snapshot"> {
   /** Added in v1 (optional): the waiting queue, first first. */
   queue?: QueueEntry[];
   competition?: Competition;
+  head_to_head?: HeadToHead | null;
 }
 
 export interface FrameMessage extends Envelope<"frame"> {
@@ -450,6 +472,10 @@ export interface CompetitionMessage extends Envelope<"competition"> {
   competition: Competition;
 }
 
+export interface HeadToHeadMessage extends Envelope<"head_to_head"> {
+  head_to_head: HeadToHead | null;
+}
+
 export type HubMessage =
   | SnapshotMessage
   | FrameMessage
@@ -461,7 +487,8 @@ export type HubMessage =
   | LeaderboardMessage
   | MomentMessage
   | QueueMessage
-  | CompetitionMessage;
+  | CompetitionMessage
+  | HeadToHeadMessage;
 
 /** Message types this client knows; others must be ignored (schema rule). */
 export const KNOWN_TYPES: ReadonlySet<string> = new Set<HubMessage["type"]>([
@@ -476,4 +503,5 @@ export const KNOWN_TYPES: ReadonlySet<string> = new Set<HubMessage["type"]>([
   "moment",
   "queue",
   "competition",
+  "head_to_head",
 ]);

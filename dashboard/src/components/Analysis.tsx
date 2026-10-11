@@ -9,7 +9,7 @@ import {
   toMapPlane,
   type Display,
 } from "../map/geometry";
-import type { RigFrame, RigInfo, TrackOutline } from "../schema";
+import type { HeadToHeadSide, RigFrame, RigInfo, TrackOutline } from "../schema";
 import {
   MINI_SECTORS,
   fasterPerMini,
@@ -39,9 +39,30 @@ export interface Duel {
   zones: SpeedZone[];
 }
 
-/** The two drivers to compare: closest pair by the best laps this page has a full trace of. */
+function hubSide(state: DashboardState, s: HeadToHeadSide, trackKey: string, position: number | null): DuelSide {
+  const rig = state.rigs.find((r) => r.rig_id === s.rig_id)
+    ?? { rig_id: s.rig_id, name: "Rig", colour: "#8a8f99", address: "", game: "F1", data_format: null, format_supported: true };
+  const trace: LapTrace = {
+    rigId: s.rig_id, trackKey, lapNumber: s.lap_number, lapMs: s.lap_ms, valid: true, minis: s.minis, speed: s.speed,
+    share: { fullThrottle: s.share.full_throttle ?? 0, heavyBraking: s.share.heavy_braking ?? 0,
+             cornering: s.share.cornering ?? 0 },
+  };
+  return { rig, frame: state.frames[s.rig_id], name: s.driver ?? rig.name, trace, position };
+}
+
+/**
+ * The two drivers to compare. From the hub when it has them (kept per track and day, so a TV reload shows
+ * them at once); otherwise the closest pair by the best laps this page has a full trace of (mock data).
+ */
 export function chooseDuel(state: DashboardState, laps: LapTraceTracker, trackKey: string | null): Duel | null {
   if (!trackKey) return null;
+  const h = state.headToHead;
+  if (h && h.track_key === trackKey) {
+    const positions = new Map((state.leaderboards.today?.entries ?? []).map((e) => [e.driver, e.rank]));
+    const a = hubSide(state, h.a, trackKey, positions.get(h.a.driver) ?? 1);
+    const b = hubSide(state, h.b, trackKey, positions.get(h.b.driver) ?? 2);
+    return { a, b, who: fasterPerMini(a.trace, b.trace), zones: speedZones(a.trace.speed) };
+  }
   const positions = new Map(runningOrder(state, trackKey).map((o) => [o.rig.rig_id, o.position]));
   const sides: DuelSide[] = state.rigs
     .map((rig) => ({ rig, trace: laps.bestLap(rig.rig_id, trackKey) }))

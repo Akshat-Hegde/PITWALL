@@ -185,6 +185,15 @@ class FeedBuilder:
             }
         return self._competition
 
+    def head_to_head(self, track_key: str | None) -> dict[str, Any] | None:
+        """Schema HeadToHead of the shown track today (null until two drivers have a traced lap)."""
+        laps = self.hub.laps
+        key = (track_key, laps.analysis_version, laps._today())
+        if getattr(self, "_h2h_key", None) != key:
+            self._h2h_key = key
+            self._h2h = laps.head_to_head(track_key) if self.hub.config.features.head_to_head else None
+        return self._h2h
+
     def queue(self) -> list[dict[str, Any]]:
         """Schema QueueEntry list: who's waiting for a rig, first first (names only, never contact details)."""
         return [{"id": e["id"], "name": e["name"]} for e in self.hub.drivers.queue()]
@@ -291,6 +300,7 @@ class FeedBuilder:
             "recent_laps": self.hub.laps.recent_laps(),
             "queue": self.queue(),
             "competition": self.competition(self.active_track(frame["rigs"])),
+            "head_to_head": self.head_to_head(self.active_track(frame["rigs"])),
         }
 
 
@@ -309,6 +319,7 @@ class FeedConnection:
         self._board: tuple[Any, ...] | None = None            # board_key last sent
         self._queue: list[dict[str, Any]] = []                # queue last sent
         self._competition: dict[str, Any] | None = None       # competition state last sent
+        self._h2h: dict[str, Any] | None = None               # head to head last sent
 
     def _message(self, type_: str, body: dict[str, Any]) -> dict[str, Any]:
         msg = {"v": SCHEMA_VERSION, "type": type_, "seq": self.seq, "ts": round(self._clock() * 1000)}
@@ -326,6 +337,7 @@ class FeedConnection:
         self._board = self.builder.board_key(self.builder.active_track(body["frame"]["rigs"]))
         self._queue = body["queue"]
         self._competition = body["competition"]
+        self._h2h = body["head_to_head"]
         return self._message("snapshot", body)
 
     def tick(self, now: float) -> list[dict[str, Any]]:
@@ -349,6 +361,10 @@ class FeedConnection:
             self._board = board
             for leaderboard in self.builder.leaderboards(track, frame["rigs"]):
                 out.append(self._message("leaderboard", {"leaderboard": leaderboard}))
+        h2h = self.builder.head_to_head(track)
+        if h2h != self._h2h:
+            self._h2h = h2h
+            out.append(self._message("head_to_head", {"head_to_head": h2h}))
         competition = self.builder.competition(track)
         if competition != self._competition:
             self._competition = competition
