@@ -35,4 +35,13 @@ def card_router(hub: Hub) -> APIRouter:
         segno.make(url, error="m").save(out, kind="svg", scale=8, border=2, dark="#000", light="#fff")
         return Response(out.getvalue(), media_type="image/svg+xml")
 
+    @router.get("/api/logos/{name}", include_in_schema=False)
+    def logo(name: str) -> Response:
+        """Event and team logos uploaded on the staff page (PNG / JPEG / WebP only)."""
+        path = hub.competitions.logo_path(name)
+        if path is None:
+            raise HTTPException(404, "No such logo.")
+        media = {"png": "image/png", "jpg": "image/jpeg", "webp": "image/webp"}[path.suffix[1:]]
+        return Response(path.read_bytes(), media_type=media, headers={"Cache-Control": "max-age=3600"})
+
     return router

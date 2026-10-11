@@ -200,6 +200,8 @@ export interface Features {
   head_to_head: boolean;
   onboard: boolean;
   sharing: boolean;
+  challenges: boolean;
+  events: boolean;
 }
 
 export interface RecordBroken {
@@ -279,9 +281,21 @@ export interface StoryCard {
   outline: { points: [number, number][]; display: TrackOutline["display"] } | null;
 }
 
+export interface ChallengeWinnerMoment {
+  kind: "challenge_winner";
+  at: number;
+  challenge_id: number;
+  title: string;
+  track_name: string | null;
+  lap_class: LapClass | string;
+  prize: string;
+  winner: ChallengeEntry | null;
+  runners_up: ChallengeEntry[];
+}
+
 /** Added in v1 (optional): a full-screen broadcast moment. Unknown kinds are ignored. */
-export type Moment = NowDrivingMoment | RecordMoment | PodiumMoment;
-export const MOMENT_KINDS: ReadonlySet<string> = new Set(["now_driving", "record", "podium"]);
+export type Moment = NowDrivingMoment | RecordMoment | PodiumMoment | ChallengeWinnerMoment;
+export const MOMENT_KINDS: ReadonlySet<string> = new Set(["now_driving", "record", "podium", "challenge_winner"]);
 
 export interface LeaderboardEntry {
   rank: number;
@@ -307,6 +321,57 @@ export interface Leaderboard {
   /** Unix ms where the period starts (hub's local time); null for all time. */
   since: number | null;
   entries: LeaderboardEntry[];
+  /** Added in v1 (optional): "open" (every lap, the default) or "pro" (Pro laps only). */
+  lap_class?: LapClass | string;
+}
+
+export interface ChallengeEntry {
+  rank: number;
+  driver: string;
+  lap_ms: number;
+  gap_ms: number;
+}
+
+export interface Challenge {
+  id: number;
+  title: string;
+  track_key: string;
+  track_name: string | null;
+  lap_class: LapClass | string;
+  starts_at: number;
+  ends_at: number;
+  prize: string;
+  state: "upcoming" | "running" | "ended" | string;
+  entries: ChallengeEntry[];
+}
+
+export interface Team {
+  id: number;
+  rank: number;
+  name: string;
+  logo: string | null;
+  members: { id: number; name: string; best_ms: number | null }[];
+  counted: number;
+  average_ms: number | null;
+}
+
+export interface CorporateEvent {
+  id: number;
+  name: string;
+  company: string;
+  accent: string | null;
+  logo: string | null;
+  track_key: string | null;
+  track_name: string | null;
+  best_n: number;
+  starts_at: number;
+  teams: Team[];
+}
+
+/** Added in v1 (optional): the current challenge and the running corporate event. */
+export interface Competition {
+  challenge: Challenge | null;
+  event: CorporateEvent | null;
 }
 
 export interface Envelope<T extends string> {
@@ -340,6 +405,7 @@ export interface SnapshotMessage extends Envelope<"snapshot"> {
   recent_laps: LapRecord[];
   /** Added in v1 (optional): the waiting queue, first first. */
   queue?: QueueEntry[];
+  competition?: Competition;
 }
 
 export interface FrameMessage extends Envelope<"frame"> {
@@ -380,6 +446,10 @@ export interface QueueMessage extends Envelope<"queue"> {
   queue: QueueEntry[];
 }
 
+export interface CompetitionMessage extends Envelope<"competition"> {
+  competition: Competition;
+}
+
 export type HubMessage =
   | SnapshotMessage
   | FrameMessage
@@ -390,7 +460,8 @@ export type HubMessage =
   | LapCompletedMessage
   | LeaderboardMessage
   | MomentMessage
-  | QueueMessage;
+  | QueueMessage
+  | CompetitionMessage;
 
 /** Message types this client knows; others must be ignored (schema rule). */
 export const KNOWN_TYPES: ReadonlySet<string> = new Set<HubMessage["type"]>([
@@ -404,4 +475,5 @@ export const KNOWN_TYPES: ReadonlySet<string> = new Set<HubMessage["type"]>([
   "leaderboard",
   "moment",
   "queue",
+  "competition",
 ]);

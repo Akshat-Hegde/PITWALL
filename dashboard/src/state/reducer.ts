@@ -7,6 +7,7 @@ import {
   type Features,
   MOMENT_KINDS,
   type CardMoment,
+  type Competition,
   type Moment,
   type QueueEntry,
   type HubMessage,
@@ -37,8 +38,12 @@ export interface DashboardState {
   frames: Record<string, RigFrame>;
   comparison: Comparison | null;
   outlines: Record<string, TrackOutline>;
-  /** Boards of the shown track by period ("today", "week", "all_time"). */
+  /** Open boards of the shown track by period ("today", "week", "all_time"). */
   leaderboards: Partial<Record<BoardPeriod, Leaderboard>>;
+  /** Pro boards (every assist off), same periods. */
+  proLeaderboards: Partial<Record<BoardPeriod, Leaderboard>>;
+  /** Current challenge and running corporate event. */
+  competition: Competition;
   recentLaps: LapRecord[];
   lastFrameAt: number | null;
   /** Optional features from the hub config (missing = on). */
@@ -55,7 +60,7 @@ export interface DashboardState {
 
 export const ALL_FEATURES: Features = {
   moments: true, battles: true, podium: true, attract: true, portrait: true, head_to_head: true, onboard: true,
-  sharing: true,
+  sharing: true, challenges: true, events: true,
 };
 export const CARDS_MAX = 3;
 export const MOMENTS_MAX = 5;
@@ -77,6 +82,8 @@ export function initialState(source: DashboardState["source"]): DashboardState {
     comparison: null,
     outlines: {},
     leaderboards: {},
+    proLeaderboards: {},
+    competition: { challenge: null, event: null },
     recentLaps: [],
     lastFrameAt: null,
     features: ALL_FEATURES,
@@ -90,15 +97,21 @@ export function initialState(source: DashboardState["source"]): DashboardState {
 
 function momentAllowed(moment: Moment, features: Features): boolean {
   if (!moment || !MOMENT_KINDS.has(moment.kind)) return false;
-  return moment.kind === "podium" ? features.podium : features.moments;
+  if (moment.kind === "podium") return features.podium;
+  if (moment.kind === "challenge_winner") return features.challenges;
+  return features.moments;
 }
 
 function isPeriod(period: string): period is BoardPeriod {
   return (BOARD_PERIODS as readonly string[]).includes(period);
 }
 
-function boardsByPeriod(boards: Leaderboard[]): Partial<Record<BoardPeriod, Leaderboard>> {
-  return Object.fromEntries(boards.filter((b) => isPeriod(b.period)).map((b) => [b.period, b]));
+function isPro(board: Leaderboard): boolean {
+  return board.lap_class === "pro";
+}
+
+function boardsByPeriod(boards: Leaderboard[], pro = false): Partial<Record<BoardPeriod, Leaderboard>> {
+  return Object.fromEntries(boards.filter((b) => isPeriod(b.period) && isPro(b) === pro).map((b) => [b.period, b]));
 }
 
 function framesById(frames: RigFrame[]): Record<string, RigFrame> {
@@ -146,6 +159,8 @@ export function applyMessage(state: DashboardState, msg: HubMessage, now: number
         comparison: msg.frame.comparison,
         outlines: Object.fromEntries(msg.outlines.map((o) => [o.track_key, o])),
         leaderboards: boardsByPeriod(msg.leaderboards),
+        proLeaderboards: boardsByPeriod(msg.leaderboards, true),
+        competition: msg.competition ?? { challenge: null, event: null },
         recentLaps: msg.recent_laps.slice(0, RECENT_LAPS_MAX),
         queue: msg.queue ?? [],
         lastFrameAt: now,
@@ -165,6 +180,8 @@ export function applyMessage(state: DashboardState, msg: HubMessage, now: number
       return { ...state, outlines: { ...state.outlines, [msg.outline.track_key]: msg.outline } };
     case "lap_completed":
       return { ...state, recentLaps: [msg.lap, ...state.recentLaps].slice(0, RECENT_LAPS_MAX) };
+    case "competition":
+      return { ...state, competition: msg.competition };
     case "queue":
       return { ...state, queue: msg.queue };
     case "moment":
@@ -177,10 +194,11 @@ export function applyMessage(state: DashboardState, msg: HubMessage, now: number
     case "leaderboard": {
       const period = msg.leaderboard.period;
       if (!isPeriod(period)) return state;
-      // Boards of another track replace all of them (the hub sends all three when the track changes).
-      const sameTrack = Object.values(state.leaderboards).every((b) => b?.track_key === msg.leaderboard.track_key);
-      const base = sameTrack ? state.leaderboards : {};
-      return { ...state, leaderboards: { ...base, [period]: msg.leaderboard } };
+      // Boards of another track replace all of them (the hub sends all of them when the track changes).
+      const key = isPro(msg.leaderboard) ? "proLeaderboards" : "leaderboards";
+      const sameTrack = Object.values(state[key]).every((b) => b?.track_key === msg.leaderboard.track_key);
+      const base = sameTrack ? state[key] : {};
+      return { ...state, [key]: { ...base, [period]: msg.leaderboard } };
     }
   }
 }

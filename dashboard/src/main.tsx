@@ -31,6 +31,7 @@ if (cardPath) {
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
       <App store={store} mapDisplay={displayFromQuery(query)} viewMode={viewModeFromQuery(query)}
+           demo={query.get("demo") === "1"}
            layout={location.pathname.startsWith("/portrait") || query.get("layout") === "portrait" ? "portrait" : "tv"} />
     </StrictMode>,
   );

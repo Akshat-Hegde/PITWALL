@@ -668,7 +668,7 @@ class LapBook:
             })
         track_name = next((row["track_name"] for row in rows if row["track_name"]), None)
         return {"track_key": track_key, "track_name": track_name, "period": period, "since": since_ms,
-                "entries": entries}
+                "lap_class": lap_class, "entries": entries}
 
     def driver_best(self, track_key: str | None, dkey: str) -> dict[str, Any] | None:
         """Schema BestLap: a driver's fastest counted lap on a track ever (lap database), or None."""

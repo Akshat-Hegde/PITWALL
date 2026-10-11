@@ -176,6 +176,64 @@ def staff_router(hub: Hub) -> APIRouter:
         drivers.queue_remove(entry_id)
         return {"queue": drivers.queue()}
 
+    # --- competitions --------------------------------------------------------------------------
+
+    comp = hub.competitions
+
+    def guarded(fn, *args):
+        try:
+            return fn(*args)
+        except DriverError as exc:
+            raise _bad(exc) from None
+
+    @router.get("/api/staff/competitions", dependencies=[Depends(guard)])
+    def competitions() -> dict[str, Any]:
+        return {"tracks": hub.drivers.store.tracks(), "challenges": comp.challenges(),
+                "event": comp.active_event(hub.active_track()), "features": hub.config.features.model_dump()}
+
+    @router.post("/api/staff/challenges", dependencies=[Depends(guard)])
+    def challenge_create(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+        return guarded(comp.create_challenge, body)
+
+    @router.delete("/api/staff/challenges/{challenge_id}", dependencies=[Depends(guard)])
+    def challenge_delete(challenge_id: int) -> dict[str, Any]:
+        return {"deleted": comp.delete_challenge(challenge_id)}
+
+    @router.post("/api/staff/events", dependencies=[Depends(guard)])
+    def event_create(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+        return guarded(comp.create_event, body)
+
+    @router.post("/api/staff/events/{event_id}/end", dependencies=[Depends(guard)])
+    def event_end(event_id: int) -> dict[str, Any]:
+        comp.end_event(event_id)
+        return {"ended": True}
+
+    @router.post("/api/staff/events/{event_id}/logo", dependencies=[Depends(guard)])
+    def event_logo(event_id: int, body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+        return {"logo": guarded(comp.save_logo, "event", event_id, body.get("data_url"))}
+
+    @router.post("/api/staff/events/{event_id}/teams", dependencies=[Depends(guard)])
+    def team_add(event_id: int, body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+        return guarded(comp.add_team, event_id, body.get("name"))
+
+    @router.delete("/api/staff/teams/{team_id}", dependencies=[Depends(guard)])
+    def team_remove(team_id: int) -> dict[str, Any]:
+        comp.remove_team(team_id)
+        return {"deleted": True}
+
+    @router.post("/api/staff/teams/{team_id}/logo", dependencies=[Depends(guard)])
+    def team_logo(team_id: int, body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+        return {"logo": guarded(comp.save_logo, "team", team_id, body.get("data_url"))}
+
+    @router.post("/api/staff/teams/{team_id}/members", dependencies=[Depends(guard)])
+    def member_add(team_id: int, body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+        return guarded(comp.add_member, team_id, body.get("name"), body.get("driver_id"))
+
+    @router.delete("/api/staff/members/{member_id}", dependencies=[Depends(guard)])
+    def member_remove(member_id: int) -> dict[str, Any]:
+        comp.remove_member(member_id)
+        return {"deleted": True}
+
     # --- TV ----------------------------------------------------------------------------------
 
     @router.post("/api/staff/podium", dependencies=[Depends(guard)])

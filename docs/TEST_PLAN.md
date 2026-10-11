@@ -171,6 +171,11 @@ On the dashboard, check:
 - [ ] **End session** on a rig whose driver set a clean lap: the staff page shows a QR code and the TV shows one
       bottom left for 30 seconds. Scan it with a phone on the same Wi-Fi: the card opens with the best lap,
       top speed and the mini-sector map. **Save image** downloads it; **Share on WhatsApp** opens WhatsApp.
+- [ ] **Compete** tab: create a challenge on the track you're driving, Pro, today to today, prize "Test".
+      The TV's leaderboard view shows it; a Pro lap puts the driver on it.
+- [ ] Start a corporate event (any name, company colour blue, best N = 1), add two teams with one driver each,
+      upload any PNG as the logo. The TV turns blue, shows the company next to the cafe name and the
+      **Teams** view (key `6`). After a lap from each driver the teams are ranked. **End event**.
 - [ ] At the end of the test: **Delete profile** on your test profile; its laps disappear from the boards.
 - [ ] If both games use the same generic player name, laps from both rigs merge into one leaderboard entry
       until names are set on `/staff`. Note whether that happened (A14).

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { challengeWhen } from "./components/Competition";
 import { battleCandidate } from "./components/Moments";
 import { DEFAULT_MOCK_OPTIONS, MockHub } from "./mock/sim";
 import type { HubMessage, Moment } from "./schema";
@@ -95,5 +96,25 @@ describe("story cards", () => {
     expect(s.moments).toEqual([]);
     s = applyMessage({ ...s, cards: [], features: { ...ALL_FEATURES, sharing: false } }, card, 0);
     expect(s.cards).toEqual([]);
+  });
+});
+
+describe("Pro boards and challenges", () => {
+  test("Pro boards are kept apart from Open boards", () => {
+    const store = new DashboardStore("mock");
+    for (const m of run(200, { ...DEFAULT_MOCK_OPTIONS, rigs: 3, pastDrivers: 6 })) store.dispatch(m);
+    const s = store.getState();
+    expect(s.leaderboards.today?.lap_class).toBe("open");
+    expect(s.proLeaderboards.today?.lap_class).toBe("pro");
+    expect(s.proLeaderboards.today!.entries.length).toBeLessThan(s.leaderboards.today!.entries.length);
+    expect(s.competition.challenge?.lap_class).toBe("pro");
+  });
+
+  test("challenge time text", () => {
+    const day = 24 * 3600_000;
+    const base = { id: 1, title: "", track_key: "", track_name: null, lap_class: "open", prize: "", entries: [] };
+    expect(challengeWhen({ ...base, state: "running", starts_at: 0, ends_at: 3 * day }, 0.5 * day)).toBe("3 days left");
+    expect(challengeWhen({ ...base, state: "running", starts_at: 0, ends_at: day }, day - 2 * 3600_000)).toBe("Ends in 2 h");
+    expect(challengeWhen({ ...base, state: "upcoming", starts_at: 2 * day, ends_at: 9 * day }, 0)).toBe("Starts in 2 days");
   });
 });

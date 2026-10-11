@@ -44,6 +44,8 @@ steering_wheel_rotation_deg = 360       # lock-to-lock rotation of the TV's whee
 # head_to_head = true
 # onboard = true
 # sharing = true                       # story card + QR code when a session ends
+# challenges = true                    # weekly challenges
+# events = true                        # corporate events with teams
 
 [moments]
 battle_margin_ms = 300                 # battle pop-up when two best laps are this close

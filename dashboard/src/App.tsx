@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { AnalysisView, chooseDuel } from "./components/Analysis";
 import { AttractView, PortraitView } from "./components/Attract";
 import { CardQr } from "./components/CardQr";
+import { BracketPreview, TeamsView } from "./components/Competition";
 import { BattlePopups, MomentLayer } from "./components/Moments";
 import { KineticType } from "./components/Motifs";
 import { OnboardView, onboardRigs } from "./components/Onboard";
@@ -48,6 +49,20 @@ export function sessionBest(state: DashboardState, trackKey: string | null): num
   return best;
 }
 
+/** During a corporate event, the company's colour replaces the brand accent. */
+function useEventAccent(accent: string | null) {
+  useEffect(() => {
+    if (!accent) return;
+    const root = document.documentElement;
+    const before = root.style.getPropertyValue("--brand-accent");
+    root.style.setProperty("--brand-accent", accent);
+    return () => {
+      if (before) root.style.setProperty("--brand-accent", before);
+      else root.style.removeProperty("--brand-accent");
+    };
+  }, [accent]);
+}
+
 /** Apply cafe branding (CSS custom properties from the hub config) to :root. */
 function useBranding(branding: Record<string, string>) {
   useEffect(() => {
@@ -66,10 +81,13 @@ interface Props {
   viewMode?: ViewMode;
   /** "portrait": the entrance-screen layout (/portrait). */
   layout?: "tv" | "portrait";
+  /** Demo mode (?demo=1): adds the tournament preview to the rotation. */
+  demo?: boolean;
 }
 
 const VIEW_NAME: Record<string, string> = {
   race: "Live timing", board: "Leaderboard", analysis: "Head to head", onboard: "Onboard", attract: "Welcome",
+  teams: "Teams", bracket: "Hotlap cup",
 };
 
 /** Broadcast wipe between views (~400 ms): accent panel with speed lines and the next view's name. */
@@ -82,7 +100,7 @@ function ViewWipe({ view }: { view: string }) {
   );
 }
 
-export function App({ store, mapDisplay = null, viewMode = "auto", layout = "tv" }: Props) {
+export function App({ store, mapDisplay = null, viewMode = "auto", layout = "tv", demo = false }: Props) {
   const state = useDashboard(store);
   useBranding(state.cafe.branding);
   useEffect(() => {
@@ -97,7 +115,11 @@ export function App({ store, mapDisplay = null, viewMode = "auto", layout = "tv"
     analysis: f.head_to_head && chooseDuel(state, store.laps, trackKey) !== null,
     onboard: f.onboard && onboardRigs(state).length > 0,
     attract: f.attract,
+    teams: f.events && state.competition.event !== null,
+    bracket: demo,
   };
+  const event = f.events ? state.competition.event : null;
+  useEventAccent(event?.accent ?? null);
   const { view, mode, attract } = useView(viewMode, anyDriving || nothingYet, available);
   const firstView = useRef(view);
   const viewChanged = useRef(false);
@@ -140,6 +162,8 @@ export function App({ store, mapDisplay = null, viewMode = "auto", layout = "tv"
         {view === "analysis" && <AnalysisView store={store} state={state} trackKey={trackKey} />}
         {view === "onboard" && <OnboardView store={store} state={state} />}
         {view === "attract" && <AttractView state={state} />}
+        {view === "teams" && <TeamsView state={state} />}
+        {view === "bracket" && <BracketPreview />}
       </div>
       {viewChanged.current && <ViewWipe key={view} view={view} />}
       {view !== "attract" && <BattlePopups state={state} trackKey={trackKey} />}

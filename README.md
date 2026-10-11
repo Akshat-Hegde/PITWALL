@@ -190,6 +190,32 @@ stay separate). The TV shows the name and that driver's best lap on the track ("
 Set `[staff] pin` in `config\hub.toml` so customers can't use the page: it then asks for the PIN, and five
 wrong PINs in a minute lock that device out for a minute. Without a PIN anyone on the LAN can use it.
 
+## Competitions
+
+On `/staff`, the **Compete** tab:
+
+- **Weekly challenges:** pick a track, Pro or Open, the first and last day and a prize ("Free hour for the
+  fastest Pro lap"). The challenge board is the best lap per driver in that window. The TV shows the
+  challenge (time left, prize, leader) on the leaderboard view, the welcome screen and the portrait screen,
+  and announces the winner full screen when it ends.
+- **Pro and Open boards:** the leaderboard view alternates between Open (all laps) and Pro (every assist
+  off) every 15 seconds once there are Pro laps.
+- **Corporate events:** event name, company, company colour, optional track and "best N". Add teams and their
+  drivers (names, or a selected driver profile), and upload the company logo and team logos (PNG, JPEG or WebP,
+  up to 512 KB; stored in `data\logos\`). The team score is the average of each team's best N drivers' best
+  laps since the event started. While the event runs the TV uses the company colour, shows the company next to
+  the cafe name and adds the **Teams** view (key `6`) to the rotation. **End event** goes back to normal.
+- **Tournaments** are not built yet. Demo mode shows a static preview screen ("Hotlap cup", made-up names).
+
+`[features] challenges` and `[features] events` switch these off.
+
+## Demo mode
+
+`http://<hub or dev server>/?source=mock&demo=1` runs a busy cafe without any rig: six simulated drivers, a
+full leaderboard with Pro and Open boards, a weekly challenge, a corporate event with four teams, a podium
+every three minutes and a scripted loop of moments (now driving, a story card QR, a record, a challenge
+winner), plus the tournament preview in the rotation. `/card/demo` shows a sample story card.
+
 ## Sharing: session story cards
 
 When staff end a session (or start the next driver on the rig), the hub makes a **story card** if the driver

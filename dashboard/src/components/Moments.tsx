@@ -5,10 +5,13 @@ import type { DashboardState } from "../state/reducer";
 import type { DashboardStore } from "../state/store";
 import { playSound } from "../sounds";
 import { findBattle } from "./Battle";
+import { ChallengeWinner } from "./Competition";
 import { Avatar, KineticType, StripeBundle, Tab } from "./Motifs";
 
 /** How long each moment stays on screen (DESIGN.md §4). */
-export const MOMENT_MS: Record<Moment["kind"], number> = { now_driving: 4000, record: 6000, podium: 10000 };
+export const MOMENT_MS: Record<Moment["kind"], number> = {
+  now_driving: 4000, record: 6000, podium: 10000, challenge_winner: 10000,
+};
 export const BATTLE_POPUP_MS = 5000;
 /** A pair (or "on course") pop-up isn't repeated within this time. */
 export const BATTLE_REPEAT_MS = 120_000;
@@ -32,6 +35,7 @@ export function MomentLayer({ store, state }: { store: DashboardStore; state: Da
       {moment.kind === "now_driving" && <NowDriving m={moment} colour={colour(moment.rig_id)} />}
       {moment.kind === "record" && <RecordBroken m={moment} colour={colour(moment.rig_id)} />}
       {moment.kind === "podium" && <Podium m={moment} colour={colour} />}
+      {moment.kind === "challenge_winner" && <ChallengeWinner m={moment} />}
     </div>
   );
 }

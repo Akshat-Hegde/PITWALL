@@ -63,6 +63,7 @@ Compatibility rules:
 | `session_changed` | A rig starts a new game session (e.g. new track, restart) | `{ "rig_id", "session": SessionInfo }` |
 | `track_outline` | An outline becomes available (generated or loaded) | `{ "outline": TrackOutline }` |
 | `lap_completed` | A rig finishes a lap | `{ "lap": LapRecord }` |
+| `competition` *(added in v1, optional)* | The challenge or the corporate event changes (also when their boards change) | `{ "competition": Competition }` |
 | `queue` *(added in v1, optional)* | The waiting queue changes | `{ "queue": [QueueEntry] }`: full replacement |
 | `moment` *(added in v1, optional)* | A broadcast moment: a driver starts, a record falls, the podium | `{ "moment": Moment }` |
 | `leaderboard` | A board of the shown track changes | `{ "leaderboard": Leaderboard }`: full replacement of the board for its `period`. Boards for another track replace all boards. |
@@ -96,6 +97,12 @@ Compatibility rules:
 - `cafe.branding`: CSS custom properties from `[cafe.branding]` in the hub config. The dashboard applies
   them to `:root` as-is (keys must start with `--`; others are ignored).
 - `outlines`: every outline the hub has (one per track that has had a complete valid lap).
+- `competition` *(added in v1, optional)*: `{ "challenge": Challenge | null, "event": Event | null }`.
+  Challenge: `id`, `title`, `track_key`, `track_name`, `lap_class`, `starts_at`, `ends_at` (Unix ms, end
+  exclusive), `prize`, `state` (`"upcoming"`, `"running"`, `"ended"`), `entries` (`rank`, `driver`, `lap_ms`,
+  `gap_ms`, at most 5). Event: `id`, `name`, `company`, `accent` (`#rrggbb` \| null), `logo` (URL \| null),
+  `track_key`, `track_name`, `best_n`, `starts_at`, `teams` (`id`, `rank`, `name`, `logo`, `members`
+  (`id`, `name`, `best_ms`), `counted`, `average_ms`), complete teams first.
 - `queue` *(added in v1, optional)*: who's waiting for a rig, first first: `[{ "id": 3, "name": "Jordan P" }]`.
   Names only; contact details never leave the hub.
 
@@ -291,6 +298,7 @@ Something the TV shows full screen for a few seconds, then returns to the view i
 | `now_driving` | `rig_id`, `rig_name`, `driver`, `track_key`, `track_name`, `today_record` (`{ "driver", "lap_ms" }` \| null), `personal_best_ms` (int \| null). Sent when staff start a session on a rig. |
 | `record` | `rig_id`, `driver`, `track_key`, `track_name`, `lap_ms`, `lap_class`, `records`: what the lap beat, most important first, each `{ "period": "all_time" \| "today", "lap_class": "pro" \| "open", "previous_ms", "previous_driver", "gap_ms" }` (`gap_ms` negative). Only sent when an existing record is beaten. |
 | `card` | `rig_id`, `driver`, `token`, `url`, `best_ms`, `track_name`. A session ended and its story card is ready: the TV shows a QR code to `url` for 30 s (not full screen). The card itself is `GET /api/cards/<token>`, outside this feed. |
+| `challenge_winner` | `challenge_id`, `title`, `track_name`, `lap_class`, `prize`, `winner` (entry \| null), `runners_up` (entries). Sent once when a challenge ends. |
 | `podium` | `reason` (`"hourly"`, `"scheduled"` or `"staff"`), `track_key`, `track_name`, `entries`: today's top three (LeaderboardEntry). |
 
 Pro laps count on the Open boards too; the Pro boards hold Pro laps only.
@@ -305,6 +313,7 @@ restarts.
 |---|---|---|
 | `track_key`, `track_name` | string, string \| null | |
 | `period` | string | `"today"`, `"week"` (from Monday) or `"all_time"`. Clients ignore boards with other values. |
+| `lap_class` | string | *(Added in v1, optional.)* `"open"` (every lap, the default when missing) or `"pro"` (Pro laps only). The hub sends both classes for each period. |
 | `since` | int \| null | Unix ms where the period starts, in the hub PC's local time; `[leaderboard] day_start_hour` sets when a day starts. `null` for all time. |
 | `entries` | array | Fastest first, at most 100. |
 

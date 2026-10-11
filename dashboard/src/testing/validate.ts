@@ -263,6 +263,12 @@ export function validateMessage(msg: unknown): string[] {
       case "leaderboard":
         leaderboard(c, m.leaderboard, `${p}.leaderboard`);
         break;
+      case "competition":
+        c.object(m.competition, `${p}.competition`, (co) => {
+          if (!("challenge" in co)) c.errors.push(`${p}.competition.challenge: missing`);
+          if (!("event" in co)) c.errors.push(`${p}.competition.event: missing`);
+        });
+        break;
       case "queue":
         c.array(m.queue, `${p}.queue`, (e, ep) =>
           c.object(e, ep, (eo) => {

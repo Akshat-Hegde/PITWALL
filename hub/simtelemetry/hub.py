@@ -33,6 +33,8 @@ class Hub:
         self.laps = LapBook(outline_display=config.map.model_dump(), store=store,
                             day_start_hour=config.leaderboard.day_start_hour)
         self.drivers = DriverRegistry(store)
+        from .core.competitions import Competitions
+        self.competitions = Competitions(self.drivers.store, config.data_dir, config.leaderboard.day_start_hour)
         # Other programs listening on the telemetry port on a specific address (see net/udp.py).
         self.port_shadows: list[str] = []
         self._session_top_kph: dict[str, int] = {}             # top speed per rig in the staff session
@@ -192,6 +194,26 @@ class Hub:
             if last_slot is not None and slot != last_slot:
                 self.podium("hourly" if every == 60 else "scheduled")
             last_slot = slot
+
+    def announce_challenge_winners(self) -> list[dict[str, Any]]:
+        """'Challenge winner' moments for challenges that have just ended."""
+        if not self.config.features.challenges:
+            return []
+        out = []
+        for c in self.competitions.due_winners():
+            winner = c["entries"][0] if c["entries"] else None
+            out.append(self.laps.publish_moment(
+                "challenge_winner", challenge_id=c["id"], title=c["title"], track_name=c["track_name"],
+                lap_class=c["lap_class"], prize=c["prize"], winner=winner, runners_up=c["entries"][1:3]))
+        return out
+
+    async def tick_competitions(self) -> None:
+        while True:
+            await asyncio.sleep(15.0)
+            try:
+                self.announce_challenge_winners()
+            except Exception:
+                log.exception("Challenge winner check failed")
 
     async def drain(self) -> None:
         """Wait until every queued packet has been decoded (used after a replay)."""

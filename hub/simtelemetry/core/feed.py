@@ -172,6 +172,19 @@ class FeedBuilder:
         a = self.hub.drivers.get(rig.ip)
         return {"driver": a.name, "started_at": a.started_at, "ends_at": a.ends_at} if a else None
 
+    def competition(self, track_key: str | None) -> dict[str, Any]:
+        """Schema Competition: the current challenge and the running corporate event (each null if none / off)."""
+        hub = self.hub
+        key = (track_key, hub.laps._lap_version, hub.competitions.version, int(time.time() // 30))
+        if getattr(self, "_competition_key", None) != key:
+            features = hub.config.features
+            self._competition_key = key
+            self._competition = {
+                "challenge": hub.competitions.current_challenge() if features.challenges else None,
+                "event": hub.competitions.active_event(track_key) if features.events else None,
+            }
+        return self._competition
+
     def queue(self) -> list[dict[str, Any]]:
         """Schema QueueEntry list: who's waiting for a rig, first first (names only, never contact details)."""
         return [{"id": e["id"], "name": e["name"]} for e in self.hub.drivers.queue()]
@@ -205,7 +218,7 @@ class FeedBuilder:
         """Today / this week / all time boards of the shown track (none while no track is known)."""
         if track_key is None:
             return []
-        boards = self.hub.laps.boards(track_key)
+        boards = self.hub.laps.boards(track_key) + self.hub.laps.boards(track_key, "pro")
         name = next((r["session"]["track_name"] for r in rigs if r["session"]["track_key"] == track_key), None)
         for board in boards:
             board["track_name"] = board["track_name"] or name
@@ -277,6 +290,7 @@ class FeedBuilder:
             "leaderboards": self.leaderboards(self.active_track(frame["rigs"]), frame["rigs"]),
             "recent_laps": self.hub.laps.recent_laps(),
             "queue": self.queue(),
+            "competition": self.competition(self.active_track(frame["rigs"])),
         }
 
 
@@ -294,6 +308,7 @@ class FeedConnection:
         self._message_id = 0                                  # last lap book message sent
         self._board: tuple[Any, ...] | None = None            # board_key last sent
         self._queue: list[dict[str, Any]] = []                # queue last sent
+        self._competition: dict[str, Any] | None = None       # competition state last sent
 
     def _message(self, type_: str, body: dict[str, Any]) -> dict[str, Any]:
         msg = {"v": SCHEMA_VERSION, "type": type_, "seq": self.seq, "ts": round(self._clock() * 1000)}
@@ -310,6 +325,7 @@ class FeedConnection:
         self._message_id = laps.last_message_id
         self._board = self.builder.board_key(self.builder.active_track(body["frame"]["rigs"]))
         self._queue = body["queue"]
+        self._competition = body["competition"]
         return self._message("snapshot", body)
 
     def tick(self, now: float) -> list[dict[str, Any]]:
@@ -333,6 +349,10 @@ class FeedConnection:
             self._board = board
             for leaderboard in self.builder.leaderboards(track, frame["rigs"]):
                 out.append(self._message("leaderboard", {"leaderboard": leaderboard}))
+        competition = self.builder.competition(track)
+        if competition != self._competition:
+            self._competition = competition
+            out.append(self._message("competition", {"competition": competition}))
         queue = self.builder.queue()
         if queue != self._queue:
             self._queue = queue

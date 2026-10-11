@@ -3041,6 +3041,264 @@ html:has(.cardpage) {
   text-transform: uppercase;
 }
 
+/* ==== Phase 5: challenges, teams, tournament preview, event branding ========================= */
+
+.challenge {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  padding: var(--s5) var(--s6) var(--s4);
+  background: var(--panel);
+}
+
+.challenge__kerb {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 8rem;
+}
+
+.challenge__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s4);
+}
+
+.challenge__when {
+  color: var(--brand-accent);
+  font-family: var(--font-cond);
+  font-size: var(--fs-body);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.challenge__title {
+  font-size: 1.6rem;
+  font-stretch: 112%;
+  font-weight: 800;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.challenge__body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3) var(--s7);
+}
+
+.challenge__prize,
+.challenge__leader {
+  font-size: var(--fs-value);
+  font-weight: 700;
+}
+
+.challenge__leader {
+  font-stretch: 112%;
+  text-transform: uppercase;
+}
+
+.challenge__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s5);
+  font-weight: 600;
+}
+
+/* compact: one line in the leaderboard header */
+.challenge--compact {
+  gap: var(--s2);
+  padding: var(--s3) var(--s5);
+}
+
+.challenge--compact .challenge__title {
+  font-size: var(--fs-value);
+}
+
+.viewhead .challenge--compact {
+  margin-left: auto;
+  max-width: 34rem;
+}
+
+.viewhead .challenge--compact .challenge__body {
+  flex-wrap: nowrap;
+}
+
+/* Team leaderboard */
+.teams {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--s5);
+}
+
+.teams__head {
+  align-items: center;
+}
+
+.teams__logo {
+  height: 2.8rem;
+  max-width: 10rem;
+  object-fit: contain;
+}
+
+.teams__list {
+  display: grid;
+  grid-auto-rows: minmax(0, 6.2rem);
+  gap: var(--s3);
+  min-height: 0;
+}
+
+.team {
+  position: relative;
+  display: grid;
+  grid-template-columns: 3rem auto minmax(0, 1fr) 4rem 10rem 6rem;
+  align-items: center;
+  gap: var(--s5);
+  padding: var(--s3) var(--s6) var(--s3) var(--s5);
+  background: var(--panel);
+}
+
+.team__chequer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 18px;
+}
+
+.team__pos {
+  font-size: 2.4rem;
+  font-stretch: 125%;
+  font-weight: 900;
+}
+
+.team__logo {
+  width: 3.6rem;
+  height: 3.6rem;
+  object-fit: contain;
+}
+
+.team__who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: var(--s1);
+}
+
+.team__name {
+  font-size: 1.6rem;
+  font-stretch: 112%;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.team__members {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team__count {
+  text-align: right;
+  font-weight: 700;
+}
+
+.team__time {
+  font-size: 1.9rem;
+  font-stretch: 125%;
+  font-weight: 800;
+  text-align: right;
+}
+
+.team__gap {
+  text-align: right;
+  font-weight: 600;
+}
+
+/* Tournament preview (static, demo only) */
+.bracket {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--s6);
+}
+
+.bracket__rounds {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s7);
+  min-height: 0;
+}
+
+.bracket__round {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  gap: var(--s4);
+}
+
+.bracket__match {
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border-left: 3px solid var(--brand-accent);
+}
+
+.bracket__row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s4);
+  padding: var(--s3) var(--s5);
+  color: var(--text-2);
+  font-weight: 700;
+}
+
+.bracket__row + .bracket__row {
+  border-top: var(--hairline);
+}
+
+.bracket__row.is-winner {
+  color: var(--text);
+}
+
+.bracket__name {
+  font-stretch: 112%;
+  text-transform: uppercase;
+}
+
+/* Event branding in the header */
+.header__event {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s3);
+  margin-left: var(--s3);
+  color: var(--brand-accent);
+}
+
+.header__logo {
+  height: 1.6rem;
+  max-width: 8rem;
+  object-fit: contain;
+}
+
+.bracket__round {
+  justify-content: flex-start;
+}
+
+.bracket__matches {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: space-around;
+  gap: var(--s4);
+}
+
+/* attract: kinetic type only in the empty top of the hero, never behind the text below */
+.attract__kinetic {
+  inset: 0 0 58% 0;
+}
+
 /* ==== Misc =================================================================================== */
 
 .fullscreen-message {

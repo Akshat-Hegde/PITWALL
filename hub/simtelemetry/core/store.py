@@ -77,6 +77,42 @@ CREATE TABLE IF NOT EXISTS cards (
     data       TEXT NOT NULL,
     created_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS challenges (
+    id         INTEGER PRIMARY KEY,
+    title      TEXT NOT NULL,
+    track_key  TEXT NOT NULL,
+    track_name TEXT,
+    lap_class  TEXT NOT NULL,
+    starts_at  INTEGER NOT NULL,
+    ends_at    INTEGER NOT NULL,
+    prize      TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL,
+    announced  INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS events (
+    id         INTEGER PRIMARY KEY,
+    name       TEXT NOT NULL,
+    company    TEXT NOT NULL,
+    accent     TEXT,
+    logo       TEXT,
+    track_key  TEXT,
+    track_name TEXT,
+    best_n     INTEGER NOT NULL,
+    starts_at  INTEGER NOT NULL,
+    ended_at   INTEGER
+);
+CREATE TABLE IF NOT EXISTS teams (
+    id       INTEGER PRIMARY KEY,
+    event_id INTEGER NOT NULL,
+    name     TEXT NOT NULL,
+    logo     TEXT
+);
+CREATE TABLE IF NOT EXISTS team_members (
+    id         INTEGER PRIMARY KEY,
+    team_id    INTEGER NOT NULL,
+    name       TEXT NOT NULL,
+    driver_key TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS outlines (
     track_key  TEXT PRIMARY KEY,
     outline    TEXT NOT NULL,
@@ -151,17 +187,18 @@ class LapStore:
             self._db.execute("DELETE FROM laps WHERE id = ?", (lap_id,))
 
     def board(self, track_key: str, since_ms: int | None, limit: int = BOARD_LIMIT,
-              lap_class: str = "open") -> list[dict[str, Any]]:
+              lap_class: str = "open", until_ms: int | None = None) -> list[dict[str, Any]]:
         """Best counted lap per driver on a track since a time, fastest first (ties: earliest).
 
         lap_class "open": every lap (Pro laps count on the Open boards too); "pro": Pro laps only.
         """
         pro = " AND lap_class = 'pro'" if lap_class == "pro" else ""
+        until = f" AND completed_at < {int(until_ms)}" if until_ms is not None else ""
         with self._lock:
             rows = self._db.execute(
                 "SELECT * FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY driver_key"
                 "  ORDER BY lap_ms, completed_at) AS n FROM laps"
-                "  WHERE track_key = ? AND valid = 1 AND out_lap = 0 AND completed_at >= ?" + pro + ")"
+                "  WHERE track_key = ? AND valid = 1 AND out_lap = 0 AND completed_at >= ?" + pro + until + ")"
                 " WHERE n = 1 ORDER BY lap_ms, completed_at LIMIT ?",
                 (track_key, since_ms if since_ms is not None else 0, limit)).fetchall()
         return [dict(row) for row in rows]
@@ -299,6 +336,109 @@ class LapStore:
                            "best_ms": min(latest), "previous_best_ms": min(before),
                            "delta_ms": min(latest) - min(before)})
         return sorted(result, key=lambda r: r["delta_ms"])
+
+    def tracks(self) -> list[dict[str, Any]]:
+        """Every track with at least one lap, by name."""
+        with self._lock:
+            rows = self._db.execute("SELECT track_key, MAX(track_name) AS track_name FROM laps GROUP BY track_key"
+                                    " ORDER BY track_name").fetchall()
+        return [{"track_key": r["track_key"], "track_name": r["track_name"] or r["track_key"]} for r in rows]
+
+    def best_laps_for(self, track_key: str, driver_keys: list[str], since_ms: int) -> dict[str, int]:
+        """Best counted lap per driver key on a track since a time (team scores)."""
+        if not driver_keys:
+            return {}
+        marks = ",".join("?" * len(driver_keys))
+        with self._lock:
+            rows = self._db.execute(
+                f"SELECT driver_key, MIN(lap_ms) AS lap_ms FROM laps WHERE track_key = ? AND valid = 1"
+                f" AND out_lap = 0 AND completed_at >= ? AND driver_key IN ({marks}) GROUP BY driver_key",
+                (track_key, since_ms, *driver_keys)).fetchall()
+        return {r["driver_key"]: r["lap_ms"] for r in rows}
+
+    # --- challenges ----------------------------------------------------------------------------
+
+    def create_challenge(self, **c: Any) -> dict[str, Any]:
+        with self._lock, self._db:
+            cur = self._db.execute(
+                "INSERT INTO challenges (title, track_key, track_name, lap_class, starts_at, ends_at, prize, created_at)"
+                " VALUES (:title, :track_key, :track_name, :lap_class, :starts_at, :ends_at, :prize, :created_at)", c)
+        return {"id": int(cur.lastrowid), **c, "announced": 0}
+
+    def challenges(self) -> list[dict[str, Any]]:
+        with self._lock:
+            return [dict(r) for r in self._db.execute("SELECT * FROM challenges ORDER BY starts_at, id").fetchall()]
+
+    def delete_challenge(self, challenge_id: int) -> bool:
+        with self._lock, self._db:
+            return self._db.execute("DELETE FROM challenges WHERE id = ?", (challenge_id,)).rowcount > 0
+
+    def mark_challenge_announced(self, challenge_id: int) -> None:
+        with self._lock, self._db:
+            self._db.execute("UPDATE challenges SET announced = 1 WHERE id = ?", (challenge_id,))
+
+    # --- corporate events ------------------------------------------------------------------------
+
+    def create_event(self, **e: Any) -> dict[str, Any]:
+        with self._lock, self._db:
+            cur = self._db.execute(
+                "INSERT INTO events (name, company, accent, track_key, track_name, best_n, starts_at)"
+                " VALUES (:name, :company, :accent, :track_key, :track_name, :best_n, :starts_at)", e)
+        return {"id": int(cur.lastrowid), **e, "logo": None, "ended_at": None}
+
+    def event(self, event_id: int) -> dict[str, Any] | None:
+        with self._lock:
+            row = self._db.execute("SELECT * FROM events WHERE id = ?", (event_id,)).fetchone()
+        return dict(row) if row else None
+
+    def active_event(self) -> dict[str, Any] | None:
+        with self._lock:
+            row = self._db.execute("SELECT * FROM events WHERE ended_at IS NULL ORDER BY id DESC LIMIT 1").fetchone()
+        return dict(row) if row else None
+
+    def end_event(self, event_id: int, ended_at: int) -> None:
+        with self._lock, self._db:
+            self._db.execute("UPDATE events SET ended_at = ? WHERE id = ? AND ended_at IS NULL", (ended_at, event_id))
+
+    def add_team(self, event_id: int, name: str) -> dict[str, Any]:
+        with self._lock, self._db:
+            cur = self._db.execute("INSERT INTO teams (event_id, name) VALUES (?, ?)", (event_id, name))
+        return {"id": int(cur.lastrowid), "event_id": event_id, "name": name, "logo": None}
+
+    def team(self, team_id: int) -> dict[str, Any] | None:
+        with self._lock:
+            row = self._db.execute("SELECT * FROM teams WHERE id = ?", (team_id,)).fetchone()
+        return dict(row) if row else None
+
+    def teams(self, event_id: int) -> list[dict[str, Any]]:
+        with self._lock:
+            return [dict(r) for r in self._db.execute("SELECT * FROM teams WHERE event_id = ? ORDER BY id",
+                                                      (event_id,)).fetchall()]
+
+    def remove_team(self, team_id: int) -> None:
+        with self._lock, self._db:
+            self._db.execute("DELETE FROM team_members WHERE team_id = ?", (team_id,))
+            self._db.execute("DELETE FROM teams WHERE id = ?", (team_id,))
+
+    def add_member(self, team_id: int, name: str, driver_key: str) -> dict[str, Any]:
+        with self._lock, self._db:
+            cur = self._db.execute("INSERT INTO team_members (team_id, name, driver_key) VALUES (?,?,?)",
+                                   (team_id, name, driver_key))
+        return {"id": int(cur.lastrowid), "team_id": team_id, "name": name, "driver_key": driver_key}
+
+    def members(self, team_id: int) -> list[dict[str, Any]]:
+        with self._lock:
+            return [dict(r) for r in self._db.execute("SELECT * FROM team_members WHERE team_id = ? ORDER BY id",
+                                                      (team_id,)).fetchall()]
+
+    def remove_member(self, member_id: int) -> None:
+        with self._lock, self._db:
+            self._db.execute("DELETE FROM team_members WHERE id = ?", (member_id,))
+
+    def set_logo(self, kind: str, owner_id: int, name: str) -> None:
+        table = "events" if kind == "event" else "teams"
+        with self._lock, self._db:
+            self._db.execute(f"UPDATE {table} SET logo = ? WHERE id = ?", (name, owner_id))
 
     # --- story cards ---------------------------------------------------------------------------
 

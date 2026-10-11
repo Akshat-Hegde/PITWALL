@@ -265,8 +265,8 @@ async def test_connection_sequence(tmp_path):
     assert (snap["v"], snap["type"], snap["seq"], snap["ts"]) == (1, "snapshot", 0, 1_791_302_400_123)
     assert snap["cafe"] == {"name": "Pit Stop", "branding": {"--brand-accent": "#0a7cff"}}
     assert snap["hub"]["frame_hz"] == 15 and snap["outlines"] == []
-    assert [(b["period"], b["track_name"], b["entries"]) for b in snap["leaderboards"]] == \
-        [("today", "Silverstone", []), ("week", "Silverstone", []), ("all_time", "Silverstone", [])]
+    assert [(b["period"], b["lap_class"], b["track_name"], b["entries"]) for b in snap["leaderboards"]] == \
+        [(p, c, "Silverstone", []) for c in ("open", "pro") for p in ("today", "week", "all_time")]
 
     # Nothing changed: just a frame (status only once a second).
     assert [m["type"] for m in conn.tick(t + 0.05)] == ["frame"]
@@ -395,7 +395,8 @@ async def test_lap_side_of_the_feed(tmp_path):
     assert len(outline["points"]) == 301                  # one per input point (~20 m apart, > 6 m step)
     assert outline["sector_starts"] is None or outline["sector_starts"][0] == 0
     assert outline["display"] == {"flip_x": False, "flip_z": True, "rotate_deg": 0.0}
-    assert [m["leaderboard"]["period"] for m in msgs[2:5]] == ["today", "week", "all_time"]
+    assert [(m["leaderboard"]["period"], m["leaderboard"]["lap_class"]) for m in msgs[2:8]] == \
+        [(p, c) for c in ("open", "pro") for p in ("today", "week", "all_time")]
     assert msgs[2]["leaderboard"]["entries"][0]["driver"] == "Akshat"
 
     frame = next(m for m in msgs if m["type"] == "frame")
@@ -411,7 +412,7 @@ async def test_lap_side_of_the_feed(tmp_path):
                      (RIG_B, lap_data_bytes(2025, 0x11, 300.0, 2, 2945.5, 44_500))])  # A passed here at 44062 ms
     msgs = conn.tick(last_seen(hub))
     assert [m["type"] for m in msgs if m["type"] in ("lap_completed", "track_outline", "leaderboard")] == \
-        ["lap_completed"] + ["leaderboard"] * 3           # one outline per track
+        ["lap_completed"] + ["leaderboard"] * 6           # one outline per track; Open and Pro boards
     comparison = next(m for m in msgs if m["type"] == "frame")["comparison"]
     by_rig = {e["rig_id"]: e for e in comparison["rigs"]}
     assert by_rig[RIG_B]["reference_rig_id"] == RIG_A and by_rig[RIG_B]["best_gap_ms"] == 1500

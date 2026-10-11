@@ -1,6 +1,7 @@
 import { formatLapTime } from "../format";
 import type { LeaderboardEntry } from "../schema";
 import type { DashboardState } from "../state/reducer";
+import { ChallengeCard } from "./Competition";
 import { LeaderboardPanel } from "./LeaderboardPanel";
 import { Avatar, KineticType, StripeBundle, Tab } from "./Motifs";
 
@@ -59,6 +60,7 @@ export function AttractView({ state }: { state: DashboardState }) {
           <p className="attract__tag">Grab a seat. Set a lap. Beat the board.</p>
         </div>
         <NextUp state={state} max={3} />
+        <ChallengeCard state={state} compact />
         <RecordHolder state={state} />
       </section>
       <LeaderboardPanel title="Today" leaderboard={state.leaderboards.today ?? null} rigs={state.rigs}
@@ -80,6 +82,7 @@ export function PortraitView({ state }: { state: DashboardState }) {
         <p className="attract__tag">Grab a seat. Set a lap. Beat the board.</p>
       </header>
       <RecordHolder state={state} />
+      <ChallengeCard state={state} />
       <LeaderboardPanel title="Today" leaderboard={state.leaderboards.today ?? null} rigs={state.rigs}
                         className="portrait__board" top />
       <NextUp state={state} />

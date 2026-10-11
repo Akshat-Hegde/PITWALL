@@ -89,13 +89,13 @@
   .check { display: flex; gap: 10px; align-items: flex-start; margin: 12px 0 0; color: var(--text); font-size: 0.95rem; }
   .check input { width: 22px; height: 22px; flex: none; margin: 1px 0 0; }
   .actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
-  button.btn {
+  button.btn, label.btn {
     padding: 11px 16px; border: 1px solid var(--edge); background: var(--panel-2); color: var(--text);
     font: inherit; font-weight: 700; cursor: pointer;
   }
   button.btn.primary { background: var(--accent); border-color: var(--accent); }
   button.btn.danger { color: var(--error); border-color: rgba(255, 107, 107, 0.4); background: none; }
-  button.btn.small { padding: 7px 12px; font-size: 0.9rem; }
+  button.btn.small, label.btn.small { padding: 7px 12px; font-size: 0.9rem; }
   button:disabled { opacity: 0.45; cursor: default; }
   .msg { margin: 8px 0 0; min-height: 1.3em; font-size: 0.92rem; }
   .msg.ok { color: var(--ok); }
@@ -127,6 +127,7 @@
     <button type="button" role="tab" data-tab="rigs" aria-selected="true">Rigs</button>
     <button type="button" role="tab" data-tab="queue" aria-selected="false">Queue <span class="badge" id="queue-count" hidden></span></button>
     <button type="button" role="tab" data-tab="drivers" aria-selected="false">Drivers</button>
+    <button type="button" role="tab" data-tab="compete" aria-selected="false">Compete</button>
   </nav>
 </header>
 
@@ -182,6 +183,55 @@
       <div class="actions"><button class="btn primary" type="submit">Create profile</button></div>
       <p class="msg" id="create-msg" role="status"></p>
     </form>
+  </section>
+  <section id="tab-compete" role="tabpanel" hidden>
+    <div class="panel" id="challenges-panel">
+      <div class="title">Weekly challenges</div>
+      <ul class="list" id="challenges"></ul>
+      <form id="challenge-form">
+        <label for="ch-track">Track</label><select id="ch-track"></select>
+        <div class="grid2">
+          <div><label for="ch-class">Class</label>
+            <select id="ch-class"><option value="open">Open (all laps)</option><option value="pro">Pro (all assists off)</option></select></div>
+          <div><label for="ch-title">Title (optional)</label><input id="ch-title" maxlength="40" autocomplete="off"></div>
+        </div>
+        <div class="grid2">
+          <div><label for="ch-start">Starts</label><input id="ch-start" type="date"></div>
+          <div><label for="ch-end">Ends (last day)</label><input id="ch-end" type="date"></div>
+        </div>
+        <label for="ch-prize">Prize</label><input id="ch-prize" maxlength="80" autocomplete="off" placeholder="e.g. Free hour for the fastest lap">
+        <div class="actions"><button class="btn primary" type="submit">Create challenge</button></div>
+        <p class="msg" id="ch-msg" role="status"></p>
+      </form>
+    </div>
+
+    <div class="panel" id="event-panel">
+      <div class="title">Corporate event</div>
+      <div id="event-live" hidden>
+        <p class="muted" id="ev-summary"></p>
+        <label for="ev-logo">Company logo (PNG, JPEG or WebP, up to 512 KB)</label>
+        <input id="ev-logo" type="file" accept="image/png,image/jpeg,image/webp">
+        <div id="ev-teams"></div>
+        <form id="team-form" class="actions">
+          <input id="team-name" maxlength="40" autocomplete="off" placeholder="New team name" style="flex:1">
+          <button class="btn" type="submit">Add team</button>
+        </form>
+        <div class="actions"><button class="btn danger" type="button" id="ev-end">End event</button></div>
+      </div>
+      <form id="event-form">
+        <div class="grid2">
+          <div><label for="ev-name">Event name</label><input id="ev-name" maxlength="40" autocomplete="off"></div>
+          <div><label for="ev-company">Company</label><input id="ev-company" maxlength="40" autocomplete="off"></div>
+        </div>
+        <div class="grid2">
+          <div><label for="ev-track">Track (optional)</label><select id="ev-track"></select></div>
+          <div><label for="ev-best">Team score: best N laps</label><input id="ev-best" type="number" min="1" max="10" value="3"></div>
+        </div>
+        <label for="ev-colour">Company colour</label><input id="ev-colour" type="color" value="#0a84ff">
+        <div class="actions"><button class="btn primary" type="submit">Start event</button></div>
+      </form>
+      <p class="msg" id="ev-msg" role="status"></p>
+    </div>
   </section>
 </main>
 
@@ -283,7 +333,8 @@
     document.querySelectorAll("[role=tabpanel]").forEach((p) => (p.hidden = p.id !== "tab-" + tab));
   }
   document.querySelectorAll("nav.tabs button").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
-  if (["rigs", "queue", "drivers"].includes(location.hash.slice(1))) showTab(location.hash.slice(1)); // e.g. /staff#queue
+  if (["rigs", "queue", "drivers", "compete"].includes(location.hash.slice(1))) showTab(location.hash.slice(1)); // e.g. /staff#queue
+  document.querySelector('[data-tab="compete"]').addEventListener("click", () => loadCompete());
 
   // --- time ----------------------------------------------------------------------------------
   function fmtLeft(ms) {
@@ -493,6 +544,150 @@
 
   $("card-close").addEventListener("click", () => { $("card-panel").hidden = true; });
 
+  // --- compete -------------------------------------------------------------------------------
+  let compete = null;
+  function fmtDate(ms) { return new Date(ms).toLocaleDateString(undefined, { day: "numeric", month: "short" }); }
+  function options(select, tracks, withNone) {
+    const keep = select.value;
+    select.textContent = "";
+    if (withNone) select.add(new Option("Any (the track on the TV)", ""));
+    for (const t of tracks) select.add(new Option(t.track_name, t.track_key));
+    if (keep) select.value = keep;
+  }
+  function readFile(input) {
+    return new Promise((resolve, reject) => {
+      const file = input.files && input.files[0];
+      if (!file) return reject(new Error("Choose an image first."));
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = () => reject(new Error("That file couldn't be read."));
+      r.readAsDataURL(file);
+    });
+  }
+  async function loadCompete() {
+    try {
+      compete = await api("GET", "/api/staff/competitions");
+      renderCompete();
+    } catch (err) { fail($("ch-msg"), err); }
+  }
+  function renderCompete() {
+    if (!compete) return;
+    const f = compete.features || {};
+    $("challenges-panel").hidden = f.challenges === false;
+    $("event-panel").hidden = f.events === false;
+    options($("ch-track"), compete.tracks, false);
+    options($("ev-track"), compete.tracks, true);
+    const list = $("challenges");
+    list.textContent = "";
+    if (!compete.challenges.length) list.innerHTML = '<li class="muted">No challenges yet.</li>';
+    for (const c of compete.challenges) {
+      const li = document.createElement("li");
+      li.innerHTML = '<span class="grow"><strong></strong><br><span class="faint"></span></span>';
+      li.querySelector("strong").textContent = c.title;
+      const lead = c.entries[0] ? ` · leader ${c.entries[0].driver} ${fmtLap(c.entries[0].lap_ms)}` : "";
+      li.querySelector(".faint").textContent =
+        `${c.lap_class === "pro" ? "Pro" : "Open"} · ${fmtDate(c.starts_at)} – ${fmtDate(c.ends_at - 1)} · ${c.state}${lead}`;
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "btn danger small"; b.textContent = "Delete";
+      b.addEventListener("click", async () => {
+        if (!confirm(`Delete the challenge "${c.title}"?`)) return;
+        try { await api("DELETE", `/api/staff/challenges/${c.id}`); loadCompete(); } catch (err) { fail($("ch-msg"), err); }
+      });
+      li.appendChild(b);
+      list.appendChild(li);
+    }
+    const ev = compete.event;
+    $("event-live").hidden = !ev;
+    $("event-form").hidden = !!ev;
+    if (ev) {
+      $("ev-summary").textContent = `${ev.name} for ${ev.company} · since ${new Date(ev.starts_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` +
+        ` · team score = average of the best ${ev.best_n}` + (ev.track_name ? ` on ${ev.track_name}` : "");
+      const box = $("ev-teams");
+      box.textContent = "";
+      for (const t of ev.teams) {
+        const div = document.createElement("div");
+        div.className = "panel";
+        div.style.marginTop = "10px";
+        div.innerHTML = `<div class="row"><span class="title"></span><span class="faint score"></span></div>
+          <ul class="list members"></ul>
+          <form class="actions add"><input maxlength="32" placeholder="Driver name" style="flex:1"><button class="btn small" type="submit">Add</button></form>
+          <div class="actions"><label class="btn small" style="margin:0">Team logo<input type="file" accept="image/png,image/jpeg,image/webp" hidden></label>
+          <button class="btn danger small" type="button" data-remove>Remove team</button></div>`;
+        div.querySelector(".title").textContent = `${t.rank}. ${t.name}`;
+        div.querySelector(".score").textContent = t.average_ms ? `${fmtLap(t.average_ms)} (${t.counted}/${ev.best_n})` : "no laps yet";
+        const ul = div.querySelector(".members");
+        for (const m of t.members) {
+          const li = document.createElement("li");
+          li.innerHTML = '<span class="grow"></span>';
+          li.querySelector(".grow").textContent = m.name + (m.best_ms ? `  ${fmtLap(m.best_ms)}` : "");
+          const rm = document.createElement("button");
+          rm.type = "button"; rm.className = "btn danger small"; rm.textContent = "×";
+          rm.setAttribute("aria-label", `Remove ${m.name}`);
+          rm.addEventListener("click", async () => { try { await api("DELETE", `/api/staff/members/${m.id}`); loadCompete(); } catch (err) { fail($("ev-msg"), err); } });
+          li.appendChild(rm);
+          ul.appendChild(li);
+        }
+        if (selectedDriver) {
+          const star = document.createElement("button");
+          star.type = "button"; star.className = "btn small primary"; star.textContent = "★ " + selectedDriver.name;
+          star.addEventListener("click", async () => { try { await api("POST", `/api/staff/teams/${t.id}/members`, { driver_id: selectedDriver.id }); loadCompete(); } catch (err) { fail($("ev-msg"), err); } });
+          div.querySelector(".add").prepend(star);
+        }
+        div.querySelector(".add").addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const input = e.target.querySelector("input");
+          try { await api("POST", `/api/staff/teams/${t.id}/members`, { name: input.value }); loadCompete(); } catch (err) { fail($("ev-msg"), err); }
+        });
+        div.querySelector('input[type="file"]').addEventListener("change", async (e) => {
+          try { await api("POST", `/api/staff/teams/${t.id}/logo`, { data_url: await readFile(e.target) }); say($("ev-msg"), "Team logo saved.", "ok"); loadCompete(); }
+          catch (err) { fail($("ev-msg"), err); }
+        });
+        div.querySelector("[data-remove]").addEventListener("click", async () => {
+          if (!confirm(`Remove ${t.name}?`)) return;
+          try { await api("DELETE", `/api/staff/teams/${t.id}`); loadCompete(); } catch (err) { fail($("ev-msg"), err); }
+        });
+        box.appendChild(div);
+      }
+    }
+  }
+  $("challenge-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      await api("POST", "/api/staff/challenges", { track_key: $("ch-track").value, lap_class: $("ch-class").value,
+        title: $("ch-title").value, starts: $("ch-start").value, ends: $("ch-end").value, prize: $("ch-prize").value });
+      say($("ch-msg"), "Challenge created. The TV shows it from its start date.", "ok");
+      loadCompete();
+    } catch (err) { fail($("ch-msg"), err); }
+  });
+  $("event-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      await api("POST", "/api/staff/events", { name: $("ev-name").value, company: $("ev-company").value,
+        track_key: $("ev-track").value || null, best_n: Number($("ev-best").value), accent: $("ev-colour").value });
+      say($("ev-msg"), "Event started: the TV now shows the company's colour and the team leaderboard.", "ok");
+      loadCompete();
+    } catch (err) { fail($("ev-msg"), err); }
+  });
+  $("ev-logo").addEventListener("change", async (e) => {
+    try { await api("POST", `/api/staff/events/${compete.event.id}/logo`, { data_url: await readFile(e.target) }); say($("ev-msg"), "Logo saved.", "ok"); loadCompete(); }
+    catch (err) { fail($("ev-msg"), err); }
+  });
+  $("team-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try { await api("POST", `/api/staff/events/${compete.event.id}/teams`, { name: $("team-name").value }); $("team-name").value = ""; loadCompete(); }
+    catch (err) { fail($("ev-msg"), err); }
+  });
+  $("ev-end").addEventListener("click", async () => {
+    if (!confirm("End the event? The TV goes back to the cafe's branding.")) return;
+    try { await api("POST", `/api/staff/events/${compete.event.id}/end`); loadCompete(); } catch (err) { fail($("ev-msg"), err); }
+  });
+  {
+    const today = new Date();
+    const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    $("ch-start").value = iso(today);
+    $("ch-end").value = iso(new Date(today.getTime() + 6 * 864e5));
+  }
+
   // --- podium --------------------------------------------------------------------------------
   $("podium-btn").addEventListener("click", async () => {
     try { await api("POST", "/api/staff/podium"); say($("top-msg"), "The TV is showing today's podium.", "ok"); }
@@ -508,6 +703,7 @@
       $("podium-btn").hidden = state.features && state.features.podium === false;
       renderRigs();
       renderQueue();
+      if (currentTab === "compete" && !compete) loadCompete();
     } catch (err) {
       if (err.message === "locked") return;
       say($("top-msg"), "Can't reach the hub: " + err.message, "error");

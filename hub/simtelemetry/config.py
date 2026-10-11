@@ -93,6 +93,8 @@ class FeaturesConfig(_Section):
     head_to_head: bool = True     # head-to-head analysis view
     onboard: bool = True          # onboard view
     sharing: bool = True          # story card + QR code when a session ends
+    challenges: bool = True       # weekly challenges on the TV
+    events: bool = True           # corporate events: teams, team leaderboard, company branding
 
 
 class MomentsConfig(_Section):

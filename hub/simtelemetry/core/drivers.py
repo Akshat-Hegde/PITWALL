@@ -89,6 +89,10 @@ class DriverRegistry:
     def _now_ms(self) -> int:
         return round(self._clock() * 1000)
 
+    @property
+    def store(self) -> LapStore:
+        return self._store
+
     # --- sessions --------------------------------------------------------------------------
 
     def assign(self, rig_id: str, name: Any = None, driver_id: Any = None, minutes: Any = None) -> Assignment:

@@ -10,6 +10,7 @@ import {
   type LapRecord,
   type Leaderboard,
   type LeaderboardEntry,
+  type Competition,
   type Moment,
   type RigFrame,
   type RigInfo,
@@ -41,6 +42,8 @@ export interface MockOptions {
   idle: boolean;
   /** Podium moment every this many ms of simulated time; 0 = never (demo mode turns it on). */
   podiumEveryMs: number;
+  /** A corporate event with teams is running. */
+  event: boolean;
 }
 
 export const DEFAULT_MOCK_OPTIONS: MockOptions = {
@@ -54,6 +57,7 @@ export const DEFAULT_MOCK_OPTIONS: MockOptions = {
   idle: false,
   frameHz: 15,
   podiumEveryMs: 0,
+  event: false,
 };
 
 const MOCK_QUEUE = [{ id: 1, name: "Jordan P" }, { id: 2, name: "Office party (4)" }, { id: 3, name: "Sam W" }];
@@ -258,7 +262,7 @@ export class MockHub {
       hub: { version: "mock", games: ["F1"], frame_hz: this.options.frameHz, udp_port: 20777,
              lan_address: "192.168.1.10", steering_rotation_deg: 360,
              features: { moments: true, battles: true, podium: true, attract: true, portrait: true,
-                         head_to_head: true, onboard: true, sharing: true },
+                         head_to_head: true, onboard: true, sharing: true, challenges: true, events: true },
              moments: { battle_margin_ms: 300 }, sounds: { enabled: false, volume: 0.6 } },
       cafe: { name: "Sim Racing Cafe", branding: {} },
       status: this.status(),
@@ -268,6 +272,7 @@ export class MockHub {
       leaderboards: this.leaderboard ? this.periodBoards(this.leaderboard) : [],
       recent_laps: [...this.recentLaps],
       queue: MOCK_QUEUE.slice(0, this.options.rigs >= 4 ? 3 : 2),
+      competition: this.competition(),
     };
   }
 
@@ -387,6 +392,7 @@ export class MockHub {
       for (const board of this.periodBoards(this.leaderboard)) {
         msgs.push({ ...this.envelope("leaderboard"), leaderboard: board });
       }
+      msgs.push({ ...this.envelope("competition"), competition: this.competition() });
     }
     if (valid && !this.outlineSent) {
       this.outlineSent = true;
@@ -449,6 +455,13 @@ export class MockHub {
       const m = this.podiumMoment();
       return m ? this.moment(m) : null;
     }
+    if (kind === "challenge_winner") {
+      const c = this.competition().challenge!;
+      return this.moment({ kind: "challenge_winner", at: this.clock(), challenge_id: c.id, title: c.title,
+        track_name: c.track_name, lap_class: c.lap_class, prize: c.prize,
+        winner: c.entries[0] ?? { rank: 1, driver: "Maya R", lap_ms: 87_671, gap_ms: 0 },
+        runners_up: c.entries.slice(1, 3) });
+    }
     if (kind === "card") {
       return { ...this.envelope("moment"), moment: {
         kind: "card", at: this.clock(), rig_id: rig.spec.info.rig_id, driver: rig.spec.driver ?? "Driver",
@@ -474,17 +487,51 @@ export class MockHub {
     return m ? [this.moment(m)] : [];
   }
 
+  /** A weekly challenge (always) and a corporate event (?event=1 or demo mode). */
+  competition(): Competition {
+    const day = 24 * 3600_000;
+    const board = this.leaderboard?.entries ?? [];
+    const leader = board[0]?.lap_ms ?? 0;
+    const challenge = {
+      id: 1, title: "Practice circuit Pro week", track_key: TRACK_KEY, track_name: TRACK_NAME, lap_class: "pro",
+      starts_at: this.startedAt - 2 * day, ends_at: this.startedAt + 3 * day + 4 * 3600_000,
+      prize: "Free hour for the fastest Pro lap", state: "running",
+      entries: board.slice(0, 5).map((e, i) => ({ rank: i + 1, driver: e.driver ?? e.rig_name, lap_ms: e.lap_ms,
+                                                   gap_ms: e.lap_ms - leader })),
+    };
+    if (!this.options.event) return { challenge, event: null };
+    const names = board.map((e) => e.driver ?? e.rig_name);
+    const team = (id: number, name: string, members: string[]) => {
+      const bests = members.map((m) => ({ id: id * 10 + members.indexOf(m), name: m,
+        best_ms: board.find((e) => (e.driver ?? e.rig_name) === m)?.lap_ms ?? null }));
+      const counted = bests.filter((b) => b.best_ms != null).map((b) => b.best_ms!).sort((a, b) => a - b).slice(0, 2);
+      return { id, rank: 0, name, logo: null, members: bests, counted: counted.length,
+               average_ms: counted.length ? Math.round(counted.reduce((a, b) => a + b, 0) / counted.length) : null };
+    };
+    const teams = [team(1, "Sales sharks", names.slice(0, 3)), team(2, "Dev ops", names.slice(3, 6)),
+                   team(3, "Finance flyers", names.slice(6, 9)), team(4, "People team", names.slice(9, 11))]
+      .sort((a, b) => (a.average_ms ?? Infinity) - (b.average_ms ?? Infinity)).map((t, i) => ({ ...t, rank: i + 1 }));
+    return { challenge, event: { id: 1, name: "Q4 kick-off", company: "Northwind", accent: "#0a84ff", logo: null,
+      track_key: TRACK_KEY, track_name: TRACK_NAME, best_n: 2, starts_at: this.startedAt, teams } };
+  }
+
   /** The mock has one session, so every period shows the same board. */
   private periodBoards(board: Leaderboard): Leaderboard[] {
     const today = new Date(this.clock());
     today.setHours(0, 0, 0, 0);
     const monday = new Date(today);
     monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
-    return [
-      { ...board, period: "today", since: today.getTime() },
-      { ...board, period: "week", since: monday.getTime() },
-      { ...board, period: "all_time", since: null },
-    ];
+    // Pro boards: the drivers who run without assists (every third one, plus rig 1's driver), re-ranked.
+    const proEntries = board.entries.filter((e, i) => i % 3 === 0 || e.rig_id === "rig-1");
+    const proLeader = proEntries[0]?.lap_ms ?? 0;
+    const pro: Leaderboard = { ...board, lap_class: "pro",
+      entries: proEntries.map((e, i) => ({ ...e, rank: i + 1, gap_ms: e.lap_ms - proLeader })) };
+    const open: Leaderboard = { ...board, lap_class: "open" };
+    return [open, pro].flatMap((b) => [
+      { ...b, period: "today", since: today.getTime() },
+      { ...b, period: "week", since: monday.getTime() },
+      { ...b, period: "all_time", since: null },
+    ]);
   }
 
   private buildLeaderboard(): Leaderboard {
@@ -713,6 +760,11 @@ function rigInfo(rig_id: string, name: string, colour: string, address: string, 
 /** Read mock options from the page URL, e.g. ?outline=late&mismatch=1&recorder=stopped&speed=4. */
 export function mockOptionsFromQuery(query: URLSearchParams): MockOptions {
   const recorder = query.get("recorder");
+  if (query.get("demo") === "1") {
+    // Demo mode: a busy cafe. Six rigs, a full board, a podium every 3 minutes, a corporate event.
+    return { ...DEFAULT_MOCK_OPTIONS, rigs: Number(query.get("rigs") ?? 6) || 6, pastDrivers: 14,
+             offlineRig: false, podiumEveryMs: 180_000, event: true };
+  }
   return {
     ...DEFAULT_MOCK_OPTIONS,
     seed: Number(query.get("seed") ?? DEFAULT_MOCK_OPTIONS.seed) || DEFAULT_MOCK_OPTIONS.seed,
@@ -724,5 +776,6 @@ export function mockOptionsFromQuery(query: URLSearchParams): MockOptions {
     rigs: Math.max(1, Math.min(10, Math.floor(Number(query.get("rigs") ?? 2) || 2))),
     idle: query.get("idle") === "1",
     podiumEveryMs: Math.max(0, Number(query.get("podium") ?? 0) || 0) * 1000,
+    event: query.get("event") === "1",
   };
 }

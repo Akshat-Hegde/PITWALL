@@ -15,6 +15,7 @@ const VIEW_TEXT: [View, string][] = [
   ["analysis", "Head to head"],
   ["onboard", "Onboard"],
   ["attract", "Welcome"],
+  ["teams", "Teams"],
 ];
 
 interface Props {
@@ -28,6 +29,7 @@ interface Props {
 /** Thin header: cafe left, session and track centre, views, link and clock right. Warnings in a line below. */
 export function StatusBar({ state, trackKey, view, modeNote }: Props) {
   const warnings = state.status?.warnings ?? [];
+  const event = state.features.events ? state.competition.event : null;
   const session = Object.values(state.frames).find((f) => f.session.track_key === trackKey)?.session;
   const track = session?.track_name ?? state.leaderboards.today?.track_name ?? null;
   const length = session?.track_length_m ? `${(session.track_length_m / 1000).toFixed(3)} km` : null;
@@ -38,6 +40,12 @@ export function StatusBar({ state, trackKey, view, modeNote }: Props) {
         <div className="header__brand">
           <span className="header__mark" aria-hidden="true" />
           {state.cafe.name || "Live timing"}
+          {event && (
+            <span className="header__event">
+              <span className="t3">×</span>
+              {event.logo ? <img className="header__logo" src={event.logo} alt={event.company} /> : event.company}
+            </span>
+          )}
         </div>
         <div className="header__session">
           {session?.session_type && <span className="t2">{session.session_type}</span>}
@@ -46,7 +54,7 @@ export function StatusBar({ state, trackKey, view, modeNote }: Props) {
         </div>
         <div className="header__right">
           <nav className="tabs" aria-label="Views">
-            {VIEW_TEXT.map(([v, text]) => (
+            {VIEW_TEXT.filter(([v]) => v !== "teams" || event || view === "teams").map(([v, text]) => (
               <span key={v} className={`tab${v === view ? " is-active" : ""}`}>{text}</span>
             ))}
             <span className="tab tab--mode">{modeNote}</span>
