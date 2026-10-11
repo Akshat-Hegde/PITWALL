@@ -54,7 +54,32 @@ function hubSide(state: DashboardState, s: HeadToHeadSide, trackKey: string, pos
  * The two drivers to compare. From the hub when it has them (kept per track and day, so a TV reload shows
  * them at once); otherwise the closest pair by the best laps this page has a full trace of (mock data).
  */
+/** Two rig colours too alike to tell apart on the map: B gets a contrasting colour instead (blue or orange). */
+export function distinctColours(a: string, b: string): [string, string] {
+  const rgb = (c: string) => {
+    const m = /^#([0-9a-f]{6})$/i.exec(c);
+    const n = m ? parseInt(m[1]!, 16) : 0x888888;
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  };
+  const [x, y] = [rgb(a), rgb(b)];
+  const distance = Math.hypot(x[0]! - y[0]!, x[1]! - y[1]!, x[2]! - y[2]!);
+  if (distance >= 110) return [a, b];
+  const blue = "#3987e5";
+  const orange = "#d95926";
+  return [a, Math.hypot(...rgb(a).map((v, i) => v - rgb(blue)[i]!)) > 140 ? blue : orange];
+}
+
+function withColours(duel: Duel): Duel {
+  const [, cb] = distinctColours(duel.a.rig.colour, duel.b.rig.colour);
+  return cb === duel.b.rig.colour ? duel : { ...duel, b: { ...duel.b, rig: { ...duel.b.rig, colour: cb } } };
+}
+
 export function chooseDuel(state: DashboardState, laps: LapTraceTracker, trackKey: string | null): Duel | null {
+  const duel = pickDuel(state, laps, trackKey);
+  return duel ? withColours(duel) : null;
+}
+
+function pickDuel(state: DashboardState, laps: LapTraceTracker, trackKey: string | null): Duel | null {
   if (!trackKey) return null;
   const h = state.headToHead;
   if (h && h.track_key === trackKey) {

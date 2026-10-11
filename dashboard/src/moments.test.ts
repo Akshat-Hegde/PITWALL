@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { chooseDuel } from "./components/Analysis";
+import { chooseDuel, distinctColours } from "./components/Analysis";
 import { challengeWhen } from "./components/Competition";
 import { LapTraceTracker } from "./state/laptrace";
 import { battleCandidate } from "./components/Moments";
@@ -136,5 +136,14 @@ describe("head to head from the hub", () => {
     expect(new Set(duel.who)).toEqual(new Set(["a"]));
     expect(duel.a.trace.share.fullThrottle).toBe(61);
     expect(chooseDuel(s, new LapTraceTracker(), "F1:10")).toBeNull();
+  });
+});
+
+describe("head to head colours", () => {
+  test("alike rig colours: the second driver gets a contrasting one", () => {
+    expect(distinctColours("#36c5f0", "#ff8a3d")).toEqual(["#36c5f0", "#ff8a3d"]);   // already distinct
+    const [a, b] = distinctColours("#e85fae", "#f06a6a");                            // pink vs salmon
+    expect(a).toBe("#e85fae");
+    expect(b).toBe("#3987e5");
   });
 });
