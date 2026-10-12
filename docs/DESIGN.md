@@ -96,6 +96,28 @@ Rules (TV pages):
 
 Each motif is drawn by us; references are for style only.
 
+### The pattern system
+
+Every decorative pattern comes from one system, so the screens read as one family:
+
+- **One slant.** Everything leans "/" at **60° from horizontal** (the run is 0.577 x the height): slashes, bar
+  ends, hatch, streaks, tag and tab cuts, the view wipe. CSS hatches use `120deg` gradients.
+- **One module.** Rules are **6 px bars on a 12 px pitch** (scaled together on the story card); hairlines 2 px.
+- **One palette.** Brand red, navy `#22324D`, and white at low strength. Nothing else.
+- **Two compositions** (`Motifs.tsx`):
+  - **Flash** (corners): slanted blocks coming in from the corner (wide 30 %, medium 10 %, thin 3.5 % of the
+    width, then a trail of seven fading hairlines) with three stepped rules (red, navy, red) along the inner
+    edge, fading away from the corner, optional halftone. Used: the LIVE header corner, attract / board /
+    moment / portrait corners (`StripeBundle`), the header's small `SlashMark`.
+  - **Steps** (edges): stacked rules growing from an edge, red and navy (navy a step shorter), free ends
+    stepping along the slant and cut on it (`SpeedSteps`). Used: the LIVE page's left edge (top and bottom),
+    the podium P1 foot, the story card corner. The **double bar** (`.kerb`) is two rules with a cap; the
+    **comb** (`.chequer`) is rules stepping off a card edge.
+- **Two textures.** Halftone dots (1.1 px on a 7 px grid) and hatch (2 px lines at the slant), panels only.
+
+Not part of the system and not used: red / white kerb stripes, chequered patterns (the map's start/finish
+marker and the logo's flag strip are the only chequers).
+
 | # | Motif | From | How we build it | Allowed | Banned |
 |---|---|---|---|---|---|
 | 1 | **Slanted blocks over halftone**: three bold parallelograms (thick, thin, short) running in from a corner at ~50°, over a field of small dots that fades away from the corner | Racing promo posters (style only) | One inline SVG (`<StripeBundle corner>`): filled paths in `--brand-accent`, a rotated dot `<pattern>` masked by a radial fade; on LIVE / MULTIVIEW a compact version (`<SlashMark>`) closes the header on the right | One per view, in a corner or edge that holds no data (the empty corner of the map, the attract / moment screens, the story card). View wipes. | Behind any number, name, table or map line; more than one per view; in other colours than the accent. |

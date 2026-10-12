@@ -6,7 +6,7 @@ import type { DashboardStore } from "../state/store";
 import { playSound } from "../sounds";
 import { findBattle } from "./Battle";
 import { ChallengeWinner } from "./Competition";
-import { Avatar, KineticType, StripeBundle, Tab } from "./Motifs";
+import { Avatar, KineticType, SpeedSteps, StripeBundle, Tab } from "./Motifs";
 
 /** How long each moment stays on screen (DESIGN.md §4). */
 export const MOMENT_MS: Record<Moment["kind"], number> = {
@@ -125,7 +125,7 @@ function Podium({ m, colour }: { m: PodiumMoment; colour: (rigId: string) => str
           return (
             <section key={e.rank} className={`podium__step podium__step--p${e.rank} cutcard`}
                      style={{ "--rig-colour": colour(e.rig_id) } as React.CSSProperties}>
-              {e.rank === 1 && <span className="chequer podium__chequer" aria-hidden="true" />}
+              {e.rank === 1 && <SpeedSteps className="podium__steps" width={260} height={24} bars={2} from="right" />}
               <span className="podium__pos">P{e.rank}</span>
               <Avatar name={e.driver ?? e.rig_name} className="avatar--l" />
               <span className="podium__name">{e.driver ?? e.rig_name}</span>

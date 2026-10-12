@@ -2,77 +2,127 @@
 
 type Corner = "top-right" | "bottom-left" | "top-left" | "bottom-right";
 
+// ---- The Pitwall pattern system (DESIGN.md §2) ------------------------------------------------------
+// One slant, one bar module, one palette, two compositions:
+//   slant    every slash, bar end, hatch and streak leans "/" at 60° from horizontal
+//   module   bars are BAR thick on a PITCH grid; hairlines are 2 units
+//   palette  red (brand accent), navy, and white at low strength
+//   Flash    corner composition: slanted blocks (wide, medium, thin, hairline trail) with stepped rules
+//   Steps    edge composition: stacked rules growing from an edge, free ends stepping along the slant
+export const SLANT = Math.tan((30 * Math.PI) / 180); // horizontal run per unit of height for a 60° lean
+export const BAR = 6;
+export const PITCH = 12;
+export const RED = "var(--brand-accent, #E10600)";
+export const NAVY = "#22324D";
+
+/** A block leaning "/": its top edge spans [x0, x1]; the bottom edge is shifted left by h x SLANT. */
+function block(x0: number, x1: number, y: number, h: number): string {
+  const d = h * SLANT;
+  return `M${x0} ${y} H${x1} L${x1 - d} ${y + h} H${x0 - d} Z`;
+}
+
+/** A rule (bar) from the left edge, its free right end cut on the slant. */
+function ruleFromLeft(len: number, y: number, h: number): string {
+  return `M0 ${y} H${len} L${len - h * SLANT} ${y + h} H0 Z`;
+}
+
+/** A rule from the right edge of a box of width w, its free left end cut on the slant. */
+function ruleFromRight(w: number, len: number, y: number, h: number): string {
+  return `M${w - len + h * SLANT} ${y} H${w} V${y + h} H${w - len} Z`;
+}
+
 /**
- * Motif 1: five parallel lines that run in from a screen edge, bend 45° with a rounded corner and leave
- * through the top edge, fading out where they enter. Drawn for the top-left; other corners mirror it in CSS.
- * One per view, in the empty title row; aria-hidden decoration.
+ * Flash: the corner composition. Slanted blocks come in from the corner (wide, medium, thin, then a trail of
+ * hairlines fading out), with three stepped rules (red, navy, red) along the inner edge; the whole thing fades
+ * away from the corner. Native geometry for the top corners; bottom corners are the top ones turned 180°
+ * (which keeps the "/" lean).
  */
-export function StripeBundle({ corner = "top-right", className = "" }: { corner?: Corner; className?: string }) {
-  // Drawn for the top-left corner; CSS mirrors it into the other corners. Bold slanted blocks over a halftone
-  // dot field that fades away from the corner (our own drawing, racing-poster style).
-  const id = `halftone-${corner}`;
+export function Flash({ width, height, corner = "top-right", rules = true, dots = false, className = "" }: {
+  width: number; height: number; corner?: Corner; rules?: boolean; dots?: boolean; className?: string;
+}) {
+  const right = corner === "top-right" || corner === "bottom-left";
+  const turned = corner.startsWith("bottom");
+  const W = width;
+  const H = height;
+  const id = `flash-${corner}-${W}x${H}`;
+  const widths = [0.3, 0.1, 0.035].map((f) => Math.max(BAR, f * W));
+  const gap = PITCH;
+  const paths: { d: string; fill: string; opacity: number }[] = [];
+  let edge = 0; // distance from the anchor edge along the top row
+  widths.forEach((w, i) => {
+    const x0 = right ? W + H * SLANT - edge - w : edge;
+    paths.push({ d: block(x0, x0 + w, 0, H), fill: RED, opacity: 1 });
+    edge += w + gap * (i === 0 ? 1.3 : 1);
+  });
+  for (let k = 0; k < 7; k++) {
+    const x0 = right ? W + H * SLANT - edge - 2 : edge;
+    paths.push({ d: block(x0, x0 + 2, 0, H), fill: RED, opacity: 0.85 - k * 0.11 });
+    edge += 2 + gap;
+  }
+  if (rules) {
+    const top = H * 0.55;
+    [0.42, 0.62, 0.3].forEach((f, i) => {
+      const y = top + i * (BAR + BAR * 0.5);
+      if (y + BAR > H) return;
+      const len = f * W;
+      paths.push({ d: right ? ruleFromRight(W, len, y, BAR) : ruleFromLeft(len, y, BAR), fill: i === 1 ? NAVY : RED, opacity: 1 });
+    });
+  }
   return (
-    <svg className={`stripes stripes--${corner} ${className}`} viewBox="0 0 440 330" aria-hidden="true">
+    <svg className={`flash ${className}`} viewBox={`0 0 ${W} ${H}`} width={W} height={H} aria-hidden="true">
       <defs>
-        <pattern id={`${id}-dots`} width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-          <circle cx="4.5" cy="4.5" r="1.6" fill="currentColor" />
-        </pattern>
-        <radialGradient id={`${id}-fade`} cx="0" cy="0" r="1" gradientUnits="objectBoundingBox">
-          <stop offset="0" stopColor="#fff" stopOpacity="0.9" />
-          <stop offset="0.75" stopColor="#fff" stopOpacity="0" />
-        </radialGradient>
-        <mask id={`${id}-mask`}>
-          <rect width="440" height="330" fill={`url(#${id}-fade)`} />
-        </mask>
+        <linearGradient id={`${id}-fade`} x1={right ? 1 : 0} y1={0} x2={right ? 0.15 : 0.85} y2={1}>
+          <stop offset="0" stopColor="#fff" />
+          <stop offset="0.55" stopColor="#fff" stopOpacity="0.9" />
+          <stop offset="1" stopColor="#fff" stopOpacity="0" />
+        </linearGradient>
+        <mask id={`${id}-mask`}><rect width={W} height={H} fill={`url(#${id}-fade)`} /></mask>
+        {dots && (
+          <pattern id={`${id}-dots`} width="7" height="7" patternUnits="userSpaceOnUse">
+            <circle cx="3.5" cy="3.5" r="1.1" fill="#fff" />
+          </pattern>
+        )}
       </defs>
-      <rect className="stripes__dots" width="440" height="330" fill={`url(#${id}-dots)`} mask={`url(#${id}-mask)`} />
-      <path className="stripes__block" d="M118 0 L196 0 L0 236 L0 142 Z" />
-      <path className="stripes__block stripes__block--thin" d="M236 0 L262 0 L44 262 L18 262 Z" />
-      <path className="stripes__block stripes__block--short" d="M300 0 L334 0 L254 96 L220 96 Z" />
+      <g mask={`url(#${id}-mask)`} transform={turned ? `rotate(180 ${W / 2} ${H / 2})` : undefined}>
+        {dots && <rect width={W} height={H} fill={`url(#${id}-dots)`} opacity={0.12} />}
+        {paths.map((p, i) => <path key={i} d={p.d} fill={p.fill} opacity={p.opacity} />)}
+      </g>
     </svg>
   );
 }
 
-/** The same motif small, for the header band of the TV pages: three slanted blocks and a few dots. */
+/** Corner flash for the attract, board, moment and portrait screens (one per view, never behind data). */
+export function StripeBundle({ corner = "top-right", className = "" }: { corner?: Corner; className?: string }) {
+  return <Flash width={440} height={330} corner={corner} dots className={`stripes stripes--${corner} ${className}`} />;
+}
+
+/** The flash small, closing the TV header band on the right. */
 export function SlashMark({ className = "" }: { className?: string }) {
-  return (
-    <svg className={`slashmark ${className}`} viewBox="0 0 120 52" preserveAspectRatio="xMaxYMid meet" aria-hidden="true">
-      <defs>
-        <pattern id="slash-dots" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-          <circle cx="3" cy="3" r="1.1" fill="currentColor" />
-        </pattern>
-      </defs>
-      <rect className="slashmark__dots" x="0" width="70" height="52" fill="url(#slash-dots)" />
-      <path className="stripes__block" d="M78 0 L98 0 L74 52 L54 52 Z" />
-      <path className="stripes__block stripes__block--thin" d="M104 0 L112 0 L88 52 L80 52 Z" />
-      <path className="stripes__block" d="M116 0 L120 0 L120 52 L96 52 Z" />
-    </svg>
-  );
+  return <Flash width={150} height={52} corner="top-right" rules={false} className={`slashmark ${className}`} />;
 }
 
 /**
- * Stepped speed bars: horizontal bars, red and navy, whose free ends step along a diagonal and are cut on the
- * slant, like a livery flash. `from` is the edge the bars grow out of.
+ * Steps: the edge composition. Stacked rules (BAR thick on the PITCH grid, scaled to fit), red and navy,
+ * growing from an edge; their free ends step along the slant, each cut on the slant. Navy rules sit a step
+ * shorter, interleaved with the red ones.
  */
 export function SpeedSteps({ width, height, bars = 12, from = "left", className = "" }: {
   width: number; height: number; bars?: number; from?: "left" | "right"; className?: string;
 }) {
   const pitch = height / bars;
-  const thick = pitch * 0.55;
-  const slant = thick * 0.9;
+  const thick = pitch / 2;
+  const step = (width - thick * SLANT) / (bars + 1);
   return (
     <svg className={`speedsteps ${className}`} viewBox={`0 0 ${width} ${height}`} width={width} height={height} aria-hidden="true">
-      <g transform={from === "right" ? `translate(${width} 0) scale(-1 1)` : undefined}>
-        {Array.from({ length: bars }, (_, i) => {
-          const y = i * pitch;
-          const len = Math.max(slant + 2, width * (0.25 + (0.75 * (i + 1)) / bars) - (i % 3 === 1 ? width * 0.18 : 0));
-          const navy = i % 2 === 1;
-          return (
-            <path key={i} d={`M0 ${y} H${len} L${len - slant} ${y + thick} H0 Z`}
-                  fill={navy ? "#22324D" : "var(--brand-accent, #E10600)"} opacity={navy ? 1 : 1 - (bars - 1 - i) * 0.03} />
-          );
-        })}
-      </g>
+      {Array.from({ length: bars }, (_, i) => {
+        const y = i * pitch + (pitch - thick) / 2;
+        const navy = i % 2 === 1;
+        const len = thick * SLANT + step * (i + 1) + (navy ? -step : 0);
+        return (
+          <path key={i} d={from === "left" ? ruleFromLeft(len, y, thick) : ruleFromRight(width, len, y, thick)}
+                fill={navy ? NAVY : RED} />
+        );
+      })}
     </svg>
   );
 }

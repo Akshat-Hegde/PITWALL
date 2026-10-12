@@ -8,7 +8,7 @@ import {
 import type { DashboardState } from "../state/reducer";
 import type { DashboardStore } from "../state/store";
 import { PitwallLogo } from "./Brand";
-import { SpeedSteps } from "./Motifs";
+import { Flash, SpeedSteps } from "./Motifs";
 import { STRIP_HOLD_MS, SteeringWheel, activeRigs, chooseStripRig, useHeld } from "./Live";
 import { PitwallMap, type Ghost } from "./PitwallMap";
 
@@ -223,17 +223,8 @@ export function PitwallPage({ store, state, trackKey, mapDisplay = null, pinnedR
 function Decor() {
   return (
     <div className="pw-decor" aria-hidden="true">
-      <div className="pw-slash">
-        {[[-70, 150, 1], [108, 52, 1], [186, 16, 1], [226, 2, 0.85], [240, 2, 0.75], [254, 2, 0.65], [268, 2, 0.55],
-          [282, 2, 0.45], [296, 2, 0.35], [310, 2, 0.25], [324, 2, 0.15]].map(([right, width, op], i) => (
-          <span key={i} className="pw-slash__bar" style={{ right, width, opacity: op }} />
-        ))}
-        {[[0, 92, 150, true], [40, 106, 220, false], [0, 120, 120, true], [40, 134, 260, false], [0, 148, 90, true]].map(([right, top, width, red], i) => (
-          <span key={`l${i}`} className={`pw-slash__line${red ? "" : " pw-slash__line--navy"}`} style={{ right: right as number, top: top as number, width: width as number }} />
-        ))}
-        <span className="pw-slash__fade" />
-      </div>
-      <div className="pw-notch"><span /><span /><span /></div>
+      <Flash className="pw-flash" width={480} height={170} corner="top-right" dots />
+      <SpeedSteps className="pw-notch" width={30} height={120} bars={10} />
       <SpeedSteps className="pw-steps" width={40} height={244} bars={16} />
     </div>
   );

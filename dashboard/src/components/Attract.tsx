@@ -51,7 +51,6 @@ export function AttractView({ state }: { state: DashboardState }) {
   const name = state.cafe.name || "Live timing";
   return (
     <main className="attract">
-      <StripeBundle corner="top-right" />
       <section className="attract__hero">
         <KineticType words={name.split(/\s+/).slice(0, 3)} rows={4} className="attract__kinetic" />
         <div className="attract__brand">
