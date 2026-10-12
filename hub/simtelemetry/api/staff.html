@@ -175,8 +175,8 @@
         <button class="btn" type="button" data-tv-page="live">LIVE</button>
         <button class="btn" type="button" data-tv-page="multi">MULTIVIEW</button>
       </div>
-      <label for="tv-pin">Trace strip on LIVE</label>
-      <select id="tv-pin"><option value="">Automatic: the rig on the fastest lap</option></select>
+      <label for="tv-pin">Focus driver on LIVE</label>
+      <select id="tv-pin"><option value="">Automatic: the hottest lap</option></select>
       <div class="actions">
         <button class="btn" type="button" data-tv-overlay="head_to_head">Show head to head</button>
         <button class="btn" type="button" data-tv-overlay="teams" id="tv-teams">Show teams</button>
@@ -830,7 +830,7 @@
     $("tv-teams").hidden = !(state.features && state.features.events);
     const select = $("tv-pin");
     const wanted = tv.pinned_rig || "";
-    const options = [["", "Automatic: the rig on the fastest lap"], ...state.rigs.map((r) => [r.rig_id, r.rig_name])];
+    const options = [["", "Automatic: the hottest lap"], ...state.rigs.map((r) => [r.rig_id, r.rig_name])];
     if (select.options.length !== options.length || [...select.options].some((o, i) => o.value !== options[i][0])) {
       select.textContent = "";
       for (const [value, text] of options) {
