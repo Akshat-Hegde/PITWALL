@@ -11,7 +11,7 @@
    ],
    "frame_hz": 15.0,
    "udp_port": 20777,
-   "lan_address": "192.168.1.64",
+   "lan_address": "192.168.16.249",
    "steering_rotation_deg": 360.0,
    "features": {
     "moments": true,
@@ -92,7 +92,7 @@
     {
      "rig_id": "192.168.1.21",
      "state": "driving",
-     "last_seen_ms": 31,
+     "last_seen_ms": 32,
      "driver": "Akshat",
      "session": {
       "session_id": "0000000000000011",
@@ -303,7 +303,7 @@
     "track_key": "F1:7",
     "track_name": "Silverstone",
     "period": "today",
-    "since": 1791657000000,
+    "since": 1791743400000,
     "lap_class": "open",
     "entries": []
    },
@@ -311,7 +311,7 @@
     "track_key": "F1:7",
     "track_name": "Silverstone",
     "period": "week",
-    "since": 1791138600000,
+    "since": 1791743400000,
     "lap_class": "open",
     "entries": []
    },
@@ -327,7 +327,7 @@
     "track_key": "F1:7",
     "track_name": "Silverstone",
     "period": "today",
-    "since": 1791657000000,
+    "since": 1791743400000,
     "lap_class": "pro",
     "entries": []
    },
@@ -335,7 +335,7 @@
     "track_key": "F1:7",
     "track_name": "Silverstone",
     "period": "week",
-    "since": 1791138600000,
+    "since": 1791743400000,
     "lap_class": "pro",
     "entries": []
    },
@@ -360,7 +360,8 @@
    "pinned_rig": null,
    "overlay": null,
    "updated_at": 0
-  }
+  },
+  "session_story": []
  },
  {
   "v": 1,
@@ -388,7 +389,7 @@
    },
    "personal_best": true,
    "session_best": true,
-   "completed_at": 1791735362853,
+   "completed_at": 1791783648052,
    "lap_class": "open"
   }
  },
@@ -4351,7 +4352,7 @@
    "track_key": "F1:7",
    "track_name": "Silverstone",
    "period": "today",
-   "since": 1791657000000,
+   "since": 1791743400000,
    "lap_class": "open",
    "entries": [
     {
@@ -4372,8 +4373,60 @@
       "age_laps": 2
      },
      "lap_number": 1,
-     "set_at": 1791735362853
+     "set_at": 1791783648052
     }
+   ],
+   "record_minis": [
+    3672,
+    3673,
+    3671,
+    3672,
+    3672,
+    3672,
+    3671,
+    3672,
+    3672,
+    3672,
+    3671,
+    3672,
+    3671,
+    3671,
+    3672,
+    3672,
+    3671,
+    3672,
+    3672,
+    3672,
+    3671,
+    3671,
+    3673,
+    3672
+   ],
+   "mini_owners": [
+    "192.168.1.21",
+    "192.168.1.21",
+    "192.168.1.21",
+    "192.168.1.21",
+    "192.168.1.21",
+    "192.168.1.21",
+    "192.168.1.21",
+    "192.168.1.21",
+    "192.168.1.21",
+    "192.168.1.21",
+    "192.168.1.21",
+    "192.168.1.21",
+    "192.168.1.21",
+    "192.168.1.21",
+    "192.168.1.21",
+    "192.168.1.21",
+    "192.168.1.21",
+    "192.168.1.21",
+    "192.168.1.21",
+    "192.168.1.21",
+    "192.168.1.21",
+    "192.168.1.21",
+    "192.168.1.21",
+    "192.168.1.21"
    ]
   }
  },
@@ -4386,7 +4439,7 @@
    "track_key": "F1:7",
    "track_name": "Silverstone",
    "period": "week",
-   "since": 1791138600000,
+   "since": 1791743400000,
    "lap_class": "open",
    "entries": [
     {
@@ -4407,7 +4460,7 @@
       "age_laps": 2
      },
      "lap_number": 1,
-     "set_at": 1791735362853
+     "set_at": 1791783648052
     }
    ]
   }
@@ -4442,7 +4495,7 @@
       "age_laps": 2
      },
      "lap_number": 1,
-     "set_at": 1791735362853
+     "set_at": 1791783648052
     }
    ]
   }
@@ -4456,7 +4509,7 @@
    "track_key": "F1:7",
    "track_name": "Silverstone",
    "period": "today",
-   "since": 1791657000000,
+   "since": 1791743400000,
    "lap_class": "pro",
    "entries": []
   }
@@ -4470,7 +4523,7 @@
    "track_key": "F1:7",
    "track_name": "Silverstone",
    "period": "week",
-   "since": 1791138600000,
+   "since": 1791743400000,
    "lap_class": "pro",
    "entries": []
   }
@@ -4605,7 +4658,7 @@
       26656
      ],
      "lap_number": 1,
-     "set_at": 1791735362853
+     "set_at": 1791783648052
     },
     "personal_best": {
      "lap_ms": 88123,
@@ -4615,7 +4668,7 @@
       26656
      ],
      "lap_number": 1,
-     "set_at": 1791735362853
+     "set_at": 1791783648052
     },
     "booking": null
    },
@@ -4826,7 +4879,7 @@
    {
     "rig_id": "192.168.1.22",
     "state": "driving",
-    "last_seen_ms": 32,
+    "last_seen_ms": 31,
     "driver": "Guest",
     "session": {
      "session_id": "0000000000000022",

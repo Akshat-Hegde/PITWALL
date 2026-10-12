@@ -34,6 +34,8 @@ log = logging.getLogger(__name__)
 lap_debug = logging.getLogger("simtelemetry.lapdebug")  # enabled by --lap-debug
 
 RECENT_LAPS_MAX = 20
+STORY_LAPS_MAX = 400          # session-story chart: laps sent in the snapshot
+STORY_WINDOW_MS = 60 * 60_000  # ...from the last hour
 EVENT_LOG_MAX = 200           # lap_completed / track_outline messages kept for dashboard connections
 
 # A lap's path (valid or not) becomes the track outline only if it covers the whole lap without gaps and had no
@@ -776,8 +778,52 @@ class LapBook:
                 "lap_number": row["lap_number"], "set_at": row["completed_at"],
             })
         track_name = next((row["track_name"] for row in rows if row["track_name"]), None)
-        return {"track_key": track_key, "track_name": track_name, "period": period, "since": since_ms,
-                "lap_class": lap_class, "entries": entries}
+        board = {"track_key": track_key, "track_name": track_name, "period": period, "since": since_ms,
+                 "lap_class": lap_class, "entries": entries}
+        if period == "today" and entries:
+            board["record_minis"] = self._record_minis(track_key, entries[0])
+            board["mini_owners"] = self._mini_owners(track_key)
+        return board
+
+    def _mini_owners(self, track_key: str) -> list[str] | None:
+        """Per mini-sector, the rig of the driver fastest through it today (from each driver's best traced lap)."""
+        day = self._today()
+        if self.store is not None:
+            laps = self.store.analyses(track_key, day)
+        else:
+            laps = [e for (t, d, _), e in self._analyses.items() if t == track_key and d == day]
+        laps = [e for e in laps if e.get("minis")]
+        if not laps:
+            return None
+        return [min(laps, key=lambda e: e["minis"][i])["rig_id"] for i in range(len(laps[0]["minis"]))]
+
+    def _record_minis(self, track_key: str, top: dict[str, Any]) -> list[int] | None:
+        """Mini-sector times of today's record lap, if the hub traced it (the TV's record ghost and delta)."""
+        day = self._today()
+        if self.store is not None:
+            laps = self.store.analyses(track_key, day)
+        else:
+            laps = [e for (t, d, _), e in self._analyses.items() if t == track_key and d == day]
+        match = next((e for e in laps if e["lap_ms"] == top["lap_ms"] and e.get("rig_id") == top["rig_id"]), None)
+        return list(match["minis"]) if match and match.get("minis") else None
+
+    def session_story(self, track_key: str | None, since_ms: int | None = None) -> list[dict[str, Any]]:
+        """Every lap on a track in the last hour (or since since_ms), oldest first: the TV's session story."""
+        if track_key is None:
+            return []
+        if since_ms is None:
+            since_ms = round(self._clock() * 1000) - STORY_WINDOW_MS
+        if self.store is not None:
+            now = round(self._clock() * 1000) + 1
+            rows = [r for r in self.store.laps_between(since_ms, now) if r["track_key"] == track_key]
+        else:
+            rows = [{"rig_id": r.rig_id, "driver": r.driver, "lap_ms": r.lap_ms, "valid": r.valid,
+                     "out_lap": r.out_lap, "lap_class": r.lap_class, "completed_at": r.completed_at}
+                    for r in self.laps if r.track_key == track_key and r.completed_at >= since_ms]
+        return [{"rig_id": r["rig_id"], "driver": r["driver"], "track_key": track_key, "lap_ms": r["lap_ms"],
+                 "valid": bool(r["valid"]),
+                 "out_lap": bool(r["out_lap"]), "lap_class": r["lap_class"], "completed_at": r["completed_at"]}
+                for r in rows][-STORY_LAPS_MAX:]
 
     def driver_best(self, track_key: str | None, dkey: str) -> dict[str, Any] | None:
         """Schema BestLap: a driver's fastest counted lap on a track ever (lap database), or None."""

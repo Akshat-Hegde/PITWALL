@@ -41,3 +41,4 @@ docs/design-refs/*
 # seed-demo output
 data-demo/
 dashboard/tsconfig.tsbuildinfo
+brag-output*/

@@ -333,6 +333,22 @@ export interface Leaderboard {
   entries: LeaderboardEntry[];
   /** Added in v1 (optional): "open" (every lap, the default) or "pro" (Pro laps only). */
   lap_class?: LapClass | string;
+  /** Added in v1 (optional, today's board): the record lap's 24 mini-sector times (ms), if the hub traced it. */
+  record_minis?: number[] | null;
+  /** Added in v1 (optional, today's board): per mini-sector, the rig of the driver fastest through it today. */
+  mini_owners?: string[] | null;
+}
+
+/** Added in v1: one lap of the session story (the last hour on the shown track). */
+export interface StoryLap {
+  rig_id: string;
+  driver: string | null;
+  track_key?: string;
+  lap_ms: number;
+  valid: boolean;
+  out_lap: boolean;
+  lap_class?: LapClass | string;
+  completed_at: number;
 }
 
 export interface ChallengeEntry {
@@ -440,6 +456,8 @@ export interface SnapshotMessage extends Envelope<"snapshot"> {
   head_to_head?: HeadToHead | null;
   /** Added in v1 (optional): what staff chose for the TV. */
   tv?: TvSetting;
+  /** Added in v1 (optional): laps on the shown track in the last hour, oldest first. */
+  session_story?: StoryLap[];
 }
 
 /** Added in v1: the TV page chosen on the staff page, the rig pinned to the LIVE strip, a view over the page. */

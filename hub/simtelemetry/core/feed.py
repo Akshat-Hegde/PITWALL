@@ -302,6 +302,7 @@ class FeedBuilder:
             "competition": self.competition(self.active_track(frame["rigs"])),
             "head_to_head": self.head_to_head(self.active_track(frame["rigs"])),
             "tv": self.hub.tv.to_json(),
+            "session_story": self.hub.laps.session_story(self.active_track(frame["rigs"])),
         }
 
 

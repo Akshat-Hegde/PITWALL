@@ -1,4 +1,4 @@
-# TV dashboard design (v3: two pages)
+# Pitwall TV design (v4: Pitwall LIVE)
 
 The TV dashboard should look like a motorsport broadcast: flat near-black, a clean grid, sharp racing accents
 used sparingly, big white numbers, small grey labels. The style is ours.
@@ -168,7 +168,7 @@ drives. Rigs without data are left off the TV.
 
 | Page | Layout (12 columns) |
 |---|---|
-| **LIVE** (default) | Map, columns 1-8 (track name, length and today's record in the top-left corner only). Rig cards, columns 9-12, one per active rig: name, lap, lap time, delta, speed + gear, wheel, pedal bars, tyre blocks; large (1-2 rigs), tall (3), compact (4-6). Bottom strip (216 px, all 12 columns): the selected rig's name (cols 1-2), pedal trace over 10 s (cols 3-6), speed this lap vs best by distance with the gap shaded (cols 7-12). The selected rig is the one on the fastest lap (best + live delta) unless staff pinned one; it changes at most every 8 s. |
+| **LIVE** (default) | The Claude Design "Pitwall TV" Turn 2 layout on the 1920 x 1080 canvas: padding 36 / 48 px, rows 108 / 600 / rest with 28 px gaps. Header: LIVE tag, track · session · rigs live, the rotating headline (slides out 60 px and fades in 280 ms), the cafe badge and name, "powered by" the Pitwall logo, the clock. Middle, three 592 px columns: today's board (60 px rows, ghost row slides to its predicted slot in 300 ms), the map (neon arcs and a halftone behind a glowing track, mini-sector bands, ghosts, cars with name boxes, the hottest lap's ring breathing +/-3 px) and the focus card (cut corner, red-pink top line with glow, glowing delta). Bottom: the session story (1208 px) and the moments log (592 px). Glows are allowed on this page only. |
 | **MULTIVIEW** | One tile per active rig: 1 full, 2 side by side, 3-4 in 2 x 2, 5-6 in 3 x 2. Tile: name, lap time, delta; speed + gear, wheel and pedals; a mini map with only that car. |
 
 Also on the TV: **attract mode** (welcome and leaderboard, after 60 s with nobody driving, back to the page
@@ -177,3 +177,5 @@ when a car drives), **head to head** and the **team board** (put over the page f
 
 Not on the TV (still in the feed): fuel, ERS, g-force, damage, brake temperatures, tyre wear and inner
 temperatures, slides / saves, lap-share statistics, IP addresses and technical warnings.
+
+**Brand**: the product is **Pitwall**. Our own mark: a slanted red "P" with two white speed bars trailing it; the wordmark is PIT in white and WALL in red, Saira 125 % / 800. Used on the TV (powered by), the staff and owner pages and as the favicon.

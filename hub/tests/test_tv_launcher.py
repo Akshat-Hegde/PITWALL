@@ -38,4 +38,4 @@ def test_dry_run_opens_kiosk_with_autoplay():
 
 def test_start_on_login_dry_run():
     out = run("-DryRun", "-StartOnLogin", "-Url", "http://hub:8000/")
-    assert "SHORTCUT" in out.stdout and "Sim Telemetry TV.lnk" in out.stdout and "-Url" in out.stdout
+    assert "SHORTCUT" in out.stdout and "Pitwall TV.lnk" in out.stdout and "-Url" in out.stdout

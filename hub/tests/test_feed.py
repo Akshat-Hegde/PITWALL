@@ -426,3 +426,18 @@ async def test_lap_side_of_the_feed(tmp_path):
     assert len(snap["outlines"]) == 1 and len(snap["leaderboards"][0]["entries"]) == 2
     assert snap["outlines"][0]["laps"] == 2
     assert [l["driver"] for l in snap["recent_laps"]] == ["Guest", "Akshat"]
+
+
+async def test_pitwall_record_minis_and_session_story(tmp_path):
+    """Today's board carries the record lap's mini-sector times; the snapshot carries the last hour's laps."""
+    hub = make_hub(tmp_path)
+    await feed(hub, driving_rig(RIG_A))
+    await feed(hub, drive_full_lap(RIG_A, 0x11, 88123, b"Akshat"))
+    snap = FeedConnection(FeedBuilder(hub)).start(last_seen(hub))
+    today = next(b for b in snap["leaderboards"] if b["period"] == "today" and b["lap_class"] == "open")
+    assert today["entries"][0]["lap_ms"] == 88123
+    minis = today["record_minis"]
+    assert minis is not None and len(minis) == 24 and abs(sum(minis) - 88123) < 50
+    assert today["mini_owners"] == [RIG_A] * 24
+    story = snap["session_story"]
+    assert [(l["driver"], l["lap_ms"], l["valid"]) for l in story] == [("Akshat", 88123, True)]

@@ -99,6 +99,7 @@ Compatibility rules:
 - `cafe.branding`: CSS custom properties from `[cafe.branding]` in the hub config. The dashboard applies
   them to `:root` as-is (keys must start with `--`; others are ignored).
 - `outlines`: every outline the hub has (bundled track files, and tracks where a full lap was driven).
+- `session_story` *(added in v1, optional)*: laps on the shown track in the last hour, oldest first: `{ "rig_id", "driver", "track_key", "lap_ms", "valid", "out_lap", "lap_class", "completed_at" }` (the LIVE page's session story; later laps arrive as `lap_completed`).
 - `tv` *(added in v1, optional)*: TvSetting, what staff chose for the TV: `page` (`"live"` or `"multi"`),
   `pinned_rig` (rig id for the LIVE trace strip, or null for automatic), `overlay` (`"head_to_head"`,
   `"teams"` or null: a view shown over the page) and `updated_at` (Unix ms). The page and pinned rig are
@@ -340,6 +341,8 @@ restarts.
       "lap_number": 4, "set_at": 1791302455000 } ] }
 ```
 
+
+Today's board *(added in v1, optional fields)*: `record_minis` (the record lap's 24 mini-sector times in ms, when the hub traced that lap: the TV's record ghost and its delta to today's record) and `mini_owners` (per mini-sector, the rig of the driver fastest through it today, from each driver's best traced lap).
 ## 5. Example: `frame`
 
 ```json

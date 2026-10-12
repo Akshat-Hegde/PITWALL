@@ -5,7 +5,8 @@ import { CardQr } from "./components/CardQr";
 import { BracketPreview, TeamsView } from "./components/Competition";
 import { BattlePopups, MomentLayer } from "./components/Moments";
 import { KineticType } from "./components/Motifs";
-import { LivePage, MultiviewPage } from "./components/Live";
+import { MultiviewPage } from "./components/Live";
+import { PitwallPage } from "./components/Pitwall";
 import { TvStage } from "./components/Stage";
 import { StatusBar } from "./components/StatusBar";
 import { BoardView } from "./components/Views";
@@ -124,7 +125,7 @@ export function App({ store, mapDisplay = null, viewMode = "auto", layout = "tv"
   const state = useDashboard(store);
   useBranding(state.cafe.branding);
   useEffect(() => {
-    document.title = state.cafe.name ? `${state.cafe.name}: live timing` : "Live timing";
+    document.title = state.cafe.name ? `${state.cafe.name} · Pitwall` : "Pitwall";
   }, [state.cafe.name]);
   const anyDriving = Object.values(state.frames).some((f) => f.state === "driving");
   // Until any rig has connected, keep the race view: its map explains how to set up the games.
@@ -172,11 +173,11 @@ export function App({ store, mapDisplay = null, viewMode = "auto", layout = "tv"
   return (
     <TvStage>
     <div className={`app app--${view}`}>
-      <StatusBar state={state} trackKey={trackKey} />
+      {view !== "live" && <StatusBar state={state} trackKey={trackKey} />}
       {/* Keys are unique among siblings: one view is mounted at a time, whatever the transition. */}
       <div className="app__view" key={`view:${view}`}>
         {view === "live" && (
-          <LivePage store={store} state={state} trackKey={trackKey} mapDisplay={mapDisplay}
+          <PitwallPage store={store} state={state} trackKey={trackKey} mapDisplay={mapDisplay}
                     pinnedRigId={state.tv.pinned_rig} />
         )}
         {view === "multi" && <MultiviewPage store={store} state={state} trackKey={trackKey} />}

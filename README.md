@@ -1,6 +1,6 @@
-# Sim Telemetry Hub
+# Pitwall
 
-Local LAN telemetry hub and TV dashboard for sim racing cafes. Milestone 1: F1 25 (UDP formats 2025 and 2026).
+Live broadcast timing for sim racing cafes: a local LAN telemetry hub and TV dashboard. Milestone 1: F1 25 (UDP formats 2025 and 2026).
 
 Status: milestone 1 is feature-complete and awaiting its end-to-end test on real devices
 ([docs/TEST_PLAN.md](docs/TEST_PLAN.md)). The hub receives F1 25 telemetry from every rig on the LAN, tracks
@@ -115,14 +115,20 @@ differs), so nothing overflows on any TV, 1080p or 4K. Names up to 16 characters
 are ever cut. Rigs the hub has no data from are left off the TV (they show on `/staff`). The look is
 specified in [docs/DESIGN.md](docs/DESIGN.md).
 
-- **LIVE** (default): a large track map on the left (a thin outline with sector marks, each 1/24 of the lap
-  in the colour of the rig fastest through it, car dots with name labels on leader lines, and only the track,
-  its length and today's record in one corner). On the right, one card per active rig: name, lap, lap time,
-  the live delta to the driver's own best (green ahead, red behind), speed and gear, a steering wheel turning
-  with the driver's input (angle in degrees: steer x `[display] steering_rotation_deg`, 360 by default),
-  throttle and brake bars and the four tyres (temperature as colour, pressure as the number). Along the
-  bottom, for one rig: throttle and brake over the last 10 s, and speed this lap against the driver's best lap
-  by distance with the gap shaded. That rig is the one on the fastest lap, unless staff picked one.
+- **LIVE** (default, the Pitwall broadcast screen):
+  - **Headline ticker** along the top, a new line every 7 s: who is up or down on today's record after which
+    sector, what lap they are on for and where it would put them, who is chasing their own best.
+  - **Today's board** (Open, best lap per driver, up to 8): drivers on a rig in their rig colour, the record
+    row highlighted, sector bars, and a dashed "on this lap" row for the hottest lap at its predicted position.
+  - **Map**: a glowing track with each of 24 mini-sectors in the colour of the rig fastest through it (with one
+    rig: how this lap compares with their best), sector marks, every car with its name, the hottest lap ringed,
+    and a dashed ghost of today's record (and, with one rig, of their personal best).
+  - **Focus card** for the hottest lap (the rig on course for the fastest lap, or the one staff picked): lap,
+    name, a big live delta to today's record (or their best), the predicted lap and position, sector times,
+    speed with a barcode meter, gear and DRS, the steering wheel, throttle / brake and the four tyres.
+  - **Session story**: every lap of the last hour per driver against the clock, best laps ringed, invalid
+    laps hollow, today's record as a dashed line; and **Moments**: the last five personal bests, records,
+    invalid laps and new drivers.
 - **MULTIVIEW:** one tile per active rig (1 full screen, 2 side by side, 3-4 in a 2 x 2 grid, 5-6 in 3 x 2):
   name, speed and gear, steering wheel, pedal bars, a small map with only that car, lap time and delta.
 - **Welcome and leaderboard (attract mode):** the cafe name, today's top 10 and the track record holder;

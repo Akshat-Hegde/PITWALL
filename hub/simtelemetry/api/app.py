@@ -41,7 +41,7 @@ def _dumps(msg: dict[str, Any]) -> str:
 
 
 def create_app(hub: Hub, dashboard_dir: Path | None = None) -> FastAPI:
-    app = FastAPI(title="Sim Telemetry Hub", docs_url="/api/docs", openapi_url="/api/openapi.json")
+    app = FastAPI(title="Pitwall hub", docs_url="/api/docs", openapi_url="/api/openapi.json")
     builder = FeedBuilder(hub)
 
     @app.get("/api/health")

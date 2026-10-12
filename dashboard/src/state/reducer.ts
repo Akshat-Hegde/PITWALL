@@ -20,6 +20,7 @@ import {
   type RigInfo,
   type TrackOutline,
   type TvSetting,
+  type StoryLap,
 } from "../schema";
 import { softenColour } from "../colour";
 
@@ -51,6 +52,10 @@ export interface DashboardState {
   headToHead: HeadToHead | null;
   tv: TvSetting;
   recentLaps: LapRecord[];
+  /** Laps on the shown track in the last hour (the LIVE page's session story). */
+  storyLaps: StoryLap[];
+  /** Newest first: what just happened, for the LIVE page's moments log. */
+  pitEvents: PitEvent[];
   lastFrameAt: number | null;
   /** Optional features from the hub config (missing = on). */
   features: Features;
@@ -95,6 +100,8 @@ export function initialState(source: DashboardState["source"]): DashboardState {
     headToHead: null,
     tv: { page: "live", pinned_rig: null, overlay: null, updated_at: 0 },
     recentLaps: [],
+    storyLaps: [],
+    pitEvents: [],
     lastFrameAt: null,
     features: ALL_FEATURES,
     battleMarginMs: 300,
@@ -175,6 +182,8 @@ export function applyMessage(state: DashboardState, msg: HubMessage, now: number
         headToHead: msg.head_to_head ?? null,
         tv: msg.tv ?? state.tv,
         recentLaps: msg.recent_laps.slice(0, RECENT_LAPS_MAX),
+        storyLaps: (msg.session_story ?? []).slice(-STORY_LAPS_MAX),
+        pitEvents: storyEvents(msg.session_story ?? []),
         queue: msg.queue ?? [],
         lastFrameAt: now,
       };
@@ -191,8 +200,19 @@ export function applyMessage(state: DashboardState, msg: HubMessage, now: number
     }
     case "track_outline":
       return { ...state, outlines: { ...state.outlines, [msg.outline.track_key]: msg.outline } };
-    case "lap_completed":
-      return { ...state, recentLaps: [msg.lap, ...state.recentLaps].slice(0, RECENT_LAPS_MAX) };
+    case "lap_completed": {
+      const lap = msg.lap;
+      const story: StoryLap = { rig_id: lap.rig_id, driver: lap.driver, track_key: lap.track_key, lap_ms: lap.lap_ms, valid: lap.valid,
+        out_lap: lap.out_lap, lap_class: lap.lap_class, completed_at: lap.completed_at };
+      const event = lapEvent(lap);
+      return {
+        ...state,
+        recentLaps: [lap, ...state.recentLaps].slice(0, RECENT_LAPS_MAX),
+        storyLaps: [...state.storyLaps, story].filter((l) => l.completed_at >= lap.completed_at - STORY_WINDOW_MS)
+          .slice(-STORY_LAPS_MAX),
+        pitEvents: event ? [event, ...state.pitEvents].slice(0, PIT_EVENTS_MAX) : state.pitEvents,
+      };
+    }
     case "head_to_head":
       return { ...state, headToHead: msg.head_to_head };
     case "tv":
@@ -202,6 +222,7 @@ export function applyMessage(state: DashboardState, msg: HubMessage, now: number
     case "queue":
       return { ...state, queue: msg.queue };
     case "moment":
+      state = momentEvent(state, msg.moment);
       if (msg.moment?.kind === "battle") {
         return state.features.battles ? { ...state, battle: msg.moment as BattleMoment } : state;
       }
@@ -221,4 +242,73 @@ export function applyMessage(state: DashboardState, msg: HubMessage, now: number
       return { ...state, [key]: { ...base, [period]: msg.leaderboard } };
     }
   }
+}
+
+// ---- LIVE page: session story and moments log ----------------------------------------------------
+
+export const STORY_WINDOW_MS = 60 * 60_000;
+export const STORY_LAPS_MAX = 400;
+export const PIT_EVENTS_MAX = 8;
+
+/** One line of the moments log. tone: p purple (record / fastest), g green (personal best), r red (invalid),
+ *  w white (other). */
+export interface PitEvent {
+  at: number;
+  rig_id: string;
+  driver: string | null;
+  label: string;
+  value: string;
+  tone: "p" | "g" | "r" | "w";
+  strike?: boolean;
+}
+
+function fmtLap(ms: number): string {
+  const m = Math.floor(ms / 60000);
+  const s = ((ms % 60000) / 1000).toFixed(3).padStart(6, "0");
+  return m ? `${m}:${s}` : s;
+}
+
+export function lapEvent(lap: LapRecord): PitEvent | null {
+  const base = { at: lap.completed_at, rig_id: lap.rig_id, driver: lap.driver, value: fmtLap(lap.lap_ms) };
+  if (lap.out_lap) return null;
+  if (!lap.valid) return { ...base, label: "LAP INVALID", tone: "r", strike: true };
+  if (lap.session_best) return { ...base, label: "FASTEST LAP TODAY", tone: "p" };
+  if (lap.personal_best) return { ...base, label: "PERSONAL BEST", tone: "g" };
+  return null;
+}
+
+/** Events from the snapshot's story laps (no PB flags there: personal bests are worked out in order). */
+function storyEvents(laps: StoryLap[]): PitEvent[] {
+  const best = new Map<string, number>();
+  const out: PitEvent[] = [];
+  for (const l of laps) {
+    if (l.out_lap) continue;
+    const key = (l.driver ?? l.rig_id).toLowerCase();
+    const base = { at: l.completed_at, rig_id: l.rig_id, driver: l.driver, value: fmtLap(l.lap_ms) };
+    if (!l.valid) {
+      out.push({ ...base, label: "LAP INVALID", tone: "r", strike: true });
+      continue;
+    }
+    const prev = best.get(key);
+    if (prev === undefined || l.lap_ms < prev) {
+      best.set(key, l.lap_ms);
+      if (prev !== undefined) out.push({ ...base, label: "PERSONAL BEST", tone: "g" });
+    }
+  }
+  return out.reverse().slice(0, PIT_EVENTS_MAX);
+}
+
+function momentEvent(state: DashboardState, moment: unknown): DashboardState {
+  const m = moment as { kind?: string; at?: number; rig_id?: string; rig_name?: string; driver?: string | null;
+    lap_ms?: number } | null;
+  if (!m || (m.kind !== "record" && m.kind !== "now_driving") || !m.rig_id) return state;
+  const event: PitEvent = m.kind === "record"
+    ? { at: m.at ?? Date.now(), rig_id: m.rig_id, driver: m.driver ?? null, label: "NEW RECORD",
+        value: m.lap_ms != null ? fmtLap(m.lap_ms) : "", tone: "p" }
+    : { at: m.at ?? Date.now(), rig_id: m.rig_id, driver: m.driver ?? null,
+        label: `NOW DRIVING · ${(m.rig_name ?? "").toUpperCase()}`, value: "", tone: "w" };
+  // A record lap also logged "fastest lap today" when it completed: the record line replaces it.
+  const rest = state.pitEvents.filter((e) => !(m.kind === "record" && e.rig_id === m.rig_id && e.tone === "p"
+    && Math.abs(e.at - event.at) < 10_000));
+  return { ...state, pitEvents: [event, ...rest].slice(0, PIT_EVENTS_MAX) };
 }

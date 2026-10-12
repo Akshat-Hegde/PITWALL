@@ -28,7 +28,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$ShortcutName = "Sim Telemetry TV.lnk"
+$ShortcutName = "Pitwall TV.lnk"
+$OldShortcutName = "Sim Telemetry TV.lnk"  # before the product was renamed
 
 function Find-Browser([string]$which) {
   $edge = @(
@@ -53,6 +54,9 @@ function Find-Browser([string]$which) {
 
 $startup = [Environment]::GetFolderPath("Startup")
 $shortcutPath = Join-Path $startup $ShortcutName
+# A shortcut from before the rename would open a second TV window at login.
+$oldShortcut = Join-Path $startup $OldShortcutName
+if (Test-Path $oldShortcut) { Remove-Item $oldShortcut -Force }
 
 if ($RemoveStartOnLogin) {
   if (Test-Path $shortcutPath) { Remove-Item $shortcutPath -Force; Write-Host "Removed: the TV no longer opens at login." }

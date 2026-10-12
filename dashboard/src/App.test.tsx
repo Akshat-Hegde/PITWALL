@@ -89,6 +89,14 @@ describe("TV view transitions", () => {
     });
     const frames = Object.values(store.getState().frames).filter((f) => f.state === "driving");
     expect(frames.length).toBeGreaterThan(0);
+    // LIVE: the focus card shows the focus driver's live speed.
+    const card = host.querySelector(".pw-card__driver")?.textContent;
+    const focus = frames.find((f) => (f.driver ?? "").toUpperCase() === card);
+    expect(focus).toBeDefined();
+    expect(host.querySelector(".pw-speed__v")?.textContent).toBe(String(Math.round(focus!.speed_kph ?? 0)));
+    // MULTIVIEW: every tile shows its rig's live speed.
+    press("2");
+    advance(WIPE_MS + 50);
     const shown = [...host.querySelectorAll(".spg__speed")].map((e) => e.textContent);
     expect(shown.sort()).toEqual(frames.map((f) => formatSpeed(f.speed_kph)).sort());
   });
