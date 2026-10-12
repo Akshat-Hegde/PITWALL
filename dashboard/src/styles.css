@@ -2810,18 +2810,27 @@ html:has(.tvstage) {
   transform-box: initial;
 }
 
-.wheel__body {
-  fill: #e9eaee;
+.wheel__grip {
+  fill: #f1f2f4;
+  stroke: #8a8f9c;
+  stroke-width: 0.8;
 }
 
-.wheel__led {
-  fill: #2a2b33;
+.wheel__plate {
+  stroke: #8a8f9c;
+  stroke-width: 0.8;
+}
+
+.wheel__screen {
+  fill: #0b0c0f;
+  stroke: #3a3e48;
+  stroke-width: 0.8;
 }
 
 .wheel__gear {
   fill: var(--text);
   font-family: var(--font-num);
-  font-size: 15px;
+  font-size: 13px;
   font-stretch: 125%;
   font-weight: 800;
 }

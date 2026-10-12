@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 import { formatDelta, formatGear, formatLapTime, formatSpeed } from "../format";
 import type { RigFrame, RigInfo } from "../schema";
 import type { DashboardState } from "../state/reducer";
@@ -90,23 +90,21 @@ function LapClock({ frame }: { frame: RigFrame | undefined }) {
 
 const STATE_TEXT: Record<string, string> = { driving: "On track", in_menu_paused: "In menu", no_data: "Waiting" };
 
-/** Wheel body: a wide formula-style wheel with two grips, drawn by us. Screen, buttons and LED slots are
- *  cut out (even-odd), so the page shows through them. */
-const WHEEL_BODY =
-  "M-30 -30 L30 -30 C42 -30 47 -24 48 -14 L48 -2 C48 14 47 26 42 31 C38 35 32 33 32 27 L32 8 " +
-  "C32 4 29 2 25 2 L22 2 C20 2 19 4 19 8 L19 14 C19 19 16 21 11 21 L-11 21 C-16 21 -19 19 -19 14 L-19 8 " +
-  "C-19 4 -20 2 -22 2 L-25 2 C-29 2 -32 4 -32 8 L-32 27 C-32 33 -38 35 -42 31 C-47 26 -48 14 -48 -2 " +
-  "L-48 -14 C-47 -24 -42 -30 -30 -30 Z " +
-  // screen
-  "M-12 -24 L12 -24 L12 -3 L-12 -3 Z " +
-  // three buttons
-  "M-12.2 11 a3.2 3.2 0 1 0 6.4 0 a3.2 3.2 0 1 0 -6.4 0 Z M-3.2 11 a3.2 3.2 0 1 0 6.4 0 a3.2 3.2 0 1 0 -6.4 0 Z " +
-  "M5.8 11 a3.2 3.2 0 1 0 6.4 0 a3.2 3.2 0 1 0 -6.4 0 Z " +
-  // grip slots
-  "M-38 -22 L-30 -24 L-30 -20 L-38 -18 Z M38 -22 L30 -24 L30 -20 L38 -18 Z";
-/** LED slots either side of the screen, bottom to top; they light up with the car's rev lights. */
-const LEDS = [-7, -11, -15, -19, -23];
-const LED_COLOURS = ["#38d97a", "#38d97a", "#f2c230", "#ff4a4a", "#b46cff"];
+/** Formula-style wheel, drawn by us in a light colour that stands out on the dark TV: two grips, a carbon
+ *  centre plate, a rev-light strip, a screen with the gear, coloured buttons and three rotary dials. */
+const GRIP_L = "M-34 -22 C-44 -26 -50 -18 -50 -6 C-50 8 -47 22 -42 30 C-39 34 -33 33 -32 27 L-30 6 Z";
+const GRIP_R = "M34 -22 C44 -26 50 -18 50 -6 C50 8 47 22 42 30 C39 34 33 33 32 27 L30 6 Z";
+const PLATE = "M-34 -24 Q-34 -31 -27 -31 H27 Q34 -31 34 -24 V14 Q34 20 28 22 L16 27 Q12 29 8 29 H-8 Q-12 29 -16 27 " +
+  "L-28 22 Q-34 20 -34 14 Z";
+/** Rev lights across the top, lit from both ends inwards: green, red, then purple at the limit. */
+const LED_X = Array.from({ length: 12 }, (_, i) => -16.5 + i * 3);
+const LED_ORDER = [0, 11, 1, 10, 2, 9, 3, 8, 4, 7, 5, 6];
+const LED_COLOUR = (rank: number) => (rank < 4 ? "#38d97a" : rank < 8 ? "#ff3b30" : "#b46cff");
+const BUTTONS: [number, number, string][] = [
+  [-27, -20, "#FFD43B"], [-27, -13, "#9B6BFF"], [-27, 4, "#FFFFFF"], [-27, 12, "#2A2D35"],
+  [27, -20, "#FFD43B"], [27, -13, "#9B6BFF"], [27, 4, "#FFFFFF"], [27, 12, "#2A2D35"],
+];
+const DIALS: [number, string][] = [[-10, "#FFD43B"], [0, "#5B8CFF"], [10, "#2EC4B6"]];
 
 /** A formula-style steering wheel that turns with the driver's input: rev LEDs, the gear on its screen, and
  *  the angle in degrees under it. */
@@ -127,19 +125,46 @@ export function SteeringWheel({ store, rigId, frameHz, rotationDeg, frame }: {
   });
   const driving = frame?.state === "driving";
   const revs = driving ? frame?.car?.rev_lights_pct ?? null : null;
-  const lit = revs == null ? 0 : Math.round((Math.max(0, Math.min(100, revs)) / 100) * LEDS.length);
+  const lit = revs == null ? 0 : Math.round((Math.max(0, Math.min(100, revs)) / 100) * LED_X.length);
   const gear = driving ? formatGear(frame?.gear) : "";
+  const carbon = `wheel-carbon-${useId().replace(/:/g, "")}`;
   return (
     <div className="wheel">
-      <svg className="wheel__svg" viewBox="-50 -50 100 100" aria-hidden="true">
+      <svg className="wheel__svg" viewBox="-52 -52 104 104" aria-hidden="true">
+        <defs>
+          <pattern id={carbon} width="3" height="3" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <rect width="3" height="3" fill="#D3D6DD" />
+            <rect width="1.5" height="1.5" fill="#BFC3CB" />
+            <rect x="1.5" y="1.5" width="1.5" height="1.5" fill="#BFC3CB" />
+          </pattern>
+        </defs>
         <g ref={wheel} className="wheel__turn">
-          <path className="wheel__body" d={WHEEL_BODY} fillRule="evenodd" />
-          {LEDS.map((y, i) => [-21, 17].map((x) => (
-            <rect key={`${x}${y}`} className="wheel__led" x={x} y={y} width="4" height="2.6" rx="0.6"
-                  style={i < lit ? { fill: LED_COLOURS[i] } : undefined} />
-          )))}
-          <text className="wheel__gear" x="0" y="-8.5" textAnchor="middle">{gear}</text>
-          <rect className="wheel__mark" x="-2.5" y="-35" width="5" height="6" />
+          <path className="wheel__grip" d={GRIP_L} />
+          <path className="wheel__grip" d={GRIP_R} />
+          <path className="wheel__plate" d={PLATE} fill={`url(#${carbon})`} />
+          {LED_X.map((x, i) => {
+            const rank = LED_ORDER.indexOf(i);
+            return <circle key={i} cx={x} cy={-27.5} r={1.15} fill={rank < lit ? LED_COLOUR(rank) : "#6C717D"} />;
+          })}
+          <rect className="wheel__screen" x="-15" y="-23" width="30" height="20" rx="1.5" />
+          <rect x="-13" y="-21" width="7" height="1.2" fill="#5A5E68" />
+          <rect x="6" y="-21" width="7" height="1.2" fill="#5A5E68" />
+          <rect x="-13" y="-6.5" width="5" height="1.2" fill="#38d97a" />
+          <text className="wheel__gear" x="0" y="-7.5" textAnchor="middle">{gear}</text>
+          {BUTTONS.map(([x, y, c], i) => (
+            <circle key={i} cx={x} cy={y} r={2.4} fill={c} stroke="#5A5E68" strokeWidth={0.6} />
+          ))}
+          <rect x="-29" y="-7.5" width="4" height="7" rx="2" fill="#E10600" />
+          <rect x="25" y="-7.5" width="4" height="7" rx="2" fill="#4C8DFF" />
+          <rect x="-22.5" y="-2" width="3" height="6" rx="0.8" fill="#FF8A1F" />
+          <rect x="19.5" y="-2" width="3" height="6" rx="0.8" fill="#FF8A1F" />
+          {DIALS.map(([x, c], i) => (
+            <g key={i}>
+              <circle cx={x} cy={17} r={3.4} fill={c} stroke="#3A3E48" strokeWidth={0.7} />
+              <rect x={x - 0.5} y={13.8} width={1} height={3} fill="#0B0C0F" />
+            </g>
+          ))}
+          <rect className="wheel__mark" x="-2.5" y="-37" width="5" height="5" />
         </g>
       </svg>
       <span ref={label} className="wheel__deg">0°</span>
