@@ -8,7 +8,7 @@ import {
 import type { DashboardState } from "../state/reducer";
 import type { DashboardStore } from "../state/store";
 import { PitwallLogo } from "./Brand";
-import { Flash, SpeedSteps } from "./Motifs";
+import { EdgeLines, Flash } from "./Motifs";
 import { STRIP_HOLD_MS, SteeringWheel, activeRigs, chooseStripRig, useHeld } from "./Live";
 import { PitwallMap, type Ghost } from "./PitwallMap";
 
@@ -224,8 +224,8 @@ function Decor() {
   return (
     <div className="pw-decor" aria-hidden="true">
       <Flash className="pw-flash" width={480} height={170} corner="top-right" dots />
-      <SpeedSteps className="pw-notch" width={30} height={120} bars={10} />
-      <SpeedSteps className="pw-steps" width={40} height={244} bars={16} />
+      <EdgeLines className="pw-notch" width={30} height={150} anchor="top" />
+      <EdgeLines className="pw-steps" width={36} height={280} />
     </div>
   );
 }

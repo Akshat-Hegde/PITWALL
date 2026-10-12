@@ -109,10 +109,11 @@ Every decorative pattern comes from one system, so the screens read as one famil
     width, then a trail of seven fading hairlines) with three stepped rules (red, navy, red) along the inner
     edge, fading away from the corner, optional halftone. Used: the LIVE header corner, attract / board /
     moment / portrait corners (`StripeBundle`), the header's small `SlashMark`.
-  - **Steps** (edges): stacked rules growing from an edge, red and navy (navy a step shorter), free ends
-    stepping along the slant and cut on it (`SpeedSteps`). Used: the LIVE page's left edge (top and bottom),
-    the podium P1 foot, the story card corner. The **double bar** (`.kerb`) is two rules with a cap; the
-    **comb** (`.chequer`) is rules stepping off a card edge.
+  - **Lines** (edges): thin vertical hairlines on a 6 px pitch (12 px on the story card) standing on an edge
+    and tapering in height away from the side they grow from; the first two are red (3 px and 2 px), the rest
+    1 px white at falling strength, each fading toward its free end (`EdgeLines`). Used: the LIVE page's left
+    edge (top and bottom), the podium P1 foot, the story card corner. The **double bar** (`.kerb`) is two rules
+    with a cap; the **comb** (`.chequer`) is rules stepping off a card edge.
 - **Two textures.** Halftone dots (1.1 px on a 7 px grid) and hatch (2 px lines at the slant), panels only.
 
 Not part of the system and not used: red / white kerb stripes, chequered patterns (the map's start/finish
@@ -128,7 +129,7 @@ marker and the logo's flag strip are the only chequers).
 | 6 | **Kinetic wide type**: huge wide uppercase words in rows, alternating filled and outlined, sliding sideways | Group_58 ("HAMMER TIME" rows) | `<KineticType words>`: Saira 125 % / 900, rows alternate `fill` and `-webkit-text-stroke`, CSS translate animation | View wipes (one word: the next view's name), record-broken and now-driving moments, attract mode | Anywhere data is shown at the same time; longer than the moment. |
 | 7 | **Layout models**: timing tower, driver card, track card | Group_58 (race tower "LAP 36/52", "LEWIS HAMILTON 112 POINTS" card, circuit cards with length and lap record) | Leaderboard = tower (tab head with lap / title, rows: pos · stripe · name · time · gap · compound letter). Driver card = avatar left, small label, name over two lines, wide number right. Track card = map well, length in wide numerals bottom-right, name, 3-stat row, record sub-card | Leaderboards, onboard / moments driver cards, the race view's track header and the attract screen | Team logos in tower rows (we use the rig stripe), "points" from a championship we don't run. |
 | 8 | **Double slanted bar**: two red bars, the lower slightly shorter, a slanted cut end and a separate slanted cap | Racing livery references (style only) | `.kerb` (CSS, two gradient bars + `::after` cap); story card `kerb()` in canvas | Top edges of moment cards and pop-ups, under the attract / portrait name, the challenge card, the story card, staff and owner pages | Red / white candy-stripe kerbs (too generic); behind data |
-| 9 | **Speed steps and comb**: horizontal bars, red and navy, whose free ends step along a diagonal and are cut on the slant; as a comb, red bars stepping off a card edge | Livery flashes on racing key art (style only) | `<SpeedSteps>` SVG; `.chequer` (comb: repeating bars masked off the edge); story card `stripes()` | Record / P1 / team-leader card edges, the podium P1 foot, the LIVE page's left gutter, the story card's top-right corner | Chequered-flag patterns (too generic); behind data |
+| 9 | **Edge lines and comb**: thin vertical hairlines tapering away from an edge, red lead lines; as a comb, red bars stepping off a card edge | Sleek broadcast graphics (style only) | `<EdgeLines>` SVG; `.chequer` (comb: repeating bars masked off the edge); story card `stripes()` | Record / P1 / team-leader card edges, the podium P1 foot, the LIVE page's left gutter, the story card's top-right corner | Chequered-flag patterns (too generic); behind data |
 
 ## 3. Layout
 
@@ -153,10 +154,10 @@ small grey "Invalid" tag sits by the lap number (the numerals stay readable).
 **Delta**: the current lap against the driver's own best at the same lap distance, hero numerals, two
 decimals, green ahead / red behind, a dash until the driver has a full lap the page saw.
 
-**Steering wheel**: our own formula-style wheel (wide body, two grips, centre screen, three buttons, LED
-slots each side), light grey with the cut-outs showing the page. It turns with the input (steer x
-`steering_rotation_deg` / 2) about its centre; the screen shows the gear, the LEDs light green / yellow / red
-/ purple with the car's rev lights, a rig-colour mark sits on top, the angle in degrees under it.
+**Steering wheel**: the formula wheel artwork supplied by the cafe owner (`dashboard/src/assets/wheel.webp`,
+background removed, cropped to the wheel). It turns with the input (steer x `steering_rotation_deg` / 2) about its
+centre; the gear is drawn live on its screen, the 15 rev LEDs (green, red, blue) light left to right with the
+car's rev lights (unlit ones are covered), a rig-colour mark sits on top, the angle in degrees under it.
 
 **Pedal bars**: two thin (8 px) vertical bars, throttle green and brake red, filling from the bottom.
 

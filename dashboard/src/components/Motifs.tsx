@@ -8,7 +8,7 @@ type Corner = "top-right" | "bottom-left" | "top-left" | "bottom-right";
 //   module   bars are BAR thick on a PITCH grid; hairlines are 2 units
 //   palette  red (brand accent), navy, and white at low strength
 //   Flash    corner composition: slanted blocks (wide, medium, thin, hairline trail) with stepped rules
-//   Steps    edge composition: stacked rules growing from an edge, free ends stepping along the slant
+//   Lines    edge composition: thin vertical hairlines tapering away from an edge, red lead lines
 export const SLANT = Math.tan((30 * Math.PI) / 180); // horizontal run per unit of height for a 60° lean
 export const BAR = 6;
 export const PITCH = 12;
@@ -102,27 +102,36 @@ export function SlashMark({ className = "" }: { className?: string }) {
 }
 
 /**
- * Steps: the edge composition. Stacked rules (BAR thick on the PITCH grid, scaled to fit), red and navy,
- * growing from an edge; their free ends step along the slant, each cut on the slant. Navy rules sit a step
- * shorter, interleaved with the red ones.
+ * Lines: the edge composition. Thin vertical hairlines on a fixed pitch, standing on an edge (top or bottom)
+ * and tapering in height away from the side they grow from; the lead lines are red, the rest low white, and
+ * each fades out toward its free end.
  */
-export function SpeedSteps({ width, height, bars = 12, from = "left", className = "" }: {
-  width: number; height: number; bars?: number; from?: "left" | "right"; className?: string;
+export function EdgeLines({ width, height, from = "left", anchor = "bottom", red = 2, pitch = 6, className = "" }: {
+  width: number; height: number; from?: "left" | "right"; anchor?: "top" | "bottom"; red?: number; pitch?: number;
+  className?: string;
 }) {
-  const pitch = height / bars;
-  const thick = pitch / 2;
-  const step = (width - thick * SLANT) / (bars + 1);
+  const count = Math.max(1, Math.floor(width / pitch));
+  const id = `edgelines-${anchor}-${width}x${height}`;
   return (
-    <svg className={`speedsteps ${className}`} viewBox={`0 0 ${width} ${height}`} width={width} height={height} aria-hidden="true">
-      {Array.from({ length: bars }, (_, i) => {
-        const y = i * pitch + (pitch - thick) / 2;
-        const navy = i % 2 === 1;
-        const len = thick * SLANT + step * (i + 1) + (navy ? -step : 0);
-        return (
-          <path key={i} d={from === "left" ? ruleFromLeft(len, y, thick) : ruleFromRight(width, len, y, thick)}
-                fill={navy ? NAVY : RED} />
-        );
-      })}
+    <svg className={`edgelines ${className}`} viewBox={`0 0 ${width} ${height}`} width={width} height={height} aria-hidden="true">
+      <defs>
+        <linearGradient id={id} x1="0" y1={anchor === "bottom" ? 1 : 0} x2="0" y2={anchor === "bottom" ? 0 : 1}>
+          <stop offset="0" stopColor="#fff" />
+          <stop offset="0.6" stopColor="#fff" stopOpacity="0.7" />
+          <stop offset="1" stopColor="#fff" stopOpacity="0" />
+        </linearGradient>
+        <mask id={`${id}-m`}><rect width={width} height={height} fill={`url(#${id})`} /></mask>
+      </defs>
+      <g mask={`url(#${id}-m)`}>
+        {Array.from({ length: count }, (_, i) => {
+          const w = i === 0 ? 3 : i < red ? 2 : 1;
+          const h = height * (1 - i / (count + 1)) ** 1.4;
+          const x = from === "left" ? i * pitch : width - i * pitch - w;
+          const y = anchor === "bottom" ? height - h : 0;
+          return <rect key={i} x={x} y={y} width={w} height={h}
+                       fill={i < red ? RED : "#fff"} opacity={i < red ? 1 : Math.max(0.12, 0.42 - i * 0.04)} />;
+        })}
+      </g>
     </svg>
   );
 }

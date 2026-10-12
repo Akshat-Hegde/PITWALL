@@ -100,4 +100,15 @@ describe("session story", () => {
     expect(c.nowX).toBeLessThan(1098);
     expect(c.refs[0]!.y).toBeGreaterThan(10);
   });
+
+  test("laps older than the window are left out (no stray label left of the chart)", () => {
+    const now = 1_000_000_000;
+    const laps: StoryLap[] = [
+      { rig_id: "r6", driver: "Old", lap_ms: 91_000, valid: true, out_lap: false, completed_at: now - 55 * 60_000 },
+      { rig_id: "r1", driver: "Akki", lap_ms: 88_000, valid: true, out_lap: false, completed_at: now - 60_000 },
+    ];
+    const c = storyChart(laps, now, () => "#fff", []);
+    expect(c.names.map((n) => n.text)).toEqual(["AKKI"]);
+    expect(Math.min(...c.dots.map((d) => d.x))).toBeGreaterThan(48);
+  });
 });

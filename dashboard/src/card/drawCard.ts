@@ -60,24 +60,24 @@ const SLANT = Math.tan(Math.PI / 6);
 /** Steps from the top-right corner: rules growing from the right edge, red and navy (navy a step shorter),
  *  free ends stepping along the slant and cut on it. */
 function stripes(ctx: Ctx, accent: string) {
-  const bars = 10;
-  const bar = 12;
-  const pitch = 24;
-  const step = 34;
-  for (let i = 0; i < bars; i++) {
-    const y = 40 + i * pitch;
-    const navy = i % 2 === 1;
-    const len = bar * SLANT + step * (bars - i) + (navy ? -step : 0);
-    const x = CARD_W - len;
-    ctx.fillStyle = navy ? "#22324D" : accent;
-    ctx.beginPath();
-    ctx.moveTo(x + bar * SLANT, y);
-    ctx.lineTo(CARD_W, y);
-    ctx.lineTo(CARD_W, y + bar);
-    ctx.lineTo(x, y + bar);
-    ctx.closePath();
-    ctx.fill();
+  // Lines: thin vertical hairlines hanging from the top edge, tapering away from the right edge, red lead lines,
+  // each fading out toward its free end.
+  const pitch = 12;
+  const count = 22;
+  const tall = 300;
+  for (let i = 0; i < count; i++) {
+    const lead = i < 2;
+    const w = i === 0 ? 6 : lead ? 4 : 2;
+    const h = tall * (1 - i / (count + 1)) ** 1.4;
+    const fade = ctx.createLinearGradient(0, 0, 0, h);
+    fade.addColorStop(0, lead ? accent : "#fff");
+    fade.addColorStop(0.6, lead ? accent : "#fff");
+    fade.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.globalAlpha = lead ? 1 : Math.max(0.12, 0.42 - i * 0.04);
+    ctx.fillStyle = fade;
+    ctx.fillRect(CARD_W - i * pitch - w, 0, w, h);
   }
+  ctx.globalAlpha = 1;
 }
 
 /** Double bar (two rules) with the slanted cut end and a separate slanted cap. */

@@ -214,7 +214,9 @@ const BG = "#0B0C0F";
 export function storyChart(laps: readonly StoryLap[], now: number, colourOf: (l: StoryLap) => string,
                            refs: readonly ChartRef[], onlyKey: string | null = null, maxDrivers = 8): StoryChart {
   const { L, R, T, B } = CHART;
-  const shown = laps.filter((l) => !l.out_lap && (onlyKey == null || driverKey(l.driver, l.rig_id) === onlyKey));
+  // Only laps inside the window: older ones would sit (and be labelled) left of the chart.
+  const shown = laps.filter((l) => !l.out_lap && l.completed_at >= now - 47 * 60_000
+                                && (onlyKey == null || driverKey(l.driver, l.rig_id) === onlyKey));
   const x1 = now + 20_000;
   const first = shown.length ? shown[0]!.completed_at - 60_000 : now - 10 * 60_000;
   const x0 = Math.min(Math.max(now - 47 * 60_000, first), x1 - 10 * 60_000);
