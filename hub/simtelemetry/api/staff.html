@@ -36,7 +36,7 @@
     background: var(--bg);
     border-bottom: 1px solid var(--line);
   }
-  .kerb { height: 4px; background: repeating-linear-gradient(90deg, var(--accent) 0 18px, #fff 18px 36px); }
+  .kerb { height: 7px; width: 300px; background: linear-gradient(180deg, var(--accent) 0 2px, transparent 2px 4px, var(--accent) 4px 7px); clip-path: polygon(0 0, 100% 0, calc(100% - 6px) 100%, 0 100%); }
   .bar { display: flex; align-items: center; gap: 12px; max-width: 720px; margin: 0 auto; padding: 10px 16px; }
   .brand { flex: 1; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
   .pwmark { flex: none; display: block; }

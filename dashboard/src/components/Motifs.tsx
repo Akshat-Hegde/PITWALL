@@ -51,6 +51,33 @@ export function SlashMark({ className = "" }: { className?: string }) {
 }
 
 /**
+ * Stepped speed bars: horizontal bars, red and navy, whose free ends step along a diagonal and are cut on the
+ * slant, like a livery flash. `from` is the edge the bars grow out of.
+ */
+export function SpeedSteps({ width, height, bars = 12, from = "left", className = "" }: {
+  width: number; height: number; bars?: number; from?: "left" | "right"; className?: string;
+}) {
+  const pitch = height / bars;
+  const thick = pitch * 0.55;
+  const slant = thick * 0.9;
+  return (
+    <svg className={`speedsteps ${className}`} viewBox={`0 0 ${width} ${height}`} width={width} height={height} aria-hidden="true">
+      <g transform={from === "right" ? `translate(${width} 0) scale(-1 1)` : undefined}>
+        {Array.from({ length: bars }, (_, i) => {
+          const y = i * pitch;
+          const len = Math.max(slant + 2, width * (0.25 + (0.75 * (i + 1)) / bars) - (i % 3 === 1 ? width * 0.18 : 0));
+          const navy = i % 2 === 1;
+          return (
+            <path key={i} d={`M0 ${y} H${len} L${len - slant} ${y + thick} H0 Z`}
+                  fill={navy ? "#22324D" : "var(--brand-accent, #E10600)"} opacity={navy ? 1 : 1 - (bars - 1 - i) * 0.03} />
+          );
+        })}
+      </g>
+    </svg>
+  );
+}
+
+/**
  * Motif 2: a double bar with a slanted cut end and a separate slanted cap. value 0..1.
  * tone "accent" (brake, progress) or "light" (throttle).
  */

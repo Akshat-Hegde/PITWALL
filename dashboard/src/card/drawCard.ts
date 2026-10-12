@@ -54,36 +54,51 @@ function label(ctx: Ctx, text: string, x: number, y: number, colour = C.text2, s
   spaced(ctx, 0, size);
 }
 
+/** Stepped speed bars from the top-right corner: red and navy bars ending on a slanted diagonal. */
 function stripes(ctx: Ctx, accent: string) {
-  ctx.save();
-  ctx.translate(CARD_W, 0);
-  ctx.scale(-1, 1);
-  ctx.globalAlpha = 0.45;
-  ctx.lineWidth = 7;
-  ctx.lineCap = "round";
-  for (let i = 0; i < 5; i++) {
-    const y = 120 + i * 26;
-    const x = 360 + i * 26 * 0.414;
-    const grad = ctx.createLinearGradient(0, 0, x, 0);
-    grad.addColorStop(0, "rgba(0,0,0,0)");
-    grad.addColorStop(1, accent);
-    ctx.strokeStyle = grad;
+  const bars = 11;
+  const pitch = 22;
+  const thick = 12;
+  for (let i = 0; i < bars; i++) {
+    const y = 40 + i * pitch;
+    const len = 420 - i * 30 - (i % 3 === 1 ? 70 : 0);
+    const x = CARD_W - len;
+    ctx.fillStyle = i % 2 ? "#22324D" : accent;
+    ctx.globalAlpha = i % 2 ? 0.9 : 1 - i * 0.05;
     ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(x, y);
-    ctx.quadraticCurveTo(x + 30, y, x + 50, y - 20);
-    ctx.lineTo(x + 50 + y, -20);
-    ctx.stroke();
+    ctx.moveTo(x + 11, y);
+    ctx.lineTo(CARD_W, y);
+    ctx.lineTo(CARD_W, y + thick);
+    ctx.lineTo(x, y + thick);
+    ctx.closePath();
+    ctx.fill();
   }
-  ctx.restore();
+  ctx.globalAlpha = 1;
 }
 
+/** Double bar with a slanted cut end and a separate slanted cap (motif 8). */
 function kerb(ctx: Ctx, x: number, y: number, w: number, h: number, accent: string) {
-  const block = 36;
-  for (let i = 0; i * block < w; i++) {
-    ctx.fillStyle = i % 2 ? C.text : accent;
-    ctx.fillRect(x + i * block, y, Math.min(block, w - i * block), h);
+  const bar = Math.round(h * 0.38);
+  const gap = h - bar * 2;
+  const slant = h * 0.8;
+  const end = x + w - h * 1.6;
+  ctx.fillStyle = accent;
+  for (const [top, inset] of [[y, 0], [y + bar + gap, slant * 0.3]] as const) {
+    ctx.beginPath();
+    ctx.moveTo(x, top);
+    ctx.lineTo(end - inset, top);
+    ctx.lineTo(end - inset - slant * (bar / h), top + bar);
+    ctx.lineTo(x, top + bar);
+    ctx.closePath();
+    ctx.fill();
   }
+  ctx.beginPath();
+  ctx.moveTo(end + h * 0.5, y);
+  ctx.lineTo(end + h * 0.5 + h * 0.5, y);
+  ctx.lineTo(end + h * 0.5 + h * 0.5 - slant, y + h);
+  ctx.lineTo(end + h * 0.5 - slant, y + h);
+  ctx.closePath();
+  ctx.fill();
 }
 
 /** Angled tab: white left part, accent right part. */

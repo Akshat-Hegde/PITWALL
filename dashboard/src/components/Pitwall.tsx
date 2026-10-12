@@ -8,6 +8,7 @@ import {
 import type { DashboardState } from "../state/reducer";
 import type { DashboardStore } from "../state/store";
 import { PitwallLogo } from "./Brand";
+import { SpeedSteps } from "./Motifs";
 import { STRIP_HOLD_MS, SteeringWheel, activeRigs, chooseStripRig, useHeld } from "./Live";
 import { PitwallMap, type Ghost } from "./PitwallMap";
 
@@ -233,7 +234,7 @@ function Decor() {
         <span className="pw-slash__fade" />
       </div>
       <div className="pw-notch"><span /><span /><span /></div>
-      <div className="pw-kerb" />
+      <SpeedSteps className="pw-steps" width={40} height={244} bars={16} />
     </div>
   );
 }

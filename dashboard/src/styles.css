@@ -3229,14 +3229,10 @@ html:has(.tvstage) {
   height: 22px;
 }
 
-.pw-kerb {
+.pw-steps {
   position: absolute;
   bottom: 0;
   left: 0;
-  width: 6px;
-  height: 244px;
-  background: repeating-linear-gradient(180deg, #e10600 0 18px, #fff 18px 36px);
-  opacity: 0.9;
 }
 
 /* Header */
@@ -4329,4 +4325,52 @@ html:has(.tvstage) {
 
 .pw-sector {
   width: 80px;
+}
+
+/* ---- Motifs 8 and 9, redrawn: no generic kerb or chequer patterns ----
+   Motif 8, the double bar: two red bars with a slanted cut end and a separate slanted cap.
+   Motif 9, the speed comb: red bars stepping off an edge (P1 / record cards). */
+.kerb {
+  position: relative;
+  display: block;
+  height: 9px;
+  background: none;
+}
+
+.kerb::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 14px;
+  bottom: 0;
+  left: 0;
+  background: linear-gradient(180deg, var(--brand-accent) 0 3px, transparent 3px 5px, var(--brand-accent) 5px 9px);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 7px) 100%, 0 100%);
+}
+
+.kerb::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 12px;
+  background: var(--brand-accent);
+  clip-path: polygon(7px 0, 100% 0, 5px 100%, 0 100%);
+}
+
+.chequer {
+  background: repeating-linear-gradient(180deg, var(--brand-accent) 0 4px, transparent 4px 10px);
+  opacity: 1;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 85%);
+  mask-image: linear-gradient(90deg, transparent, #000 85%);
+}
+
+.podium__chequer {
+  background:
+    linear-gradient(var(--brand-accent), var(--brand-accent)) right 0 top 2px / 62% 5px no-repeat,
+    linear-gradient(#22324d, #22324d) right 0 top 10px / 84% 5px no-repeat,
+    linear-gradient(var(--brand-accent), var(--brand-accent)) right 0 top 18px / 40% 5px no-repeat;
+  -webkit-mask-image: none;
+  mask-image: none;
 }
