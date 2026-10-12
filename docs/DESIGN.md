@@ -178,4 +178,4 @@ when a car drives), **head to head** and the **team board** (put over the page f
 Not on the TV (still in the feed): fuel, ERS, g-force, damage, brake temperatures, tyre wear and inner
 temperatures, slides / saves, lap-share statistics, IP addresses and technical warnings.
 
-**Brand**: the product is **Pitwall**. Our own mark: a slanted red "P" with two white speed bars trailing it; the wordmark is PIT in white and WALL in red, Saira 125 % / 800. Used on the TV (powered by), the staff and owner pages and as the favicon.
+**Brand**: the product is **Pitwall**. Our own mark: a slanted red "P" with a chequered-flag strip (white squares, slanted like the stem) fading out to its left; the wordmark is PIT in white and WALL in red, Saira 125 % / 800. Used on the TV (powered by), the staff and owner pages and as the favicon.
