@@ -4,13 +4,22 @@
 $ErrorActionPreference = "Stop"
 $root = Split-Path $PSScriptRoot -Parent
 $py = "$root\.venv-build\Scripts\python.exe"
-Push-Location "$root\dashboard"; try { npm ci; npm run build } finally { Pop-Location }
+Push-Location "$root\dashboard"
+try {
+  npm ci
+  if ($LASTEXITCODE -ne 0) { throw "npm ci failed (exit $LASTEXITCODE)" }
+  npm run build
+  if ($LASTEXITCODE -ne 0) { throw "npm run build failed (exit $LASTEXITCODE)" }
+} finally { Pop-Location }
+if (-not (Test-Path "$root\dashboard\dist\index.html")) { throw "dashboard\dist\index.html missing after the dashboard build" }
 & $py -m pip install -q -e "$root[build]"
+if ($LASTEXITCODE -ne 0) { throw "pip install failed (exit $LASTEXITCODE)" }
 $brand = & $py -c "import json; from simtelemetry import brand; print(json.dumps(brand.as_dict()))" | ConvertFrom-Json
 & $py -m PyInstaller --noconfirm --clean --distpath "$root\dist" --workpath "$root\build" "$root\packaging\pitwall.spec"
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed" }
 $exe = "$root\dist\$($brand.EXE_NAME)\$($brand.EXE_NAME).exe"
 & $exe --version
+if ($LASTEXITCODE -ne 0) { throw "$exe --version failed (exit $LASTEXITCODE)" }
 Set-Item "env:$($brand.HOME_ENV)" (Join-Path $env:TEMP "$($brand.SLUG)-smoke")
 $p = Start-Process $exe -ArgumentList "run --demo --duration 25 --http-port 8199" -PassThru -WindowStyle Hidden
 try {
