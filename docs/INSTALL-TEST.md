@@ -5,7 +5,7 @@ Never run the installer on the development PC: it registers a boot task and fire
 1. **Prepare the test machine.**
    - Spare PC: Windows 10/11, on the same LAN as the rigs and your phone.
    - VM: Hyper-V "Quick Create" (Windows Pro) or VirtualBox. Use a **bridged** network adapter so rigs and phones on the LAN can reach it. Give it 4 GB RAM and 2 CPUs.
-2. **Copy** `dist\Pitwall-Setup-0.2.0.exe` to it (USB stick or network share). No internet is needed.
+2. **Copy** `dist\Pitwall-Setup-0.2.1.exe` to it (USB stick or network share). No internet is needed.
 3. **Install.** Right-click, Run as administrator. On the last page **write down the setup code**. Leave "Open the setup page" ticked and click Finish. Then check that Task Scheduler shows the task "Pitwall Hub" (Ready or Running) and that Windows Defender Firewall with Advanced Security (`wf.msc`, Inbound Rules) shows the 3 rules "Pitwall hub", "Pitwall telemetry" and "Pitwall pages".
 4. **Setup page** (opens in the browser):
    - first type a wrong code and check it is refused;
