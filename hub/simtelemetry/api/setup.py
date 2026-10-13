@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Header, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import ValidationError
 
 from .. import brand
@@ -18,6 +18,7 @@ from ..core.feed import lan_address
 from ..core.settings import CafeSettings, SettingsStore, apply_settings
 from ..core.setup_code import SetupCode, SetupLocked
 from .owner import OWNER_PIN_HEADER
+from .pages import render_page
 from .staff import PinGuard
 
 if TYPE_CHECKING:
@@ -54,8 +55,8 @@ def setup_router(hub: Hub) -> APIRouter:
                                      "(also in the hub's log, or run: <exe> setup-code).")
 
     @router.get("/setup")
-    def page() -> FileResponse:
-        return FileResponse(SETUP_PAGE)
+    def page() -> HTMLResponse:
+        return render_page(SETUP_PAGE)
 
     @router.get("/api/setup")
     def state() -> dict[str, Any]:

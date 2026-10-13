@@ -283,7 +283,7 @@ def port_in_use_message(exc: PortInUseError) -> str:
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if not argv:
-        argv = ["run"]  # double-clicking Pitwall.exe starts the hub
+        argv = ["run"]  # double-clicking the exe starts the hub
     args = build_parser().parse_args(argv)
     if args.command == "seed-demo":
         from .tools.seed_demo import DemoTargetError, seed

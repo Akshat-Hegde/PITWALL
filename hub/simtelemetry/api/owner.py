@@ -14,6 +14,7 @@ from fastapi.responses import HTMLResponse, Response
 
 from ..core.analytics import Analytics
 from ..core.backup import last_backup
+from .pages import render_page
 from .staff import PinGuard
 
 if TYPE_CHECKING:
@@ -43,8 +44,8 @@ def owner_router(hub: Hub) -> APIRouter:
         guard(request)
 
     @router.get("/owner", response_class=HTMLResponse, include_in_schema=False)
-    def page() -> str:
-        return OWNER_PAGE.read_text(encoding="utf-8")
+    def page() -> HTMLResponse:
+        return render_page(OWNER_PAGE)
 
     @router.get("/api/owner/report", dependencies=[Depends(check)])
     def report(days: int = 30) -> dict[str, Any]:

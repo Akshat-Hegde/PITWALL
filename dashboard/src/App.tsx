@@ -125,7 +125,7 @@ export function App({ store, mapDisplay = null, viewMode = "auto", layout = "tv"
   const state = useDashboard(store);
   useBranding(state.cafe.branding);
   useEffect(() => {
-    document.title = state.cafe.name ? `${state.cafe.name} · Pitwall` : "Pitwall";
+    document.title = state.cafe.name ? `${state.cafe.name} · ${__PRODUCT_NAME__}` : __PRODUCT_NAME__;
   }, [state.cafe.name]);
   const anyDriving = Object.values(state.frames).some((f) => f.state === "driving");
   // Until any rig has connected, keep the race view: its map explains how to set up the games.

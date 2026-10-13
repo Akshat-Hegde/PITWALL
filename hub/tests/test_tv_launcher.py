@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pytest
 
+from simtelemetry import brand
+
 SCRIPT = Path(__file__).resolve().parents[2] / "tools" / "windows" / "tv-launcher.ps1"
 pytestmark = pytest.mark.skipif(sys.platform != "win32" or shutil.which("powershell") is None,
                                 reason="Windows PowerShell only")
@@ -38,4 +40,4 @@ def test_dry_run_opens_kiosk_with_autoplay():
 
 def test_start_on_login_dry_run():
     out = run("-DryRun", "-StartOnLogin", "-Url", "http://hub:8000/")
-    assert "SHORTCUT" in out.stdout and "Pitwall TV.lnk" in out.stdout and "-Url" in out.stdout
+    assert "SHORTCUT" in out.stdout and f"{brand.PRODUCT_NAME} TV.lnk" in out.stdout and "-Url" in out.stdout

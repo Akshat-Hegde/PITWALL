@@ -28,7 +28,26 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$ShortcutName = "Pitwall TV.lnk"
+# The product name lives in brand.py only. Installed: the exe sits in the parent folder of tools\ and prints
+# "Name x.y.z" for --version. From a source checkout: ask the repo's own Python.
+function Get-ProductName {
+  $appDir = Split-Path -Parent $PSScriptRoot
+  $exes = @(Get-ChildItem -LiteralPath $appDir -Filter *.exe -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -notlike "unins*" })
+  if ($exes.Count -eq 1) {
+    $line = (& $exes[0].FullName --version 2>$null | Select-Object -First 1)
+    $parts = @("$line".Trim() -split "\s+")
+    if ($parts.Count -ge 2) { return ($parts[0..($parts.Count - 2)] -join " ") }
+  }
+  $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+  $python = Join-Path $repo ".venv\Scripts\python.exe"
+  if (Test-Path $python) {
+    $name = (& $python -c "from simtelemetry import brand; print(brand.PRODUCT_NAME)" 2>$null | Select-Object -First 1)
+    if ($name) { return "$name".Trim() }
+  }
+  throw "Could not work out the product name: no single program next to the tools folder and no .venv in the source checkout."
+}
+$ShortcutName = "$(Get-ProductName) TV.lnk"
 $OldShortcutName = "Sim Telemetry TV.lnk"  # before the product was renamed
 
 function Find-Browser([string]$which) {

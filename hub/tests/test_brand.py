@@ -33,3 +33,15 @@ def test_name_is_written_once():
             body = "\n".join(l for l in f.read_text(encoding="utf-8").splitlines()
                              if not l.lstrip().startswith(("#", ";", "//")))
             assert brand.PRODUCT_NAME not in body, rel
+
+
+def test_hub_pages_fill_in_the_product_name(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from simtelemetry.api.app import create_app
+    from test_drivers import make_hub
+    monkeypatch.setattr(brand, "PRODUCT_NAME", "Zed Cafe")
+    client = TestClient(create_app(make_hub(tmp_path), dashboard_dir=tmp_path / "none"))
+    for path in ("/staff", "/owner", "/setup"):
+        r = client.get(path)
+        assert r.status_code == 200 and "{{PRODUCT_NAME}}" not in r.text
+    assert "Staff · Zed Cafe" in client.get("/staff").text

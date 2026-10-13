@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from ..core.feed import FeedBuilder, FeedConnection
-from .. import paths
+from .. import brand, paths
 from ..hub import Hub
 from .cards import card_router
 from .owner import owner_router
@@ -41,7 +41,7 @@ def _dumps(msg: dict[str, Any]) -> str:
 
 
 def create_app(hub: Hub, dashboard_dir: Path | None = None) -> FastAPI:
-    app = FastAPI(title="Pitwall hub", docs_url="/api/docs", openapi_url="/api/openapi.json")
+    app = FastAPI(title=f"{brand.PRODUCT_NAME} hub", docs_url="/api/docs", openapi_url="/api/openapi.json")
     builder = FeedBuilder(hub)
 
     @app.get("/api/health")

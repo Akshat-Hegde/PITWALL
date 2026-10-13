@@ -20,6 +20,7 @@ from ..core.drivers import EXTEND_PROMPT_MS, DriverError
 from ..core.feed import FeedBuilder, lan_address
 from ..core.tv import TvError
 from ..core.health import RigState
+from .pages import render_page
 
 if TYPE_CHECKING:
     from ..hub import Hub
@@ -92,8 +93,8 @@ def staff_router(hub: Hub) -> APIRouter:
         return rig
 
     @router.get("/staff", response_class=HTMLResponse, include_in_schema=False)
-    def page() -> str:
-        return STAFF_PAGE.read_text(encoding="utf-8")
+    def page() -> HTMLResponse:
+        return render_page(STAFF_PAGE)
 
     @router.get("/api/staff/rigs", dependencies=[Depends(guard)])
     def rigs() -> dict[str, Any]:
