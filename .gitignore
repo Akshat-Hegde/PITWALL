@@ -42,3 +42,6 @@ docs/design-refs/*
 data-demo/
 dashboard/tsconfig.tsbuildinfo
 brag-output*/
+
+# Subagent-driven development scratch (ledgers, briefs, review packages)
+.superpowers/
