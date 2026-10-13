@@ -82,6 +82,18 @@ interface PageProps {
   pinnedRigId?: string | null;
 }
 
+/** The cafe's badge: its logo, or its first letter when there is none or the image fails to load. */
+export function CafeBadge({ logo, initial }: { logo: string | null; initial: string }) {
+  const [failed, setFailed] = useState<string | null>(null);   // the logo URL that failed; a new URL gets a fresh try
+  return (
+    <span className="pw-cafe__badge">
+      {logo && failed !== logo
+        ? <img className="pw-cafe__logo" src={logo} alt="" onError={() => setFailed(logo)} />
+        : initial}
+    </span>
+  );
+}
+
 export function PitwallPage({ store, state, trackKey, mapDisplay = null, pinnedRigId = null }: PageProps) {
   const rigs = activeRigs(state);
   const solo = rigs.length <= 1;
@@ -170,9 +182,7 @@ export function PitwallPage({ store, state, trackKey, mapDisplay = null, pinnedR
         </div>
         <div className="pw-head__right">
           <div className="pw-cafe">
-            <span className="pw-cafe__badge">
-              {state.cafe.logo ? <img className="pw-cafe__logo" src={state.cafe.logo} alt="" /> : cafe[0]}
-            </span>
+            <CafeBadge logo={state.cafe.logo ?? null} initial={cafe[0] ?? ""} />
             <span className="pw-cafe__name">{cafe}</span>
           </div>
           <div className="pw-head__clockrow">

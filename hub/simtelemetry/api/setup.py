@@ -5,6 +5,7 @@ The setup code is never returned by any endpoint; it lives in the console/log, t
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -94,10 +95,11 @@ def setup_router(hub: Hub) -> APIRouter:
         if len(data) > MAX_LOGO_BYTES:
             raise HTTPException(400, "The logo must be under 1 MB.")
         store.branding_dir.mkdir(parents=True, exist_ok=True)
-        for old in store.branding_dir.glob("logo.*"):
+        name = f"logo-{hashlib.sha256(data).hexdigest()[:8]}{ext}"   # new image = new name = new URL (cache busting)
+        for old in store.branding_dir.glob("logo*"):
             old.unlink()
-        (store.branding_dir / f"logo{ext}").write_bytes(data)
-        hub.config.cafe.logo = f"logo{ext}"
+        (store.branding_dir / name).write_bytes(data)
+        hub.config.cafe.logo = name
         s = current()
         if s is not None:
             store.save(s.model_copy(update={"logo": hub.config.cafe.logo}))

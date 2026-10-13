@@ -91,6 +91,22 @@ def test_logo_upload_and_serve(tmp_path):
     assert client.post("/api/setup/logo", files={"file": ("big.png", big, "image/png")}, headers=code).status_code == 400
 
 
+def test_second_logo_changes_name_and_sends_cafe_message(tmp_path):
+    from simtelemetry.core.feed import FeedBuilder, FeedConnection
+    hub, client, code = _client(tmp_path)
+    conn = FeedConnection(FeedBuilder(hub))
+    conn.start(0.0)
+    client.post("/api/setup/logo", files={"file": ("a.png", PNG, "image/png")}, headers=code)
+    (first,) = [m for m in conn.tick(0.0) if m["type"] == "cafe"]
+    PNG2 = PNG + b"-second"
+    r = client.post("/api/setup/logo", files={"file": ("b.png", PNG2, "image/png")}, headers=code)
+    assert r.json()["logo"] == hub.config.cafe.logo and hub.config.cafe.logo != first["cafe"]["logo"].split("v=")[1]
+    (second,) = [m for m in conn.tick(0.0) if m["type"] == "cafe"]
+    assert second["cafe"]["logo"] != first["cafe"]["logo"]
+    assert client.get("/api/cafe/logo").content == PNG2
+    assert len(list((tmp_path / "branding").glob("logo*"))) == 1
+
+
 def test_setup_code_command_and_settings_layering(tmp_path, capsys):
     from simtelemetry.__main__ import apply_saved_settings, build_parser, main
     from simtelemetry.config import AppConfig
