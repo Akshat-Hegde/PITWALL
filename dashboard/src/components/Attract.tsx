@@ -56,7 +56,7 @@ export function AttractView({ state }: { state: DashboardState }) {
         <div className="attract__brand">
           <span className="kerb attract__kerb" aria-hidden="true" />
           <h1 className="attract__name">{name}</h1>
-          <p className="attract__tag">Grab a seat. Set a lap. Beat the board.</p>
+          <p className="attract__tag">{state.cafe.tagline || "Grab a seat. Set a lap. Beat the board."}</p>
         </div>
         <NextUp state={state} max={3} />
         <ChallengeCard state={state} compact />
@@ -78,7 +78,7 @@ export function PortraitView({ state }: { state: DashboardState }) {
       <header className="portrait__brand">
         <span className="kerb" aria-hidden="true" />
         <h1 className="attract__name">{name}</h1>
-        <p className="attract__tag">Grab a seat. Set a lap. Beat the board.</p>
+        <p className="attract__tag">{state.cafe.tagline || "Grab a seat. Set a lap. Beat the board."}</p>
       </header>
       <RecordHolder state={state} />
       <ChallengeCard state={state} />

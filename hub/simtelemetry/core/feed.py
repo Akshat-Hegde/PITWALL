@@ -281,8 +281,12 @@ class FeedBuilder:
         self._size_drops[ip] = (count, since)
         return now - since <= SIZE_MISMATCH_WARN_S
 
+    def cafe(self) -> dict[str, Any]:
+        c = self.hub.config.cafe
+        return {"name": c.name, "branding": dict(c.branding), "tagline": c.tagline,
+                "logo": f"/api/cafe/logo?v={c.logo}" if c.logo else None}
+
     def snapshot_body(self, now: float) -> dict[str, Any]:
-        cafe = self.hub.config.cafe
         frame = self.frame_body(now)
         return {
             "hub": {"version": __version__, "games": [self.hub.adapter.game], "frame_hz": self.frame_hz,
@@ -291,7 +295,7 @@ class FeedBuilder:
                     "features": self.hub.config.features.model_dump(),
                     "moments": {"battle_margin_ms": self.hub.config.moments.battle_margin_ms},
                     "sounds": self.hub.config.sounds.model_dump()},
-            "cafe": {"name": cafe.name, "branding": dict(cafe.branding)},
+            "cafe": self.cafe(),
             "status": self.status(now),
             "rigs": self.rig_infos(),
             "frame": frame,
@@ -323,6 +327,7 @@ class FeedConnection:
         self._competition: dict[str, Any] | None = None       # competition state last sent
         self._h2h: dict[str, Any] | None = None               # head to head last sent
         self._tv: dict[str, Any] | None = None                # TV page setting last sent
+        self._cafe: dict[str, Any] | None = None              # cafe name, tagline, colour, logo last sent
 
     def _message(self, type_: str, body: dict[str, Any]) -> dict[str, Any]:
         msg = {"v": SCHEMA_VERSION, "type": type_, "seq": self.seq, "ts": round(self._clock() * 1000)}
@@ -342,6 +347,7 @@ class FeedConnection:
         self._competition = body["competition"]
         self._h2h = body["head_to_head"]
         self._tv = body["tv"]
+        self._cafe = body["cafe"]
         return self._message("snapshot", body)
 
     def tick(self, now: float) -> list[dict[str, Any]]:
@@ -377,6 +383,10 @@ class FeedConnection:
         if tv != self._tv:
             self._tv = tv
             out.append(self._message("tv", {"tv": tv}))
+        cafe = self.builder.cafe()
+        if cafe != self._cafe:
+            self._cafe = cafe
+            out.append(self._message("cafe", {"cafe": cafe}))
         queue = self.builder.queue()
         if queue != self._queue:
             self._queue = queue

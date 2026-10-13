@@ -66,6 +66,7 @@ Compatibility rules:
 | `head_to_head` *(added in v1, optional)* | The closest pair on the shown track changes | `{ "head_to_head": HeadToHead \| null }` |
 | `competition` *(added in v1, optional)* | The challenge or the corporate event changes (also when their boards change) | `{ "competition": Competition }` |
 | `tv` *(added in v1, optional)* | Staff change the TV page, the pinned rig or the view over the page | `{ "tv": TvSetting }` |
+| `cafe` *(added in v1, optional)* | The cafe name, tagline, colour or logo changes (owner saved `/setup`) | `{ "cafe": { "name", "branding", "tagline", "logo" } }`: full replacement |
 | `queue` *(added in v1, optional)* | The waiting queue changes | `{ "queue": [QueueEntry] }`: full replacement |
 | `moment` *(added in v1, optional)* | A broadcast moment: a driver starts, a record falls, the podium | `{ "moment": Moment }` |
 | `leaderboard` | A board of the shown track changes | `{ "leaderboard": Leaderboard }`: full replacement of the board for its `period`. Boards for another track replace all boards. |
@@ -98,6 +99,8 @@ Compatibility rules:
   steering wheel graphic, from `[dashboard] steering_wheel_rotation_deg`.
 - `cafe.branding`: CSS custom properties from `[cafe.branding]` in the hub config. The dashboard applies
   them to `:root` as-is (keys must start with `--`; others are ignored).
+- `cafe.tagline` *(added in v1, optional, default `""`)*: the line shown on the attract and portrait screens; empty means the built-in line.
+- `cafe.logo` *(added in v1, optional)*: `"/api/cafe/logo?v=<file name>"` or `null`. The TV shows it in the header badge in place of the cafe's first letter.
 - `outlines`: every outline the hub has (bundled track files, and tracks where a full lap was driven).
 - `session_story` *(added in v1, optional)*: laps on the shown track in the last hour, oldest first: `{ "rig_id", "driver", "track_key", "lap_ms", "valid", "out_lap", "lap_class", "completed_at" }` (the LIVE page's session story; later laps arrive as `lap_completed`).
 - `tv` *(added in v1, optional)*: TvSetting, what staff chose for the TV: `page` (`"live"` or `"multi"`),

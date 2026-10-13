@@ -170,7 +170,9 @@ export function PitwallPage({ store, state, trackKey, mapDisplay = null, pinnedR
         </div>
         <div className="pw-head__right">
           <div className="pw-cafe">
-            <span className="pw-cafe__badge">{cafe[0]}</span>
+            <span className="pw-cafe__badge">
+              {state.cafe.logo ? <img className="pw-cafe__logo" src={state.cafe.logo} alt="" /> : cafe[0]}
+            </span>
             <span className="pw-cafe__name">{cafe}</span>
           </div>
           <div className="pw-head__clockrow">

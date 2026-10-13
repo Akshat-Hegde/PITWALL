@@ -442,7 +442,7 @@ export interface SnapshotMessage extends Envelope<"snapshot"> {
     moments?: { battle_margin_ms: number };
     sounds?: { enabled: boolean; volume: number };
   };
-  cafe: { name: string; branding: Record<string, string> };
+  cafe: { name: string; branding: Record<string, string>; tagline?: string; logo?: string | null };
   status: HubStatus;
   rigs: RigInfo[];
   frame: { rigs: RigFrame[]; comparison: Comparison | null };
@@ -515,6 +515,10 @@ export interface HeadToHeadMessage extends Envelope<"head_to_head"> {
   head_to_head: HeadToHead | null;
 }
 
+export interface CafeMessage extends Envelope<"cafe"> {
+  cafe: { name: string; branding: Record<string, string>; tagline?: string; logo?: string | null };
+}
+
 export interface TvMessage extends Envelope<"tv"> {
   tv: TvSetting;
 }
@@ -532,7 +536,8 @@ export type HubMessage =
   | QueueMessage
   | CompetitionMessage
   | HeadToHeadMessage
-  | TvMessage;
+  | TvMessage
+  | CafeMessage;
 
 /** Message types this client knows; others must be ignored (schema rule). */
 export const KNOWN_TYPES: ReadonlySet<string> = new Set<HubMessage["type"]>([
@@ -549,4 +554,5 @@ export const KNOWN_TYPES: ReadonlySet<string> = new Set<HubMessage["type"]>([
   "competition",
   "head_to_head",
   "tv",
+  "cafe",
 ]);

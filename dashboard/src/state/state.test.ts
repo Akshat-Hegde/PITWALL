@@ -68,6 +68,13 @@ describe("reducer", () => {
     expect(s.comparison).not.toBeNull();
   });
 
+  test("cafe message updates name, tagline and logo", () => {
+    const s0 = applyMessage(initialState("hub"), snapshot, 0);
+    const cafe = { name: "Lap Lab", branding: { "--brand-accent": "#FF2A6D" }, tagline: "Beat the board", logo: "/api/cafe/logo?v=logo.png" };
+    const s1 = applyMessage(s0, { v: 1, type: "cafe", seq: 1, ts: 0, cafe } as HubMessage, 1);
+    expect(s1.cafe).toEqual(cafe);
+  });
+
   test("unknown types are ignored", () => {
     const s = applyMessage(initialState("hub"), snapshot, 0);
     const next = applyMessage(s, { v: 1, type: "something_new", seq: 1, ts: 0 } as unknown as HubMessage, 1);

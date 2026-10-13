@@ -31,7 +31,7 @@ export interface DashboardState {
   /** "hub" when talking to a real hub, "mock" for the built-in simulation. */
   source: "hub" | "mock";
   receivedVersion: number | null;
-  cafe: { name: string; branding: Record<string, string> };
+  cafe: { name: string; branding: Record<string, string>; tagline?: string; logo?: string | null };
   frameHz: number;
   /** Where games send telemetry, from the hub (for the waiting screen). */
   telemetryTarget: { address: string | null; port: number };
@@ -217,6 +217,8 @@ export function applyMessage(state: DashboardState, msg: HubMessage, now: number
       return { ...state, headToHead: msg.head_to_head };
     case "tv":
       return { ...state, tv: msg.tv };
+    case "cafe":
+      return { ...state, cafe: msg.cafe };
     case "competition":
       return { ...state, competition: msg.competition };
     case "queue":
