@@ -71,6 +71,7 @@ Filename: "netsh.exe"; Parameters: "advfirewall firewall delete rule name=""{#Ap
 var
   FreshInstall: Boolean;
   SetupCodeText: String;
+  TaskDisabled, TaskRecreated: Boolean;
   CodeLabel, HelpLabel: TNewStaticText;
 
 function DataDir: String;
@@ -106,7 +107,11 @@ procedure StopHub;
 var
   ResultCode, I: Integer;
 begin
-  // The hub runs as SYSTEM, which the wizard cannot close: end the task, wait, then kill what is left.
+  // The hub runs as SYSTEM, which the wizard cannot close. Disable the task first, or its every-minute trigger
+  // starts the old exe again while files are being replaced; then end it, wait, and kill what is left.
+  Exec('schtasks.exe', '/Change /TN "{#TaskName}" /Disable', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Log('schtasks /Change /Disable -> ' + IntToStr(ResultCode));
+  if ResultCode = 0 then TaskDisabled := True;
   Exec('schtasks.exe', '/End /TN "{#TaskName}"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   for I := 1 to 15 do
   begin
@@ -118,6 +123,18 @@ begin
     Log('Hub still running after the task was ended: taskkill');
     Exec('taskkill.exe', '/F /IM {#ExeName}.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     Sleep(1000);
+  end;
+end;
+
+procedure DeinitializeSetup;
+var
+  ResultCode: Integer;
+begin
+  // A cancelled or failed upgrade must not leave the cafe without its hub: turn the old task back on.
+  if TaskDisabled and not TaskRecreated then
+  begin
+    Exec('schtasks.exe', '/Change /TN "{#TaskName}" /Enable', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Log('Install did not finish: re-enabled the old task -> ' + IntToStr(ResultCode));
   end;
 end;
 
@@ -225,6 +242,7 @@ begin
   Ok := Exec('schtasks.exe', '/Create /F /TN "{#TaskName}" /XML "' + ExpandConstant('{tmp}\pitwall-task.xml') + '"', '',
     SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
   Log('schtasks /Create -> ' + IntToStr(ResultCode));
+  if Ok then TaskRecreated := True;     // registered again, enabled
   if not Ok then
   begin
     MsgBox('The hub could not be set to start with this PC (schtasks exit code ' + IntToStr(ResultCode) +

@@ -12,12 +12,12 @@
     <!-- RestartOnFailure only covers a failed launch; this retries every minute for as long as the hub is not
          running (IgnoreNew makes it a no-op while it is). -->
     <TimeTrigger>
-      <StartBoundary>2026-01-01T00:00:00</StartBoundary>
-      <Enabled>true</Enabled>
       <Repetition>
         <Interval>PT1M</Interval>
         <StopAtDurationEnd>false</StopAtDurationEnd>
       </Repetition>
+      <StartBoundary>2026-01-01T00:00:00</StartBoundary>
+      <Enabled>true</Enabled>
     </TimeTrigger>
   </Triggers>
   <Principals>
