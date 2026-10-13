@@ -38,7 +38,7 @@ Each rig sends UDP telemetry to the hub's IP address on port 20777. See [RIG_SET
 
 ## Backups
 
-Every night the hub saves a zip of the laps, settings, branding and config in `C:\ProgramData\Pitwallackups` and keeps the last 14. If the hub PC was off at the backup hour, it makes one a couple of minutes after it next starts. To keep them off the hub PC, open `C:\ProgramData\Pitwall\config\hub.toml` (the installer puts a commented starter file there; remove the `#` in front of `directory` under `[backup]`) and point it at a folder on a USB stick (for example `directory = "E:/Pitwall backups"`), then restart the hub.
+Every night the hub saves a zip of the laps, settings, branding and config in `C:\ProgramData\Pitwall\backups` and keeps the last 14. If the hub PC was off at the backup hour, it makes one a couple of minutes after it next starts. To keep them off the hub PC, open `C:\ProgramData\Pitwall\config\hub.toml` (the installer puts a commented starter file there; remove the `#` in front of `directory` under `[backup]`) and point it at a folder on a USB stick (for example `directory = "E:/Pitwall backups"`), then restart the hub.
 
 To restore, the hub must stay stopped, but its start-up task starts it again within a minute if it is only ended. So disable the task first:
 
@@ -49,7 +49,7 @@ To restore, the hub must stay stopped, but its start-up task starts it again wit
 
 2. Restore:
 
-        "C:\Program Files\Pitwall\Pitwall.exe" restore "C:\ProgramData\Pitwallackups\<the zip>"
+        "C:\Program Files\Pitwall\Pitwall.exe" restore "C:\ProgramData\Pitwall\backups\<the zip>"
 
    The restore is refused while the hub is running, and warns if the task is still enabled.
 
