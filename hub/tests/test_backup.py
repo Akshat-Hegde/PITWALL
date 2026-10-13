@@ -7,6 +7,8 @@ import socket
 import sqlite3
 import zipfile
 
+import pytest
+
 from fastapi.testclient import TestClient
 
 from simtelemetry.__main__ import main
@@ -101,3 +103,65 @@ def test_backup_and_restore_commands(tmp_path, capsys):
         free = s.getsockname()[1]
     assert main(["restore", str(z), "--config", str(toml), "--http-port", str(free)]) == 0
     assert (data / "laps.db").exists()
+
+
+def _zip_of_db(tmp_path, extra=None):
+    src = tmp_path / "src"
+    src.mkdir()
+    _db(src / "laps.db").close()
+    z = make_backup(src, None, tmp_path / "bk", dt.datetime(2026, 10, 13, 4, 0))
+    if extra:
+        with zipfile.ZipFile(z, "a") as zf:
+            for name, body in extra.items():
+                zf.writestr(name, body)
+    return z
+
+
+def test_restore_removes_stale_wal_and_keeps_old_copies(tmp_path):
+    z = _zip_of_db(tmp_path)
+    data = tmp_path / "data"
+    data.mkdir()
+    (data / "laps.db").write_bytes(b"old db")
+    (data / "laps.db-wal").write_bytes(b"stale wal")
+    (data / "laps.db-shm").write_bytes(b"stale shm")
+    cfg = tmp_path / "hub.toml"
+    cfg.write_text("old = 1", encoding="utf-8")
+    restore(z, data, cfg)
+    assert not (data / "laps.db-wal").exists() and not (data / "laps.db-shm").exists()
+    assert sqlite3.connect(data / "laps.db").execute("SELECT ms FROM laps").fetchone() == (88000,)
+    assert (data / "laps.db.before-restore").read_bytes() == b"old db"
+    assert not list(tmp_path.glob(".restore-*"))
+
+
+def test_restore_keeps_previous_hub_toml(tmp_path):
+    z = _zip_of_db(tmp_path, {"hub.toml": "new = 1"})
+    cfg = tmp_path / "hub.toml"
+    cfg.write_text("old = 1", encoding="utf-8")
+    restore(z, tmp_path / "data", cfg)
+    assert cfg.read_text(encoding="utf-8") == "new = 1"
+    assert (tmp_path / "hub.toml.before-restore").read_text(encoding="utf-8") == "old = 1"
+
+
+def test_restore_with_bad_entry_changes_nothing(tmp_path):
+    z = _zip_of_db(tmp_path, {"hub.toml": "new = 1", "../evil.txt": "x"})
+    data = tmp_path / "data"
+    data.mkdir()
+    (data / "laps.db").write_bytes(b"old db")
+    cfg = tmp_path / "hub.toml"
+    cfg.write_text("old = 1", encoding="utf-8")
+    with pytest.raises(ValueError):
+        restore(z, data, cfg)
+    assert (data / "laps.db").read_bytes() == b"old db"
+    assert cfg.read_text(encoding="utf-8") == "old = 1"
+    assert sorted(p.name for p in data.iterdir()) == ["laps.db"]
+    assert not (tmp_path / "evil.txt").exists() and not list(tmp_path.glob(".restore-*"))
+
+
+def test_hub_backs_up_the_config_it_was_started_with(tmp_path):
+    from simtelemetry.hub import Hub
+    base = make_hub(tmp_path / "d", owner={"pin": "1"}, backup={"directory": tmp_path / "bk"})
+    custom = tmp_path / "custom.toml"
+    custom.write_text("# mine", encoding="utf-8")
+    hub = Hub(base.config, base.adapter, base.registry, store=base.drivers.store, config_path=custom)
+    z = hub.run_backup()
+    assert zipfile.ZipFile(z).read("hub.toml") == b"# mine"

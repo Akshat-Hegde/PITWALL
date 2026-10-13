@@ -451,7 +451,8 @@ def run_command(args: argparse.Namespace, config: AppConfig) -> int:
     store = LapStore(config.data_dir / "laps.db" if save_laps else None)
     from .core.tracks import load_bundled
     bundled = None if getattr(args, "demo", False) else load_bundled()  # the demo circuit is made up
-    hub = Hub(config, F1Adapter(config.track_names), registry, recorder, store, bundled)
+    hub = Hub(config, F1Adapter(config.track_names), registry, recorder, store, bundled,
+              config_path=args.config or paths.config_path())
 
     selection = SourceSelection()
     if args.command == "replay":

@@ -7,6 +7,7 @@ import datetime as dt
 import logging
 import sqlite3
 import time
+from pathlib import Path
 from typing import Any
 
 from . import paths
@@ -34,8 +35,10 @@ def next_backup_at(now: dt.datetime, hour: int) -> dt.datetime:
 class Hub:
     def __init__(self, config: AppConfig, adapter: GameAdapter, registry: RigRegistry,
                  recorder: Recorder | None = None, store: LapStore | None = None,
-                 bundled_outlines: dict[str, dict[str, Any]] | None = None) -> None:
+                 bundled_outlines: dict[str, dict[str, Any]] | None = None,
+                 config_path: Path | None = None) -> None:
         self.config = config
+        self.config_path = config_path or paths.config_path()   # the hub.toml actually loaded (for backups)
         self.adapter = adapter
         self.registry = registry
         self.health = HealthMonitor(config.health)
@@ -243,7 +246,7 @@ class Hub:
         """One backup now plus pruning; returns the zip path. Blocking: call from a thread."""
         from .core.backup import make_backup, prune
         cfg = self.config
-        out = make_backup(cfg.data_dir, paths.config_path(), cfg.backups_dir, now or dt.datetime.now())
+        out = make_backup(cfg.data_dir, self.config_path, cfg.backups_dir, now or dt.datetime.now())
         prune(cfg.backups_dir, cfg.backup.keep)
         return out
 

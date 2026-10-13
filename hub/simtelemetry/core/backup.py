@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import os
 import shutil
 import sqlite3
 import tempfile
@@ -66,23 +67,41 @@ def prune(target_dir: Path, keep: int) -> list[Path]:
 
 
 def restore(zip_path: Path, data_dir: Path, config_path: Path | None) -> None:
+    """All or nothing: every name is checked and every file extracted to a staging folder first; only then
+    are files moved into place. The previous laps.db and hub.toml are kept as *.before-restore."""
     data_dir.mkdir(parents=True, exist_ok=True)
     root = data_dir.resolve()
     with zipfile.ZipFile(zip_path) as z:
-        for name in z.namelist():
-            if name == "manifest.json":
-                continue
-            if name == "hub.toml":
-                if config_path is not None:
-                    config_path.parent.mkdir(parents=True, exist_ok=True)
-                    config_path.write_bytes(z.read(name))
-                continue
-            dest = data_dir / name
-            if not dest.resolve().is_relative_to(root):
+        names = [n for n in z.namelist() if n != "manifest.json" and not n.endswith("/")]
+        for name in names:
+            if name != "hub.toml" and not (data_dir / name).resolve().is_relative_to(root):
                 raise ValueError(f"Unsafe path in backup: {name}")
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            with z.open(name) as src, dest.open("wb") as out:
-                shutil.copyfileobj(src, out)
+        staging = Path(tempfile.mkdtemp(prefix=".restore-", dir=data_dir.parent))
+        try:
+            for name in names:
+                dest = staging / name
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                with z.open(name) as src, dest.open("wb") as out:
+                    shutil.copyfileobj(src, out)
+            for name in names:
+                staged = staging / name
+                if name == "hub.toml":
+                    if config_path is not None:
+                        config_path.parent.mkdir(parents=True, exist_ok=True)
+                        if config_path.exists():
+                            os.replace(config_path, config_path.with_name(config_path.name + ".before-restore"))
+                        shutil.move(str(staged), str(config_path))
+                    continue
+                dest = data_dir / name
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                if name == "laps.db":
+                    if dest.exists():
+                        os.replace(dest, dest.with_name("laps.db.before-restore"))
+                    for stale in ("laps.db-wal", "laps.db-shm"):   # left by a crash; must not replay onto the restored file
+                        (data_dir / stale).unlink(missing_ok=True)
+                os.replace(staged, dest)
+        finally:
+            shutil.rmtree(staging, ignore_errors=True)
 
 
 def last_backup(target_dir: Path) -> dict[str, Any] | None:
