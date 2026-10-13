@@ -328,7 +328,7 @@ packaged build uses a separate **python.org 3.11** in `.venv-build`.
 
 1. Install python.org Python 3.11 (`winget install -e --id Python.Python.3.11`).
 2. Create the build-only venv once: `"%LOCALAPPDATA%\Programs\Python\Python311\python.exe" -m venv .venv-build`
-3. Run `powershell -ExecutionPolicy Bypass -File packaginguild.ps1`. It builds the dashboard (`npm ci`,
+3. Run `powershell -ExecutionPolicy Bypass -File packagingbuild.ps1`. It builds the dashboard (`npm ci`,
    `npm run build`), runs PyInstaller (`packaging\pitwall.spec`) into `dist\Pitwall\` (one folder, `Pitwall.exe`
    plus `_internal\`), then smoke-tests the exe on HTTP port 8199 (`run --demo`). `build\` and `dist\` are not committed.
 
