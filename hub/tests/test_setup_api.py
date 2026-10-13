@@ -107,3 +107,13 @@ def test_setup_code_command_and_settings_layering(tmp_path, capsys):
     config = AppConfig(data_dir=tmp_path)
     assert apply_saved_settings(config, args) is True
     assert config.cafe.name == "Lap Lab" and config.owner.pin == "9999"
+
+
+def test_opening_hours_from_setup_reach_the_owner_report(tmp_path):
+    _, client, code = _client(tmp_path)
+    assert client.post("/api/setup", json=GOOD, headers=code).status_code == 200
+    pin = {"X-Owner-Pin": "2468"}
+    assert client.get("/api/owner/report", headers=pin).json()["open_hours"] == [10, 22]
+    r = client.post("/api/setup", json={**GOOD, "open_hour": 12, "close_hour": 20}, headers=pin)
+    assert r.status_code == 200
+    assert client.get("/api/owner/report", headers=pin).json()["open_hours"] == [12, 20]
