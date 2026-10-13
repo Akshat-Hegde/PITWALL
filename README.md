@@ -347,12 +347,16 @@ packaged build uses a separate **python.org 3.11** in `.venv-build`.
 2. Create the build-only venv once: `"%LOCALAPPDATA%\Programs\Python\Python311\python.exe" -m venv .venv-build`
 3. Run `powershell -ExecutionPolicy Bypass -File packaging\build.ps1`. It builds the dashboard (`npm ci`,
    `npm run build`), runs PyInstaller (`packaging\pitwall.spec`) into `dist\Pitwall\` (one folder, `Pitwall.exe`
-   plus `_internal\`), then smoke-tests the exe on HTTP port 8199 (`run --demo`). `build\` and `dist\` are not committed.
+   plus `_internal\`), smoke-tests the exe on HTTP port 8199 (`run --demo`, including a logo upload), then compiles
+   the installer with Inno Setup 6 (`winget install -e --id JRSoftware.InnoSetup`) into `dist\Pitwall-Setup-<version>.exe`.
+   `build\` and `dist\` are not committed. Never run the installer on the dev PC; see [docs/INSTALL-TEST.md](docs/INSTALL-TEST.md).
 
 Double-clicking `Pitwall.exe` (no arguments) starts the hub, same as `run`.
 
 ## Docs
 
+- [docs/INSTALL.md](docs/INSTALL.md): installing the hub at a cafe (requirements, setup code, backups, restore).
+- [docs/INSTALL-TEST.md](docs/INSTALL-TEST.md): the steps to test the installer on a spare PC or VM.
 - [docs/RIG_SETUP.md](docs/RIG_SETUP.md): in-game UDP settings for each rig.
 - [docs/TEST_PLAN.md](docs/TEST_PLAN.md): firewall setup and the end-to-end test checklist (2 PCs, 2 copies of F1 25).
 - [docs/WS_SCHEMA.md](docs/WS_SCHEMA.md): hub → dashboard WebSocket message format (v1, frozen).
