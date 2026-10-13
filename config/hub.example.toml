@@ -72,6 +72,12 @@ flip_x = false                         # find the right values with the dashboar
 flip_z = false                         # (docs/TEST_PLAN.md), then set them here
 rotate_deg = 0
 
+[backup]                               # nightly zip of laps, settings, branding and this file
+enabled = true
+# directory = "E:/pitwall-backups"     # default: a "backups" folder next to the data folder; a USB stick or synced folder is safer
+hour = 4                               # local hour of the nightly backup
+keep = 14                              # how many backups to keep
+
 # Rigs are auto-detected by source IP and named "Rig 1", "Rig 2", ...
 # Add entries to give them fixed names / colours.
 # [[rigs]]

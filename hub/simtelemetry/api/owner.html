@@ -148,6 +148,14 @@
       </section>
     </div>
 
+    <section class="card" id="backup-card">
+      <h2>Backups</h2>
+      <p class="sub" id="backup-last">Checking...</p>
+      <p class="sub">Folder: <span id="backup-dir"></span></p>
+      <button class="btn" type="button" id="backup-now">Back up now</button>
+      <span class="msg" id="backup-msg" role="status"></span>
+    </section>
+
     <details>
       <summary>Table: every day</summary>
       <div id="table"></div>
@@ -372,9 +380,30 @@
     });
   }
 
+  function showBackup(b) {
+    $("backup-dir").textContent = b.directory;
+    if (!b.last) { $("backup-last").textContent = "No backup yet"; return; }
+    const when = new Date(b.last.at).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    $("backup-last").textContent = `Last backup: ${when} \u00b7 ${(b.last.bytes / 1048576).toFixed(1)} MB`;
+  }
+  async function loadBackup() {
+    try { showBackup(await api("/api/owner/backup")); } catch { $("backup-last").textContent = "Backup status unavailable"; }
+  }
+  $("backup-now").addEventListener("click", async () => {
+    $("backup-msg").textContent = "Backing up...";
+    try {
+      const res = await fetch("/api/owner/backup", { method: "POST", headers: { "X-Owner-Pin": pin() } });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) throw new Error((body && body.detail) || `The hub answered ${res.status}.`);
+      showBackup(body);
+      $("backup-msg").textContent = "Done.";
+    } catch (err) { $("backup-msg").textContent = err.message; }
+  });
+
   async function load() {
     try {
       data = await api(`/api/owner/report?days=${days}`);
+      loadBackup();
       $("report").hidden = false;
       $("msg").textContent = "";
       render();

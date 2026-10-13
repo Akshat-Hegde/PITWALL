@@ -261,6 +261,17 @@ CSV** download the figures. Everything comes from the hub's own database; nothin
 A bookmark like `/owner#pin=1234` unlocks it on the owner's own device (the part after `#` never reaches the
 hub). `[features] owner = false` turns the page off.
 
+## Backups and restore
+
+Every night at `[backup] hour` (default 04:00) the hub saves `pitwall-YYYYMMDD-HHMM.zip` with the lap database
+(copied safely while the hub runs), the owner's settings, the uploaded logo and `hub.toml`, and keeps the last
+`keep` (14). The one-time setup code is never included. By default the zips go to a `backups` folder next to the
+data folder; point `[backup] directory` at a USB stick or a synced folder so a dead PC does not take them along.
+The owner page shows the last backup and has a **Back up now** button; `Pitwall.exe backup` does the same from a
+command prompt. `[backup] enabled = false` switches the nightly job off.
+
+To restore, stop the hub, then run `Pitwall.exe restore <zip>` (refused while the hub is running) and start the hub again.
+
 ## Demo mode
 
 `http://<hub or dev server>/?source=mock&demo=1` runs a busy cafe without any rig: six simulated drivers, a

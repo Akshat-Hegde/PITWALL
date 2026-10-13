@@ -5,6 +5,7 @@ The page shows business figures, so it stays locked until a PIN is set in the co
 
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -12,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
 
 from ..core.analytics import Analytics
+from ..core.backup import last_backup
 from .staff import PinGuard
 
 if TYPE_CHECKING:
@@ -57,5 +59,20 @@ def owner_router(hub: Hub) -> APIRouter:
         name = f"{kind}-last-{days}-days.csv"
         return Response(analytics.csv(kind, max(1, min(366, days))), media_type="text/csv",
                         headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+    def backup_status() -> dict[str, Any]:
+        return {"last": last_backup(config.backups_dir), "directory": str(config.backups_dir)}
+
+    @router.get("/api/owner/backup", dependencies=[Depends(check)])
+    def backup_get() -> dict[str, Any]:
+        return backup_status()
+
+    @router.post("/api/owner/backup", dependencies=[Depends(check)])
+    def backup_now() -> dict[str, Any]:
+        try:
+            hub.run_backup()
+        except (OSError, sqlite3.Error) as exc:
+            raise HTTPException(500, f"The backup failed: {exc}") from None
+        return backup_status()
 
     return router

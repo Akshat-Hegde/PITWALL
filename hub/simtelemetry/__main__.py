@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import datetime as dt
 import logging
 import socket
+import sqlite3
 import sys
 import time
+import zipfile
 from pathlib import Path
 
 import uvicorn
@@ -117,6 +120,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--config", type=Path, default=None, help="TOML config (default: config/hub.toml if present)")
     p.add_argument("--data-dir", type=Path, default=None, help="override data_dir from config")
     p.add_argument("--out", type=Path, default=None, help="folder to write to (default: the hub's bundled tracks)")
+
+    p = sub.add_parser("backup", help="make a backup now (laps, settings, branding, config) in the backup folder")
+    p.add_argument("--config", type=Path, default=None, help="TOML config (default: config/hub.toml if present)")
+    p.add_argument("--data-dir", type=Path, default=None, help="override data_dir from config")
+
+    p = sub.add_parser("restore", help="put a backup zip back (stop the hub first)")
+    p.add_argument("zip", type=Path, help="a backup zip made by the backup command or the nightly job")
+    p.add_argument("--config", type=Path, default=None, help="TOML config (default: config/hub.toml if present)")
+    p.add_argument("--data-dir", type=Path, default=None, help="override data_dir from config")
+    p.add_argument("--http-port", type=int, default=None, help="HTTP port the hub uses, to check it is stopped")
     return parser
 
 
@@ -207,6 +220,8 @@ async def run_hub(args: argparse.Namespace, hub: Hub, selection: SourceSelection
         hub.recorder.start()
     tasks = [asyncio.create_task(hub.consume()), asyncio.create_task(hub.tick_health()),
              asyncio.create_task(hub.tick_podium()), asyncio.create_task(hub.tick_competitions())]
+    if cmd == "run" and not demo and hub.config.backup.enabled and hub.drivers.store.path is not None:
+        tasks.append(asyncio.create_task(hub.backup_loop()))
     if print_lines:
         tasks.append(asyncio.create_task(print_status_lines(hub)))
     if demo:
@@ -287,6 +302,10 @@ def main(argv: list[str] | None = None) -> int:
         return save_outline(args, config)
     if args.command == "setup-code":
         return setup_code_command(args, config)
+    if args.command == "backup":
+        return backup_command(args, config)
+    if args.command == "restore":
+        return restore_command(args, config)
     lap_log = setup_logging(config.data_dir / "logs", args.verbose, args.lap_debug)
     if lap_log is not None:
         log.info("Lap debug log: %s", lap_log)
@@ -307,6 +326,46 @@ def setup_code_command(args: argparse.Namespace, config: AppConfig) -> int:
         print("Setup is done; use the owner PIN.")
         return 0
     print(code.ensure())
+    return 0
+
+
+def backup_command(args: argparse.Namespace, config: AppConfig) -> int:
+    """`backup`: one backup now; prints the zip path."""
+    from .core.backup import make_backup, prune
+    try:
+        out = make_backup(config.data_dir, args.config or paths.config_path(), config.backups_dir, dt.datetime.now())
+        prune(config.backups_dir, config.backup.keep)
+    except (OSError, sqlite3.Error) as exc:
+        print(f"ERROR: backup failed: {exc}", file=sys.stderr)
+        return 2
+    print(out)
+    return 0
+
+
+def hub_is_running(port: int) -> bool:
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+            return True
+    except OSError:
+        return False
+
+
+def restore_command(args: argparse.Namespace, config: AppConfig) -> int:
+    """`restore <zip>`: refuses while the hub answers on its HTTP port."""
+    from .core.backup import restore
+    port = config.network.http_port
+    if hub_is_running(port):
+        print(f"ERROR: the hub is running (port {port} answers). Stop it, then restore.", file=sys.stderr)
+        return 2
+    if not args.zip.is_file():
+        print(f"ERROR: no such backup file: {args.zip}", file=sys.stderr)
+        return 2
+    try:
+        restore(args.zip, config.data_dir, args.config or paths.config_path())
+    except (OSError, ValueError, zipfile.BadZipFile) as exc:
+        print(f"ERROR: restore failed: {exc}", file=sys.stderr)
+        return 2
+    print(f"Restored {args.zip} into {config.data_dir}. Start the hub again.")
     return 0
 
 

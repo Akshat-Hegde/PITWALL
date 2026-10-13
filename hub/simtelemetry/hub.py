@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import logging
+import sqlite3
 import time
 from typing import Any
 
+from . import paths
 from .config import AppConfig
 from .core.adapter import Checked, GameAdapter
 from .core.health import HealthMonitor, RigState
@@ -20,6 +23,12 @@ log = logging.getLogger(__name__)
 
 QUEUE_MAX = 20_000  # ~10 rigs x 60 Hz x 6 packets for >5 s of backlog
 DROP_QUEUE_FULL = "queue_full"
+
+
+def next_backup_at(now: dt.datetime, hour: int) -> dt.datetime:
+    """The next local `hour`:00 strictly after `now`."""
+    at = now.replace(hour=hour, minute=0, second=0, microsecond=0)
+    return at if at > now else at + dt.timedelta(days=1)
 
 
 class Hub:
@@ -229,6 +238,25 @@ class Hub:
                 self.announce_challenge_winners()
             except Exception:
                 log.exception("Challenge winner check failed")
+
+    def run_backup(self, now: dt.datetime | None = None):
+        """One backup now plus pruning; returns the zip path. Blocking: call from a thread."""
+        from .core.backup import make_backup, prune
+        cfg = self.config
+        out = make_backup(cfg.data_dir, paths.config_path(), cfg.backups_dir, now or dt.datetime.now())
+        prune(cfg.backups_dir, cfg.backup.keep)
+        return out
+
+    async def backup_loop(self) -> None:
+        """Back up every night at [backup] hour. Never ends the hub: a failed backup is a warning."""
+        while True:
+            at = next_backup_at(dt.datetime.now(), self.config.backup.hour)
+            await asyncio.sleep(max(1.0, (at - dt.datetime.now()).total_seconds()))
+            try:
+                out = await asyncio.to_thread(self.run_backup)
+                log.info("Backup saved: %s", out)
+            except (OSError, sqlite3.Error) as exc:
+                log.warning("Backup failed (will try again tomorrow): %s", exc)
 
     async def drain(self) -> None:
         """Wait until every queued packet has been decoded (used after a replay)."""

@@ -141,6 +141,13 @@ class RigConfig(_Section):
     colour: str | None = None
 
 
+class BackupConfig(_Section):
+    enabled: bool = True
+    directory: Path | None = None   # default: <data_dir>/../backups; a USB stick or synced folder is better
+    hour: int = Field(4, ge=0, le=23)   # local hour for the nightly backup
+    keep: int = Field(14, ge=1, le=365)
+
+
 class AppConfig(_Section):
     data_dir: Path = Path("data")
     cafe: CafeConfig = Field(default_factory=CafeConfig)
@@ -155,6 +162,7 @@ class AppConfig(_Section):
     features: FeaturesConfig = Field(default_factory=FeaturesConfig)
     moments: MomentsConfig = Field(default_factory=MomentsConfig)
     sounds: SoundsConfig = Field(default_factory=SoundsConfig)
+    backup: BackupConfig = Field(default_factory=BackupConfig)
     rigs: list[RigConfig] = Field(default_factory=list)
     track_names: dict[int, str] = Field(default_factory=dict)  # trackId -> display name override
 
@@ -164,6 +172,10 @@ class AppConfig(_Section):
     @property
     def recordings_dir(self) -> Path:
         return self.recorder.directory or self.data_dir / "recordings"
+
+    @property
+    def backups_dir(self) -> Path:
+        return self.backup.directory or self.data_dir.parent / "backups"
 
 
 def load_config(path: Path | None = None) -> AppConfig:

@@ -15,6 +15,7 @@ dashboard/dist/
 # Runtime data (SQLite, track outlines, logs, recordings)
 data/
 recordings/
+/backups/
 *.f1rec
 *.sqlite
 *.sqlite3
