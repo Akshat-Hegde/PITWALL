@@ -13,7 +13,7 @@ from pathlib import Path
 import uvicorn
 
 from .adapters.f1.adapter import F1Adapter
-from . import paths
+from . import __version__, brand, paths
 from .api.app import create_app
 from .config import AppConfig, ConfigError, load_config
 from .core.health import RigState
@@ -58,6 +58,7 @@ def build_parser() -> argparse.ArgumentParser:
                              "session history update) to the console and data/logs/lap-debug-*.log")
 
     parser = argparse.ArgumentParser(prog="simtelemetry", description="Sim racing cafe telemetry hub")
+    parser.add_argument("--version", action="version", version=f"{brand.PRODUCT_NAME} {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("run", parents=[common], help="hub + TV dashboard and API")
@@ -252,6 +253,9 @@ def port_in_use_message(exc: PortInUseError) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if not argv:
+        argv = ["run"]  # double-clicking Pitwall.exe starts the hub
     args = build_parser().parse_args(argv)
     if args.command == "seed-demo":
         from .tools.seed_demo import DemoTargetError, seed

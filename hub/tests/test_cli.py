@@ -187,3 +187,20 @@ def test_port_shadow_warning(monkeypatch):
     assert message.startswith(f"Another program (simpro3.exe) is listening on 127.0.0.1:{port}")
     assert "UDP IP Address to this PC's network address" in message
     assert udp.port_shadows(port) == []
+
+
+def test_version_flag(capsys):
+    import simtelemetry
+    try:
+        main(["--version"])
+    except SystemExit as exc:
+        assert exc.code == 0
+    assert simtelemetry.__version__ in capsys.readouterr().out
+
+
+def test_double_click_means_run(monkeypatch, tmp_path):
+    from simtelemetry import brand
+    monkeypatch.setenv(brand.HOME_ENV, str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("simtelemetry.__main__.run_command", lambda args, config: args.command)
+    assert main([]) == "run"

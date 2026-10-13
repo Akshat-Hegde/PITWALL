@@ -318,13 +318,21 @@ not, with no flashback) and refined by averaging in the next four. To ship a goo
 
 A bundled track file is used straight away on every hub and never replaced by a learned outline.
 
-## Python on the dev machine
+## Python on the dev machine and building the installer
 
-The current dev machine uses the **Microsoft Store** build of Python 3.11. That's fine for development, but
-before packaging (Windows installer, background service, tray icon: a later milestone) we will switch to a
-**python.org 3.11 install**. Store Python is unreliable with PyInstaller and with Windows Firewall
-*program* rules (the real executable is hidden under `WindowsApps` and the venv's `python.exe` is only a
-launcher). Until then, use the port-based firewall rule in [docs/TEST_PLAN.md](docs/TEST_PLAN.md).
+Day-to-day development uses the **Microsoft Store** build of Python 3.11 in `.venv`. That is fine for running the
+hub and the tests, but Store Python is unreliable with PyInstaller and with Windows Firewall *program* rules, so the
+packaged build uses a separate **python.org 3.11** in `.venv-build`.
+
+## Building the installer
+
+1. Install python.org Python 3.11 (`winget install -e --id Python.Python.3.11`).
+2. Create the build-only venv once: `"%LOCALAPPDATA%\Programs\Python\Python311\python.exe" -m venv .venv-build`
+3. Run `powershell -ExecutionPolicy Bypass -File packaginguild.ps1`. It builds the dashboard (`npm ci`,
+   `npm run build`), runs PyInstaller (`packaging\pitwall.spec`) into `dist\Pitwall\` (one folder, `Pitwall.exe`
+   plus `_internal\`), then smoke-tests the exe on HTTP port 8199 (`run --demo`). `build\` and `dist\` are not committed.
+
+Double-clicking `Pitwall.exe` (no arguments) starts the hub, same as `run`.
 
 ## Docs
 
