@@ -17,7 +17,8 @@ a = Analysis(
         (str(PKG / "tracks"), "simtelemetry/tracks"),
     ],
     hiddenimports=["uvicorn.logging", "uvicorn.loops.auto", "uvicorn.protocols.http.auto",
-                   "uvicorn.protocols.websockets.auto", "uvicorn.lifespan.on"],
+                   "uvicorn.protocols.websockets.auto", "uvicorn.lifespan.on",
+                   "python_multipart", "multipart"],
     excludes=["pytest", "tkinter"],
 )
 pyz = PYZ(a.pure)

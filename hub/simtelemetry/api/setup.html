@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0c0d11">
+<title>Setup</title>
+<style>
+  :root {
+    --bg: #0c0d11;
+    --panel: #14151b;
+    --panel-2: #1b1c24;
+    --edge: #262731;
+    --line: rgba(255, 255, 255, 0.08);
+    --text: #fff;
+    --text-2: rgba(255, 255, 255, 0.6);
+    --text-3: rgba(255, 255, 255, 0.38);
+    --accent: #e10600;
+    --ok: #38d97a;
+    --warn: #f2c230;
+    --error: #ff6b6b;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.4 "Saira", "Segoe UI", system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
+  }
+  header.top { position: sticky; top: 0; z-index: 2; background: var(--bg); border-bottom: 1px solid var(--line); }
+  .kerb { height: 7px; width: 300px; background: linear-gradient(180deg, var(--accent) 0 2px, transparent 2px 4px, var(--accent) 4px 7px); clip-path: polygon(0 0, 100% 0, calc(100% - 6px) 100%, 0 100%); }
+  .bar { display: flex; align-items: center; gap: 12px; max-width: 720px; margin: 0 auto; padding: 10px 16px; }
+  .brand { flex: 1; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+  .pwmark { flex: none; display: block; }
+  main { max-width: 720px; margin: 0 auto; padding: 16px; }
+  .panel {
+    background: var(--panel);
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    border-left: 4px solid var(--edge);
+    clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%);
+  }
+  .title { font-size: 1.2rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.02em; }
+  .muted { color: var(--text-2); font-size: 0.9rem; }
+  label { display: block; font-size: 0.85rem; color: var(--text-2); margin: 10px 0 4px; letter-spacing: 0.04em; }
+  input, select {
+    width: 100%; min-width: 0; padding: 11px 12px; font: inherit; color: var(--text);
+    background: var(--panel-2); border: 1px solid var(--edge); border-radius: 0;
+  }
+  input[type="color"] { padding: 2px; height: 44px; width: 64px; }
+  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0; }
+  .grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 10px; }
+  .actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; align-items: center; }
+  button.btn, label.btn {
+    display: inline-block; width: auto; margin: 0; padding: 11px 16px; border: 1px solid var(--edge);
+    background: var(--panel-2); color: var(--text); font: inherit; font-weight: 700; cursor: pointer;
+  }
+  button.btn.primary { background: var(--accent); border-color: var(--accent); }
+  button:disabled { opacity: 0.45; cursor: default; }
+  .msg { margin: 8px 0 0; min-height: 1.3em; font-size: 0.92rem; }
+  .msg.ok { color: var(--ok); }
+  .msg.error { color: var(--error); }
+  .swatches { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .swatches button { width: 36px; height: 36px; padding: 0; border: 2px solid var(--edge); cursor: pointer; }
+  .swatches button[aria-pressed="true"] { border-color: #fff; }
+  .logo-row { display: flex; align-items: center; gap: 12px; }
+  .logo-row img { max-width: 120px; max-height: 64px; background: var(--panel-2); }
+  .rigbox { margin-top: 8px; padding: 10px 12px; background: var(--panel-2); border-left: 3px solid var(--accent); }
+  .warn { color: var(--warn); font-size: 0.9rem; margin-top: 8px; }
+  ul.list { list-style: none; margin: 8px 0 0; padding: 0; }
+  ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
+  [hidden] { display: none !important; }
+  @media (max-width: 440px) { .grid2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="kerb"></div>
+  <div class="bar">
+    <svg class="pwmark" viewBox="-11 0 52 28" width="35" height="19" aria-hidden="true"><g transform="translate(0 14) skewX(-10.9) translate(0 -14)"><rect x="3.8" y="8" width="3" height="3" fill="#fff" opacity="0.84"/><rect x="-2.2" y="8" width="3" height="3" fill="#fff" opacity="0.52"/><rect x="-8.2" y="8" width="3" height="3" fill="#fff" opacity="0.2"/><rect x="6.8" y="11" width="3" height="3" fill="#fff" opacity="1.0"/><rect x="0.8" y="11" width="3" height="3" fill="#fff" opacity="0.68"/><rect x="-5.2" y="11" width="3" height="3" fill="#fff" opacity="0.36"/><rect x="3.8" y="14" width="3" height="3" fill="#fff" opacity="0.84"/><rect x="-2.2" y="14" width="3" height="3" fill="#fff" opacity="0.52"/><rect x="-8.2" y="14" width="3" height="3" fill="#fff" opacity="0.2"/><rect x="6.8" y="17" width="3" height="3" fill="#fff" opacity="1.0"/><rect x="0.8" y="17" width="3" height="3" fill="#fff" opacity="0.68"/><rect x="-5.2" y="17" width="3" height="3" fill="#fff" opacity="0.36"/></g><path fill="#E10600" fill-rule="evenodd" d="M14 0 H33 C38.5 0 40.6 3.6 39.4 8.2 L38.4 12 C37.2 16.6 33.8 19 28.6 19 H19.9 L17.4 28 H8.6 Z M22.8 6.4 L21.6 12.4 H28.4 C30.1 12.4 31 11.6 31.4 10.2 L31.8 8.6 C32.2 7.2 31.6 6.4 30 6.4 Z"/></svg>
+    <h1 class="brand" id="heading" style="margin:0;font-size:1rem">Set up <span id="product"></span></h1>
+  </div>
+</header>
+
+<main>
+  <section class="panel" id="code-panel" hidden>
+    <div class="title">Setup code</div>
+    <label for="code">Enter the setup code shown at the end of the installer</label>
+    <input id="code" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX">
+    <p class="muted">It is also in the hub's log, or run <code>setup-code</code> on the hub PC.</p>
+  </section>
+
+  <form id="form" autocomplete="off">
+    <section class="panel">
+      <div class="title">Cafe</div>
+      <label for="name">Cafe name</label>
+      <input id="name" maxlength="40" required>
+      <label for="tagline">Tagline (optional)</label>
+      <input id="tagline" maxlength="60">
+      <label>Logo (PNG, JPEG or WebP, under 1 MB)</label>
+      <div class="logo-row">
+        <img id="logo-preview" alt="" hidden>
+        <label class="btn" for="logo-file">Choose a logo</label>
+        <input id="logo-file" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+      </div>
+      <div class="msg" id="logo-msg"></div>
+      <label>Accent colour</label>
+      <div class="swatches" id="swatches">
+        <input id="accent" type="color" value="#e10600" aria-label="Accent colour">
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="title">Opening hours</div>
+      <div class="grid2">
+        <div><label for="open">Opens</label><select id="open"></select></div>
+        <div><label for="close">Closes</label><select id="close"></select></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="title">PINs</div>
+      <div class="grid2">
+        <div><label for="owner-pin">Owner PIN (4 to 8 digits)</label>
+          <input id="owner-pin" type="password" inputmode="numeric" pattern="[0-9]{4,8}" maxlength="8" required></div>
+        <div><label for="staff-pin">Staff PIN (optional)</label>
+          <input id="staff-pin" type="password" inputmode="numeric" pattern="([0-9]{4,8})?" maxlength="8"></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="title">Rigs</div>
+      <div class="rigbox">
+        On each rig in F1 25 (Settings, Telemetry): UDP telemetry on, UDP IP address
+        <strong id="hub-ip"></strong>, port <strong id="udp-port"></strong>, format 2025.
+      </div>
+      <div class="warn">Reserve this address for the hub PC in your router (DHCP reservation), or rigs lose the hub when the router restarts.</div>
+      <ul class="list" id="rigs"></ul>
+    </section>
+
+    <div class="actions">
+      <button class="btn primary" type="submit" id="save">Save</button>
+    </div>
+    <div class="msg" id="msg" role="status"></div>
+  </form>
+</main>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const SWATCHES = ["#E10600", "#FF2A6D", "#2D7FF9", "#14B8A6", "#F59E0B", "#8B5CF6"];
+  let state = null;
+  let ownerPin = "";
+
+  function say(el, text, kind) { el.textContent = text; el.className = "msg" + (kind ? " " + kind : ""); }
+
+  function authHeaders() {
+    const h = {};
+    if (state && state.needs_code) h["X-Setup-Code"] = $("code").value;
+    else if (ownerPin) h["X-Owner-Pin"] = ownerPin;
+    return h;
+  }
+
+  function hours() {
+    for (const [id, from, to] of [["open", 0, 23], ["close", 1, 24]]) {
+      const sel = $(id);
+      for (let h = from; h <= to; h++) sel.add(new Option(String(h).padStart(2, "0") + ":00", h));
+    }
+  }
+
+  function pickAccent(value) {
+    $("accent").value = value.toLowerCase();
+    for (const b of document.querySelectorAll("#swatches button")) b.setAttribute("aria-pressed", String(b.dataset.c.toLowerCase() === value.toLowerCase()));
+  }
+
+  function swatches() {
+    for (const c of SWATCHES) {
+      const b = document.createElement("button");
+      b.type = "button"; b.dataset.c = c; b.style.background = c; b.title = c; b.setAttribute("aria-label", c);
+      b.addEventListener("click", () => pickAccent(c));
+      $("swatches").appendChild(b);
+    }
+    $("accent").addEventListener("input", () => pickAccent($("accent").value));
+  }
+
+  function showLogo() {
+    const img = $("logo-preview");
+    img.hidden = !(state && state.logo);
+    if (!img.hidden) img.src = "/api/cafe/logo?t=" + Date.now();
+  }
+
+  function fill(s) {
+    state = s;
+    $("product").textContent = s.product;
+    document.title = "Setup " + s.product;
+    $("code-panel").hidden = !s.needs_code;
+    $("name").value = s.name;
+    $("tagline").value = s.tagline || "";
+    $("open").value = s.open_hour;
+    $("close").value = s.close_hour;
+    pickAccent(s.accent);
+    $("hub-ip").textContent = s.hub_address;
+    $("udp-port").textContent = s.udp_port;
+    $("rigs").replaceChildren(...s.rigs.map((r) => { const li = document.createElement("li"); li.textContent = r.name; return li; }));
+    if (!s.rigs.length) { const li = document.createElement("li"); li.className = "muted"; li.textContent = "No rigs have sent data yet."; $("rigs").appendChild(li); }
+    showLogo();
+  }
+
+  async function load() {
+    const r = await fetch("/api/setup");
+    fill(await r.json());
+  }
+
+  // Sends the request; once setup is done a 401 means the owner PIN is needed: ask and retry.
+  async function call(url, init) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const r = await fetch(url, { ...init, headers: { ...(init.headers || {}), ...authHeaders() } });
+      if (r.status === 401 && state && !state.needs_code) {
+        const pin = prompt(attempt ? "Wrong PIN. Enter the owner PIN" : "Enter the owner PIN to change the setup");
+        if (!pin) return r;
+        ownerPin = pin;
+        continue;
+      }
+      return r;
+    }
+  }
+
+  async function detail(r) {
+    try { return (await r.json()).detail; } catch { return "Something went wrong."; }
+  }
+
+  $("logo-file").addEventListener("change", async () => {
+    const f = $("logo-file").files[0];
+    if (!f) return;
+    const body = new FormData();
+    body.append("file", f);
+    const r = await call("/api/setup/logo", { method: "POST", body });
+    if (r.ok) { state.logo = (await r.json()).logo; showLogo(); say($("logo-msg"), "Logo uploaded.", "ok"); }
+    else say($("logo-msg"), await detail(r), "error");
+  });
+
+  $("form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const body = {
+      name: $("name").value.trim(), tagline: $("tagline").value.trim(), accent: $("accent").value.toUpperCase(),
+      owner_pin: $("owner-pin").value, staff_pin: $("staff-pin").value,
+      open_hour: Number($("open").value), close_hour: Number($("close").value),
+    };
+    $("save").disabled = true;
+    try {
+      const r = await call("/api/setup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      if (r.ok) {
+        ownerPin = body.owner_pin;
+        fill(await r.json());
+        say($("msg"), "Saved. Your TV updates in a few seconds.", "ok");
+      } else say($("msg"), await detail(r), "error");
+    } finally { $("save").disabled = false; }
+  });
+
+  hours();
+  swatches();
+  load();
+})();
+</script>
+</body>
+</html>

@@ -24,6 +24,8 @@ class _Section(BaseModel):
 
 class CafeConfig(_Section):
     name: str = "Sim Racing Cafe"
+    tagline: str = ""
+    logo: str | None = None  # file name in <data_dir>/branding/, set from /setup
     # CSS custom properties for the dashboard, e.g. {"--brand-accent" = "#e10600"}.
     branding: dict[str, str] = Field(default_factory=dict)
 

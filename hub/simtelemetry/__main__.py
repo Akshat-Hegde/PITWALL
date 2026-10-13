@@ -1,4 +1,4 @@
-"""Command line: python -m simtelemetry {run,listen,record,replay} ..."""
+"""Command line: python -m simtelemetry {run,listen,record,replay,setup-code} ..."""
 
 from __future__ import annotations
 
@@ -16,8 +16,11 @@ from .adapters.f1.adapter import F1Adapter
 from . import __version__, brand, paths
 from .api.app import create_app
 from .config import AppConfig, ConfigError, load_config
+from .core.feed import lan_address
 from .core.health import RigState
 from .core.rigs import RigRegistry
+from .core.settings import SettingsStore, apply_settings
+from .core.setup_code import SetupCode
 from .hub import Hub
 from .logging_setup import setup_logging, teardown_logging
 from .net.udp import PortInUseError, UdpListener, bind_socket, port_shadows
@@ -103,6 +106,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--data-dir", type=Path, default=None,
                    help="demo data folder (default data-demo in the home folder); must be empty or made by seed-demo before")
     p.add_argument("--days", type=int, default=60, help="days of history (default 60)")
+
+    p = sub.add_parser("setup-code", help="show the one-time first-run setup code (--new makes a fresh one)")
+    p.add_argument("--new", action="store_true", help="make a fresh code and print it (the installer does this)")
+    p.add_argument("--config", type=Path, default=None, help="TOML config (default: config/hub.toml if present)")
+    p.add_argument("--data-dir", type=Path, default=None, help="override data_dir from config")
 
     p = sub.add_parser("save-outline", help="save a track outline the hub learned as a bundled track file")
     p.add_argument("track", nargs="?", help="track key (e.g. F1:7) or name; omit to list the learned outlines")
@@ -277,6 +285,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.command == "save-outline":
         return save_outline(args, config)
+    if args.command == "setup-code":
+        return setup_code_command(args, config)
     lap_log = setup_logging(config.data_dir / "logs", args.verbose, args.lap_debug)
     if lap_log is not None:
         log.info("Lap debug log: %s", lap_log)
@@ -284,6 +294,31 @@ def main(argv: list[str] | None = None) -> int:
         return run_command(args, config)
     finally:
         teardown_logging()  # main() may be called again in-process (tests); don't leave handlers behind
+
+
+def setup_code_command(args: argparse.Namespace, config: AppConfig) -> int:
+    """`setup-code`: --new makes and prints a fresh code; otherwise print the current one."""
+    code = SetupCode(config.data_dir)
+    if args.new:
+        print(code.new())
+        return 0
+    s = SettingsStore(config.data_dir).load()
+    if s is not None and s.setup_done:
+        print("Setup is done; use the owner PIN.")
+        return 0
+    print(code.ensure())
+    return 0
+
+
+def apply_saved_settings(config: AppConfig, args: argparse.Namespace) -> bool:
+    """Layer the owner's /setup choices over hub.toml. Command-line flags still win. True if setup is done."""
+    s = SettingsStore(config.data_dir).load()
+    if s is None:
+        return False
+    apply_settings(config, s)
+    if getattr(args, "owner_pin", None):
+        config.owner.pin = args.owner_pin
+    return s.setup_done
 
 
 def save_outline(args: argparse.Namespace, config: AppConfig) -> int:
@@ -338,6 +373,12 @@ def run_command(args: argparse.Namespace, config: AppConfig) -> int:
         except DemoTargetError as exc:
             print(f"\nERROR: {exc}\n", file=sys.stderr)
             return 2
+    if not getattr(args, "demo", False):
+        setup_done = apply_saved_settings(config, args)
+        if args.command == "run" and not setup_done:
+            # Console and logs/hub.log only; never the TV or the API.
+            log.warning("First-run setup: open http://%s:%d/setup and enter setup code %s",
+                        lan_address(), config.network.http_port, SetupCode(config.data_dir).ensure())
     registry = RigRegistry(config, config.data_dir / "rigs.json")
     recorder = None
     if should_record(args, config):

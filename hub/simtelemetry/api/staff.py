@@ -9,6 +9,7 @@ from __future__ import annotations
 import hmac
 import time
 from collections import defaultdict, deque
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -32,14 +33,15 @@ STATE_TEXT = {RigState.DRIVING: "On track", RigState.IN_MENU: "In menu", RigStat
 
 
 class PinGuard:
-    def __init__(self, pin: str, clock=time.monotonic, header: str = PIN_HEADER) -> None:
-        self.pin = pin
+    def __init__(self, pin: Callable[[], str], clock=time.monotonic, header: str = PIN_HEADER) -> None:
+        self._pin = pin  # read on every request, so a PIN changed from /setup applies at once
         self.header = header
         self._clock = clock
         self._failures: dict[str, deque[float]] = defaultdict(deque)
 
     def __call__(self, request: Request) -> None:
-        if not self.pin:
+        pin = self._pin()
+        if not pin:
             return
         client = request.client.host if request.client else "?"
         now = self._clock()
@@ -49,7 +51,7 @@ class PinGuard:
         if len(failures) >= MAX_FAILURES:
             raise HTTPException(429, "Too many wrong PINs. Wait a minute, then try again.")
         given = request.headers.get(self.header, "")
-        if not hmac.compare_digest(given.encode(), self.pin.encode()):
+        if not hmac.compare_digest(given.encode(), pin.encode()):
             if given:
                 failures.append(now)
             raise HTTPException(401, "Wrong PIN." if given else "Enter the staff PIN.")
@@ -61,7 +63,7 @@ def _bad(exc: DriverError) -> HTTPException:
 
 def staff_router(hub: Hub) -> APIRouter:
     router = APIRouter()
-    guard = PinGuard(hub.config.staff.pin)
+    guard = PinGuard(lambda: hub.config.staff.pin)
     drivers = hub.drivers
 
     def rig_row(rig, now: float) -> dict[str, Any]:

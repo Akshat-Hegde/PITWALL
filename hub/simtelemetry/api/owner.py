@@ -25,7 +25,7 @@ CSV_KINDS = ("daily", "sessions", "laps")
 def owner_router(hub: Hub) -> APIRouter:
     router = APIRouter()
     config = hub.config
-    guard = PinGuard(config.owner.pin, header=OWNER_PIN_HEADER)
+    guard = PinGuard(lambda: config.owner.pin, header=OWNER_PIN_HEADER)
     analytics = Analytics(hub.drivers.store, config.leaderboard.day_start_hour, config.owner.open_hour,
                           config.owner.close_hour, rig_label=hub.rig_label)
 

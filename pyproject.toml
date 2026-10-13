@@ -13,6 +13,7 @@ dependencies = [
     "websockets>=12",
     "pydantic>=2.6",
     "segno>=1.6",           # QR codes for story cards (pure Python, offline)
+    "python-multipart>=0.0.9",  # logo upload on /setup
 ]
 
 [project.optional-dependencies]

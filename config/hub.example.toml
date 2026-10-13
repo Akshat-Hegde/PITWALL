@@ -2,6 +2,7 @@
 
 data_dir = "data"                      # SQLite, track outlines, logs, recordings
 
+# The owner's /setup page overrides name, branding, PINs and opening hours via data/settings.json.
 [cafe]
 name = "Sim Racing Cafe"
 

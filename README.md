@@ -198,6 +198,12 @@ Options (run from a terminal in `tools\windows`, or put them in a shortcut):
 For a TV PC that should come back by itself after a power cut, also set Windows to sign in automatically
 (or use a dedicated local account) and set the BIOS to power on after AC loss.
 
+## First-run setup
+
+The owner sets the cafe up in a browser at `http://<hub PC>:8000/setup`: name, tagline, logo, accent colour, opening hours, owner PIN and staff PIN. The choices are saved in `data/settings.json` and override `config/hub.toml` (a `--owner-pin` flag still wins).
+
+Before setup is done, `/setup` needs the one-time setup code. The installer makes it and shows it on its last page; a hub started from source makes one on first start. While setup is not done the hub logs it at every start (console and `data/logs/hub.log`, never the TV). On the hub PC, `python -m simtelemetry setup-code` prints it (`--new` makes a fresh one). Ten wrong codes lock the page for a minute. After setup the code is deleted and `/setup` asks for the owner PIN.
+
 ## Staff page and driver profiles
 
 Open `http://<hub>:8000/staff` on a phone or tablet. Tabs (a link like `/staff#queue` opens one):

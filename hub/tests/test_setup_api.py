@@ -1,0 +1,109 @@
+"""First-run setup page and API; branding upload; owner PIN once set up."""
+
+from __future__ import annotations
+
+from fastapi.testclient import TestClient
+
+from simtelemetry.api.app import create_app
+from simtelemetry.core.setup_code import SetupCode
+
+from test_drivers import make_hub
+
+PNG = (b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
+       b"\x00\x00\x00\rIDATx\x9cc\xf8\xff\xff?\x00\x05\xfe\x02\xfe\xa7\x9a\xa0\xa0\x00\x00\x00\x00IEND\xaeB`\x82")
+GOOD = {"name": "Lap Lab", "tagline": "Beat the board", "accent": "#FF2A6D", "owner_pin": "2468",
+        "staff_pin": "", "open_hour": 10, "close_hour": 22}
+
+
+def _client(tmp_path):
+    code = SetupCode(tmp_path).new()                      # what the installer does
+    hub = make_hub(tmp_path)
+    return hub, TestClient(create_app(hub, dashboard_dir=tmp_path / "none")), {"X-Setup-Code": code}
+
+
+def test_first_run_needs_the_setup_code_then_the_pin(tmp_path):
+    hub, client, code = _client(tmp_path)
+    assert "Set up" in client.get("/setup").text
+    state = client.get("/api/setup").json()
+    assert state["setup_done"] is False and state["needs_code"] is True and "hub_address" in state
+    r = client.post("/api/setup", json=GOOD)                          # someone else on the LAN, no code
+    assert r.status_code == 401 and "setup code" in r.json()["detail"]
+    assert client.post("/api/setup", json=GOOD, headers={"X-Setup-Code": "AAAA-AAAA"}).status_code == 401
+    r = client.post("/api/setup", json=GOOD, headers=code)
+    assert r.status_code == 200
+    assert hub.config.cafe.name == "Lap Lab" and hub.config.owner.pin == "2468"
+    assert SetupCode(tmp_path).current() is None                     # used up
+    assert client.post("/api/setup", json={**GOOD, "name": "Other"}, headers=code).status_code == 401
+    ok = client.post("/api/setup", json={**GOOD, "name": "Lap Lab 2"}, headers={"X-Owner-Pin": "2468"})
+    assert ok.status_code == 200 and hub.config.cafe.name == "Lap Lab 2"
+
+
+def test_setup_code_never_in_api_responses(tmp_path):
+    _, client, code = _client(tmp_path)
+    secret = code["X-Setup-Code"]
+    assert secret not in client.get("/api/setup").text and secret not in client.get("/setup").text
+
+
+def test_too_many_wrong_codes_locks(tmp_path):
+    _, client, _ = _client(tmp_path)
+    for _ in range(10):
+        client.post("/api/setup", json=GOOD, headers={"X-Setup-Code": "AAAA-AAAA"})
+    assert client.post("/api/setup", json=GOOD, headers={"X-Setup-Code": "AAAA-AAAA"}).status_code == 429
+
+
+def test_owner_pin_after_setup_is_rate_limited(tmp_path):
+    _, client, code = _client(tmp_path)
+    assert client.post("/api/setup", json=GOOD, headers=code).status_code == 200
+    for _ in range(5):
+        assert client.post("/api/setup", json=GOOD, headers={"X-Owner-Pin": "0000"}).status_code == 401
+    assert client.post("/api/setup", json=GOOD, headers={"X-Owner-Pin": "0000"}).status_code == 429
+    assert client.post("/api/setup", json=GOOD, headers={"X-Owner-Pin": "2468"}).status_code == 429
+
+
+def test_bad_values_are_400(tmp_path):
+    _, client, code = _client(tmp_path)
+    r = client.post("/api/setup", json={**GOOD, "accent": "pink"}, headers=code)
+    assert r.status_code == 400 and "accent" in r.json()["detail"]
+
+
+def test_pins_set_in_setup_apply_without_restart(tmp_path):
+    hub, client, code = _client(tmp_path)
+    assert client.get("/api/staff/rigs").status_code == 200             # no staff PIN yet
+    assert client.get("/api/owner/report").status_code == 403           # owner page locked until a PIN is set
+    r = client.post("/api/setup", json={**GOOD, "staff_pin": "1357"}, headers=code)
+    assert r.status_code == 200
+    assert client.get("/api/staff/rigs").status_code == 401
+    assert client.get("/api/staff/rigs", headers={"X-Staff-Pin": "1357"}).status_code == 200
+    assert client.get("/api/owner/report").status_code == 401
+    assert client.get("/api/owner/report", headers={"X-Owner-Pin": "2468"}).status_code == 200
+
+
+def test_logo_upload_and_serve(tmp_path):
+    hub, client, code = _client(tmp_path)
+    assert client.post("/api/setup/logo", files={"file": ("logo.png", PNG, "image/png")}).status_code == 401
+    r = client.post("/api/setup/logo", files={"file": ("logo.png", PNG, "image/png")}, headers=code)
+    assert r.status_code == 200 and hub.config.cafe.logo == r.json()["logo"]
+    got = client.get("/api/cafe/logo")
+    assert got.status_code == 200 and got.content == PNG and got.headers["content-type"] == "image/png"
+    bad = client.post("/api/setup/logo", files={"file": ("x.exe", b"MZ", "application/octet-stream")}, headers=code)
+    assert bad.status_code == 400
+    big = PNG + b"\0" * (1024 * 1024)
+    assert client.post("/api/setup/logo", files={"file": ("big.png", big, "image/png")}, headers=code).status_code == 400
+
+
+def test_setup_code_command_and_settings_layering(tmp_path, capsys):
+    from simtelemetry.__main__ import apply_saved_settings, build_parser, main
+    from simtelemetry.config import AppConfig
+    from simtelemetry.core.settings import CafeSettings, SettingsStore
+    assert main(["setup-code", "--new", "--data-dir", str(tmp_path)]) == 0
+    printed = capsys.readouterr().out.strip()
+    assert printed == SetupCode(tmp_path).current()
+    assert main(["setup-code", "--data-dir", str(tmp_path)]) == 0 and capsys.readouterr().out.strip() == printed
+    SettingsStore(tmp_path).save(CafeSettings(name="Lap Lab", owner_pin="2468", setup_done=True))
+    assert main(["setup-code", "--data-dir", str(tmp_path)]) == 0
+    assert "Setup is done" in capsys.readouterr().out
+    # a --owner-pin flag still wins over settings.json
+    args = build_parser().parse_args(["run", "--owner-pin", "9999", "--data-dir", str(tmp_path)])
+    config = AppConfig(data_dir=tmp_path)
+    assert apply_saved_settings(config, args) is True
+    assert config.cafe.name == "Lap Lab" and config.owner.pin == "9999"
