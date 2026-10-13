@@ -41,3 +41,16 @@ def test_dry_run_opens_kiosk_with_autoplay():
 def test_start_on_login_dry_run():
     out = run("-DryRun", "-StartOnLogin", "-Url", "http://hub:8000/")
     assert "SHORTCUT" in out.stdout and f"{brand.PRODUCT_NAME} TV.lnk" in out.stdout and "-Url" in out.stdout
+
+
+def test_plain_launch_never_looks_up_the_product_name():
+    """The name is only for the start-at-login shortcut: a plain TV launch must not depend on it."""
+    text = SCRIPT.read_text(encoding="utf-8")
+    body = text.split("function Find-Browser", 1)[1]
+    assert "Get-ProductName" not in text.split("function Get-ProductName", 1)[0]
+    assert body.count("Get-ShortcutPath") == 2
+    for flag in ("if ($RemoveStartOnLogin) {", "if ($StartOnLogin) {"):
+        block = body.split(flag, 1)[1].split("\n}\n", 1)[0]
+        assert "Get-ShortcutPath" in block
+    lookup = text.split("function Get-ProductName", 1)[1].split("function Get-ShortcutPath", 1)[0]
+    assert "try {" in lookup and "catch" in lookup and "--version" not in lookup and "python" not in lookup

@@ -28,26 +28,28 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-# The product name lives in brand.py only. Installed: the exe sits in the parent folder of tools\ and prints
-# "Name x.y.z" for --version. From a source checkout: ask the repo's own Python.
+# The product name lives in brand.py only. It is needed just for the start-at-login shortcut, so it is looked up
+# lazily and never by running anything: a source checkout reads brand.py, an installed copy uses the name of the
+# single program next to the tools folder (it equals brand.EXE_NAME). Returns $null when it can't be worked out.
 function Get-ProductName {
-  $appDir = Split-Path -Parent $PSScriptRoot
-  $exes = @(Get-ChildItem -LiteralPath $appDir -Filter *.exe -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -notlike "unins*" })
-  if ($exes.Count -eq 1) {
-    $line = (& $exes[0].FullName --version 2>$null | Select-Object -First 1)
-    $parts = @("$line".Trim() -split "\s+")
-    if ($parts.Count -ge 2) { return ($parts[0..($parts.Count - 2)] -join " ") }
-  }
-  $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-  $python = Join-Path $repo ".venv\Scripts\python.exe"
-  if (Test-Path $python) {
-    $name = (& $python -c "from simtelemetry import brand; print(brand.PRODUCT_NAME)" 2>$null | Select-Object -First 1)
-    if ($name) { return "$name".Trim() }
-  }
-  throw "Could not work out the product name: no single program next to the tools folder and no .venv in the source checkout."
+  try {
+    $brandPy = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) "hub"; $brandPy = Join-Path (Join-Path $brandPy "simtelemetry") "brand.py"
+    if (Test-Path -LiteralPath $brandPy) {
+      $m = [regex]::Match((Get-Content -LiteralPath $brandPy -Raw), '(?m)^PRODUCT_NAME\s*=\s*"([^"]+)"')
+      if ($m.Success) { return $m.Groups[1].Value }
+    }
+    $appDir = Split-Path -Parent $PSScriptRoot
+    $exes = @(Get-ChildItem -LiteralPath $appDir -Filter *.exe -File -ErrorAction Stop |
+              Where-Object { $_.Name -notlike "unins*" })
+    if ($exes.Count -eq 1) { return [IO.Path]::GetFileNameWithoutExtension($exes[0].Name) }
+  } catch { }
+  return $null
 }
-$ShortcutName = "$(Get-ProductName) TV.lnk"
+function Get-ShortcutPath {
+  $name = Get-ProductName
+  if (-not $name) { Write-Warning "Could not work out the product name, so the start-at-login shortcut was not changed."; return $null }
+  return Join-Path ([Environment]::GetFolderPath("Startup")) "$name TV.lnk"
+}
 $OldShortcutName = "Sim Telemetry TV.lnk"  # before the product was renamed
 
 function Find-Browser([string]$which) {
@@ -72,18 +74,21 @@ function Find-Browser([string]$which) {
 }
 
 $startup = [Environment]::GetFolderPath("Startup")
-$shortcutPath = Join-Path $startup $ShortcutName
 # A shortcut from before the rename would open a second TV window at login.
 $oldShortcut = Join-Path $startup $OldShortcutName
 if (Test-Path $oldShortcut) { Remove-Item $oldShortcut -Force }
 
 if ($RemoveStartOnLogin) {
+  $shortcutPath = Get-ShortcutPath
+  if (-not $shortcutPath) { exit 1 }
   if (Test-Path $shortcutPath) { Remove-Item $shortcutPath -Force; Write-Host "Removed: the TV no longer opens at login." }
   else { Write-Host "There was no start-at-login shortcut." }
   exit 0
 }
 
 if ($StartOnLogin) {
+  $shortcutPath = Get-ShortcutPath
+  if (-not $shortcutPath) { exit 1 }
   $arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$PSCommandPath`" -Url `"$Url`" -Browser $Browser"
   if ($DryRun) { Write-Output "SHORTCUT $shortcutPath powershell.exe $arguments"; exit 0 }
   $shell = New-Object -ComObject WScript.Shell
