@@ -198,10 +198,10 @@
     document.title = "Setup " + s.product;
     $("code-panel").hidden = !s.needs_code;
     // Once set up, the PINs are never sent back: blank means "keep the current PIN".
-    $("owner-pin").required = !s.setup_done;
-    $("owner-pin-label").textContent = s.setup_done ? "Owner PIN (leave blank to keep the current PIN)" : "Owner PIN (4 to 8 digits)";
-    $("staff-pin-label").textContent = s.setup_done ? "Staff PIN (leave blank to keep the current PIN)" : "Staff PIN (optional)";
-    $("remove-staff-row").hidden = !s.setup_done;
+    $("owner-pin").required = !s.has_settings;
+    $("owner-pin-label").textContent = s.has_settings ? "Owner PIN (leave blank to keep the current PIN)" : "Owner PIN (4 to 8 digits)";
+    $("staff-pin-label").textContent = s.has_settings ? "Staff PIN (leave blank to keep the current PIN)" : "Staff PIN (optional)";
+    $("remove-staff-row").hidden = !s.has_settings;
     $("remove-staff").checked = false;
     $("owner-pin").value = "";
     $("staff-pin").value = "";

@@ -64,6 +64,7 @@ def setup_router(hub: Hub) -> APIRouter:
         return {
             "product": brand.PRODUCT_NAME,
             "setup_done": bool(s and s.setup_done),
+            "has_settings": s is not None,          # earlier settings (and PINs) exist; blank PIN fields keep them
             "needs_code": not (s and s.setup_done),
             "name": c.cafe.name, "tagline": c.cafe.tagline, "logo": c.cafe.logo,
             "accent": c.cafe.branding.get("--brand-accent", "#E10600"),
@@ -78,8 +79,9 @@ def setup_router(hub: Hub) -> APIRouter:
         old = current()
         body = dict(body)
         remove_staff_pin = bool(body.pop("remove_staff_pin", False))
-        if old is not None and old.setup_done:
+        if old is not None:
             # /api/setup never returns PINs, so the form's PIN fields start empty: blank means "keep the current one".
+            # Applies whenever settings exist, also after `setup-code --reset` (setup_done is false again then).
             if not body.get("owner_pin"):
                 body["owner_pin"] = old.owner_pin
             if remove_staff_pin:

@@ -133,3 +133,27 @@ def test_opening_hours_from_setup_reach_the_owner_report(tmp_path):
     r = client.post("/api/setup", json={**GOOD, "open_hour": 12, "close_hour": 20}, headers=pin)
     assert r.status_code == 200
     assert client.get("/api/owner/report", headers=pin).json()["open_hours"] == [12, 20]
+
+
+def test_blank_pins_keep_old_ones_after_setup_code_reset(tmp_path):
+    import argparse
+    from simtelemetry.__main__ import setup_code_command
+    hub, client, code = _client(tmp_path)
+    assert client.post("/api/setup", json={**GOOD, "staff_pin": "1357"}, headers=code).status_code == 200
+    # what `<exe> setup-code --reset` does
+    assert setup_code_command(argparse.Namespace(reset=True, new=False), hub.config) == 0
+    new_code = SetupCode(tmp_path).current()
+    state = client.get("/api/setup").json()
+    assert state["setup_done"] is False and state["has_settings"] is True
+    assert "1357" not in client.get("/api/setup").text and "2468" not in client.get("/api/setup").text
+    r = client.post("/api/setup", json={**GOOD, "owner_pin": "", "staff_pin": ""}, headers={"X-Setup-Code": new_code})
+    assert r.status_code == 200
+    assert client.get("/api/staff/rigs").status_code == 401                     # staff PIN kept
+    assert client.get("/api/staff/rigs", headers={"X-Staff-Pin": "1357"}).status_code == 200
+    assert client.get("/api/owner/report", headers={"X-Owner-Pin": "2468"}).status_code == 200
+
+
+def test_fresh_first_setup_still_requires_owner_pin(tmp_path):
+    _, client, code = _client(tmp_path)
+    assert client.post("/api/setup", json={**GOOD, "owner_pin": ""}, headers=code).status_code == 400
+    assert client.get("/api/setup").json()["has_settings"] is False
