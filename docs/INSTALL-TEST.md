@@ -14,7 +14,7 @@ Never run the installer on the development PC: it registers a boot task and fire
    - open `/setup` again and check it now asks for the owner PIN.
 5. **TV.** Double-click the "Pitwall TV" shortcut. The branded LIVE page shows (full screen; Alt+F4 closes it).
 6. **Boot start.** Restart the machine and **do not sign in**. From your phone on the same Wi-Fi open `http://<test machine IP>:8000/staff`. It must answer. (Allow about a minute after the PC starts.)
-7. **Self-restart.** Sign in, end the hub's exe (`Pitwall.exe`) in Task Manager, and wait about 1 minute. `/staff` answers again.
+7. **Self-restart.** Sign in, end the hub's exe (`Pitwall.exe`) in Task Manager, and wait up to 1 minute (the task retries every minute). `/staff` answers again.
 8. **Firewall.** The dev PC's `replay` command can only play into a hub on the same machine (it has no flag to send to another host), so use a real rig: set F1 25's telemetry IP to the test machine's IP, port 20777, and drive. The staff page shows the rig. If it does not, note whether the network profile is Public or Private (Settings, Network).
 9. **Upgrade.** Run the same installer again. The last page says "Already set up: use your owner PIN." Data and setup are kept.
 10. **Uninstall** via Settings, Apps. `C:\ProgramData\Pitwall` is still there, and the message at the end says so. Reinstall: setup is remembered (no setup code asked).

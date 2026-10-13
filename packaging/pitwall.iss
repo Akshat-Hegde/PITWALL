@@ -39,6 +39,9 @@ Name: "startuptv"; Description: "Open the TV page when this PC signs in"; Flags:
 [Files]
 Source: "..\dist\{#ExeName}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 Source: "..\tools\windows\*"; DestDir: "{app}\tools"; Flags: recursesubdirs createallsubdirs ignoreversion
+; Last, so AfterInstall runs once the exe and everything else is in place. It writes the task XML, makes the
+; setup code, sets up the firewall and the boot task, and starts the hub.
+Source: "pitwall-task.xml"; DestDir: "{tmp}"; Flags: ignoreversion deleteafterinstall; AfterInstall: AfterAllFiles
 
 [Dirs]
 Name: "{commonappdata}\{#AppName}"; Permissions: users-modify
@@ -53,15 +56,8 @@ Name: "{autodesktop}\{#AppName} TV"; Filename: "{app}\tools\Start TV.cmd"; Worki
 Name: "{commonstartup}\{#AppName} TV"; Filename: "{app}\tools\Start TV.cmd"; WorkingDir: "{app}\tools"; IconFilename: "{app}\{#ExeName}.exe"; Tasks: startuptv
 
 [Run]
-Filename: "schtasks.exe"; Parameters: "/End /TN ""{#TaskName}"""; Flags: runhidden; StatusMsg: "Stopping the old hub..."
-Filename: "netsh.exe"; Parameters: "advfirewall firewall delete rule name=""{#AppName} hub"""; Flags: runhidden
-Filename: "netsh.exe"; Parameters: "advfirewall firewall delete rule name=""{#AppName} telemetry"""; Flags: runhidden
-Filename: "netsh.exe"; Parameters: "advfirewall firewall delete rule name=""{#AppName} pages"""; Flags: runhidden
-Filename: "netsh.exe"; Parameters: "advfirewall firewall add rule name=""{#AppName} hub"" dir=in action=allow program=""{app}\{#ExeName}.exe"" enable=yes profile=private,domain"; Flags: runhidden; StatusMsg: "Opening the firewall for rigs and phones..."
-Filename: "netsh.exe"; Parameters: "advfirewall firewall add rule name=""{#AppName} telemetry"" dir=in action=allow protocol=UDP localport=20777 enable=yes profile=any"; Flags: runhidden
-Filename: "netsh.exe"; Parameters: "advfirewall firewall add rule name=""{#AppName} pages"" dir=in action=allow protocol=TCP localport=8000 enable=yes profile=any"; Flags: runhidden
-Filename: "schtasks.exe"; Parameters: "/Create /F /TN ""{#TaskName}"" /XML ""{tmp}\pitwall-task.xml"""; Flags: runhidden; StatusMsg: "Setting the hub to start with this PC..."
-Filename: "schtasks.exe"; Parameters: "/Run /TN ""{#TaskName}"""; Flags: runhidden; StatusMsg: "Starting the hub..."
+; Stopping the old hub, the firewall rules, the boot task and starting the hub are done in [Code] (AfterAllFiles),
+; so a failure is logged and shown instead of passing silently.
 Filename: "http://localhost:8000/setup"; Description: "Open the setup page"; Flags: shellexec postinstall skipifsilent; Check: IsFreshInstall
 
 [UninstallRun]
@@ -94,31 +90,65 @@ begin
   Result := True;
 end;
 
-function PrepareToInstall(var NeedsRestart: Boolean): String;
+function GetTickCount: Cardinal;
+  external 'GetTickCount@kernel32.dll stdcall';
+
+function HubRunning: Boolean;
 var
   ResultCode: Integer;
 begin
-  Result := '';
-  // Stop the running hub so its files can be replaced on an upgrade.
+  // find exits 0 when the exe is in the tasklist
+  Result := Exec(ExpandConstant('{sys}\cmd.exe'), '/c tasklist /FI "IMAGENAME eq {#ExeName}.exe" | find /I "{#ExeName}.exe" >nul',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
+end;
+
+procedure StopHub;
+var
+  ResultCode, I: Integer;
+begin
+  // The hub runs as SYSTEM, which the wizard cannot close: end the task, wait, then kill what is left.
   Exec('schtasks.exe', '/End /TN "{#TaskName}"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Sleep(1500);
+  for I := 1 to 15 do
+  begin
+    if not HubRunning then Break;
+    Sleep(1000);
+  end;
+  if HubRunning then
+  begin
+    Log('Hub still running after the task was ended: taskkill');
+    Exec('taskkill.exe', '/F /IM {#ExeName}.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Sleep(1000);
+  end;
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  Result := '';
+  StopHub;
 end;
 
 procedure WriteTaskXml;
 var
   Task: AnsiString;
   Text: String;
+  Lines: TArrayOfString;
+  Exe, Data: String;
 begin
-  // Task definition with the installed paths filled in.
-  if LoadStringFromFile(ExpandConstant('{tmp}\pitwall-task.xml'), Task) then
+  if not LoadStringFromFile(ExpandConstant('{tmp}\pitwall-task.xml'), Task) then
   begin
-    Text := String(Task);
-    StringChangeEx(Text, '__EXE__', ExpandConstant('{app}\{#ExeName}.exe'), True);
-    StringChangeEx(Text, '__DATA__', ExpandConstant('{commonappdata}\{#AppName}'), True);
-    SaveStringToFile(ExpandConstant('{tmp}\pitwall-task.xml'), AnsiString(Text), False);
-  end
-  else
     Log('Could not read the hub start-up task definition.');
+    Exit;
+  end;
+  Exe := ExpandConstant('{app}\{#ExeName}.exe');
+  Data := ExpandConstant('{commonappdata}\{#AppName}');
+  StringChangeEx(Exe, '&', '&amp;', True);
+  StringChangeEx(Data, '&', '&amp;', True);
+  Text := String(Task);
+  StringChangeEx(Text, '__EXE__', Exe, True);
+  StringChangeEx(Text, '__DATA__', Data, True);
+  SetArrayLength(Lines, 1);
+  Lines[0] := Text;
+  SaveStringsToUTF8File(ExpandConstant('{tmp}\pitwall-task.xml'), Lines, False);   // matches the XML declaration
 end;
 
 function HubAnswers: Boolean;
@@ -137,11 +167,35 @@ begin
   end;
 end;
 
+procedure WaitForHub;
+var
+  Started: Cardinal;
+begin
+  // Up to about 20 s in total, measured on the clock (each probe can itself take a second).
+  Started := GetTickCount;
+  while (GetTickCount - Started) < 20000 do
+  begin
+    if HubAnswers then Exit;
+    Sleep(500);
+  end;
+  Log('The hub did not answer on port 8000 within 20 s.');
+end;
+
+procedure Netsh(Params: String);
+var
+  ResultCode: Integer;
+begin
+  Exec('netsh.exe', Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Log('netsh ' + Params + ' -> ' + IntToStr(ResultCode));
+end;
+
 procedure AfterAllFiles;
 var
   ResultCode: Integer;
   Code: AnsiString;
+  Ok: Boolean;
 begin
+  WizardForm.StatusLabel.Caption := 'Setting up the hub...';
   WriteTaskXml;
   if FreshInstall then
   begin
@@ -158,24 +212,38 @@ begin
   end
   else
     Log('Upgrade over an existing setup: no new setup code.');
-end;
 
-procedure WaitForHub;
-var
-  I: Integer;
-begin
-  // The hub is started by the last non-postinstall [Run] line; give it up to 20 s before the setup page opens.
-  for I := 1 to 20 do
+  // Firewall: old rules out, then the program rule plus port rules (in case the network profile is Public).
+  Netsh('advfirewall firewall delete rule name="{#AppName} hub"');
+  Netsh('advfirewall firewall delete rule name="{#AppName} telemetry"');
+  Netsh('advfirewall firewall delete rule name="{#AppName} pages"');
+  Netsh('advfirewall firewall add rule name="{#AppName} hub" dir=in action=allow program="' + ExpandConstant('{app}\{#ExeName}.exe') + '" enable=yes profile=private,domain');
+  Netsh('advfirewall firewall add rule name="{#AppName} telemetry" dir=in action=allow protocol=UDP localport=20777 enable=yes profile=any');
+  Netsh('advfirewall firewall add rule name="{#AppName} pages" dir=in action=allow protocol=TCP localport=8000 enable=yes profile=any');
+
+  // Boot task, then start the hub now.
+  Ok := Exec('schtasks.exe', '/Create /F /TN "{#TaskName}" /XML "' + ExpandConstant('{tmp}\pitwall-task.xml') + '"', '',
+    SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
+  Log('schtasks /Create -> ' + IntToStr(ResultCode));
+  if not Ok then
   begin
-    if HubAnswers then Break;
-    Sleep(1000);
+    MsgBox('The hub could not be set to start with this PC (schtasks exit code ' + IntToStr(ResultCode) +
+      '). The install log has the details. The hub will not start by itself until this is fixed.', mbError, MB_OK);
+    Exit;
   end;
+  WizardForm.StatusLabel.Caption := 'Starting the hub...';
+  Ok := Exec('schtasks.exe', '/Run /TN "{#TaskName}"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
+  Log('schtasks /Run -> ' + IntToStr(ResultCode));
+  if not Ok then
+    MsgBox('The hub task was created but could not be started (schtasks exit code ' + IntToStr(ResultCode) +
+      '). It will start when this PC restarts.', mbError, MB_OK)
+  else
+    WaitForHub;
 end;
 
 procedure CurPageChanged(CurPageID: Integer);
 begin
   if CurPageID <> wpFinished then Exit;
-  WaitForHub;
   if CodeLabel = nil then
   begin
     CodeLabel := TNewStaticText.Create(WizardForm);
@@ -221,6 +289,8 @@ end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
+  if CurUninstallStep = usUninstall then
+    StopHub;
   if (CurUninstallStep = usDone) and not UninstallSilent then
     MsgBox('{#AppName} was removed. Your cafe''s data (laps, settings, backups) was kept in ' +
       ExpandConstant('{commonappdata}\{#AppName}') + ' and is used again if you reinstall.', mbInformation, MB_OK);
