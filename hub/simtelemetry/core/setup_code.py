@@ -45,7 +45,10 @@ class SetupCode:
         code = f"{raw[:4]}-{raw[4:]}"
         self.path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.path.with_suffix(".tmp")
-        tmp.write_text(code + "\n", encoding="utf-8")
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(code + "\n")
+            f.flush()
+            os.fsync(f.fileno())               # on disk before the rename, or a power cut can leave an empty file
         os.replace(tmp, self.path)
         return code
 

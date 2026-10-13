@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 import logging
-import sqlite3
 import time
 from pathlib import Path
 from typing import Any
@@ -30,6 +29,17 @@ def next_backup_at(now: dt.datetime, hour: int) -> dt.datetime:
     """The next local `hour`:00 strictly after `now`."""
     at = now.replace(hour=hour, minute=0, second=0, microsecond=0)
     return at if at > now else at + dt.timedelta(days=1)
+
+
+CATCH_UP_AFTER = dt.timedelta(hours=24)
+CATCH_UP_DELAY_S = 120.0
+
+
+def catch_up_due(last_at_ms: int | None, now: dt.datetime) -> bool:
+    """True when there is no backup yet or the newest is over 24 h old (the PC was off at the backup hour)."""
+    if last_at_ms is None:
+        return True
+    return now - dt.datetime.fromtimestamp(last_at_ms / 1000) > CATCH_UP_AFTER
 
 
 class Hub:
@@ -251,15 +261,29 @@ class Hub:
         return out
 
     async def backup_loop(self) -> None:
-        """Back up every night at [backup] hour. Never ends the hub: a failed backup is a warning."""
+        """Back up every night at [backup] hour, plus one shortly after start if the last is over a day old
+        (a PC that is off at the backup hour would otherwise never back up). Never ends the hub."""
+        from .core.backup import last_backup
+        try:
+            last = last_backup(self.config.backups_dir)
+            due = catch_up_due(last["at"] if last else None, dt.datetime.now())
+        except Exception:
+            log.exception("Could not check the last backup")
+            due = False
+        if due:
+            await asyncio.sleep(CATCH_UP_DELAY_S)
+            await self._backup_once("Catch-up backup")
         while True:
             at = next_backup_at(dt.datetime.now(), self.config.backup.hour)
             await asyncio.sleep(max(1.0, (at - dt.datetime.now()).total_seconds()))
-            try:
-                out = await asyncio.to_thread(self.run_backup)
-                log.info("Backup saved: %s", out)
-            except (OSError, sqlite3.Error) as exc:
-                log.warning("Backup failed (will try again tomorrow): %s", exc)
+            await self._backup_once("Backup")
+
+    async def _backup_once(self, label: str) -> None:
+        try:
+            out = await asyncio.to_thread(self.run_backup)
+            log.info("%s saved: %s", label, out)
+        except Exception:
+            log.exception("%s failed (will try again tomorrow)", label)
 
     async def drain(self) -> None:
         """Wait until every queued packet has been decoded (used after a replay)."""

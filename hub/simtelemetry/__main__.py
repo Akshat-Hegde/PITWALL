@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import csv
 import datetime as dt
+import io
 import logging
 import socket
 import sqlite3
+import subprocess
 import sys
 import time
 import zipfile
@@ -112,6 +115,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("setup-code", help="show the one-time first-run setup code (--new makes a fresh one)")
     p.add_argument("--new", action="store_true", help="make a fresh code and print it (the installer does this)")
+    p.add_argument("--reset", action="store_true",
+                   help="forgot the owner PIN: mark setup as not done and make a new code (run on the hub PC, as administrator)")
     p.add_argument("--config", type=Path, default=None, help="TOML config (default: config/hub.toml if present)")
     p.add_argument("--data-dir", type=Path, default=None, help="override data_dir from config")
 
@@ -318,6 +323,15 @@ def main(argv: list[str] | None = None) -> int:
 def setup_code_command(args: argparse.Namespace, config: AppConfig) -> int:
     """`setup-code`: --new makes and prints a fresh code; otherwise print the current one."""
     code = SetupCode(config.data_dir)
+    if args.reset:
+        store = SettingsStore(config.data_dir)
+        s = store.load()
+        if s is not None:
+            store.save(s.model_copy(update={"setup_done": False}))    # everything else is kept
+        print(code.new())
+        print(f"Setup is open again. Open http://localhost:{config.network.http_port}/setup, enter the code above "
+              "and choose a new owner PIN. The hub picks this up without a restart.")
+        return 0
     if args.new:
         print(code.new())
         return 0
@@ -350,6 +364,31 @@ def hub_is_running(port: int) -> bool:
         return False
 
 
+def task_enabled(name: str) -> bool | None:
+    """Is the scheduled task `name` enabled? None when it can't be told (not Windows, no task, any error)."""
+    try:
+        out = subprocess.run(["schtasks", "/Query", "/TN", name, "/FO", "CSV", "/NH"],
+                             capture_output=True, text=True, timeout=10, check=False)
+        if out.returncode != 0:
+            return None
+        row = next(csv.reader(io.StringIO(out.stdout.strip().splitlines()[0])))
+        status = row[2].strip().lower()
+    except Exception:
+        return None
+    return status != "disabled"
+
+
+def restore_task_warning() -> str | None:
+    """Frozen on Windows: the start-up task restarts a stopped hub within a minute, so tell the user to disable it."""
+    if not (paths.is_frozen() and sys.platform == "win32"):
+        return None
+    if task_enabled(brand.TASK_NAME):
+        return (f'WARNING: the scheduled task "{brand.TASK_NAME}" is enabled and restarts the hub within a minute. '
+                "Disable it first (Task Scheduler, right-click, Disable), then End it, restore, "
+                "and Enable and Run it afterwards.")
+    return None
+
+
 def restore_command(args: argparse.Namespace, config: AppConfig) -> int:
     """`restore <zip>`: refuses while the hub answers on its HTTP port."""
     from .core.backup import restore
@@ -360,6 +399,9 @@ def restore_command(args: argparse.Namespace, config: AppConfig) -> int:
     if not args.zip.is_file():
         print(f"ERROR: no such backup file: {args.zip}", file=sys.stderr)
         return 2
+    warning = restore_task_warning()
+    if warning:
+        print(warning, file=sys.stderr)
     try:
         restore(args.zip, config.data_dir, args.config or paths.config_path())
     except (OSError, ValueError, zipfile.BadZipFile) as exc:
@@ -416,6 +458,8 @@ def prepare_demo(args: argparse.Namespace, config: AppConfig) -> None:
     from .tools.seed_demo import seed
     if args.data_dir is None:
         config.data_dir = paths.home() / "data-demo"
+    if config.backup.directory is None:        # "Back up now" on /owner must never prune the real backups
+        config.backup.directory = paths.home() / "backups-demo"
     counts = seed(config.data_dir)
     config.track_names[TRACK_ID] = DEMO_TRACK_NAME
     if not config.owner.pin:

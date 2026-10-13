@@ -1,10 +1,12 @@
-# Copy to config/hub.toml and edit. Every key is optional; defaults are shown.
+# Starter config. Every key is optional; the defaults are shown, and lines starting with # are examples.
+# Installed hub: this file is C:\ProgramData\<product>\config\hub.toml; restart the hub after editing it.
+# Source checkout: copy to config/hub.toml.
 
-data_dir = "data"                      # SQLite, track outlines, logs, recordings
+# data_dir = "data"                    # SQLite, track outlines, logs, recordings (relative to the cafe folder)
 
 # The owner's /setup page overrides name, branding, PINs and opening hours via data/settings.json.
 [cafe]
-name = "Sim Racing Cafe"
+# name = "Sim Racing Cafe"
 
 [cafe.branding]                        # CSS variables applied to the dashboard
 # "--brand-accent" = "#e10600"

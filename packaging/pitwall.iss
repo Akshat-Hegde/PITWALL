@@ -39,6 +39,8 @@ Name: "startuptv"; Description: "Open the TV page when this PC signs in"; Flags:
 [Files]
 Source: "..\dist\{#ExeName}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 Source: "..\tools\windows\*"; DestDir: "{app}\tools"; Flags: recursesubdirs createallsubdirs ignoreversion
+; A commented starter config for a fresh install; an existing hub.toml (even after an uninstall) is never touched.
+Source: "..\config\hub.example.toml"; DestDir: "{commonappdata}\{#AppName}\config"; DestName: "hub.toml"; Flags: onlyifdoesntexist uninsneveruninstall
 ; Last, so AfterInstall runs once the exe and everything else is in place. It writes the task XML, makes the
 ; setup code, sets up the firewall and the boot task, and starts the hub.
 Source: "pitwall-task.xml"; DestDir: "{tmp}"; Flags: ignoreversion deleteafterinstall; AfterInstall: AfterAllFiles

@@ -69,7 +69,10 @@ class SettingsStore:
     def save(self, settings: CafeSettings) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(settings.model_dump(), indent=2), encoding="utf-8")
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(json.dumps(settings.model_dump(), indent=2))
+            f.flush()
+            os.fsync(f.fileno())               # on disk before the rename, or a power cut can leave an empty file
         os.replace(tmp, self.path)             # atomic: a power cut never leaves half a file
 
 

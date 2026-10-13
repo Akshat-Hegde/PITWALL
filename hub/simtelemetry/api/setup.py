@@ -76,6 +76,16 @@ def setup_router(hub: Hub) -> APIRouter:
     def save(request: Request, body: dict[str, Any], x_setup_code: str | None = Header(None)) -> dict[str, Any]:
         guard(request, x_setup_code)
         old = current()
+        body = dict(body)
+        remove_staff_pin = bool(body.pop("remove_staff_pin", False))
+        if old is not None and old.setup_done:
+            # /api/setup never returns PINs, so the form's PIN fields start empty: blank means "keep the current one".
+            if not body.get("owner_pin"):
+                body["owner_pin"] = old.owner_pin
+            if remove_staff_pin:
+                body["staff_pin"] = ""
+            elif not body.get("staff_pin"):
+                body["staff_pin"] = old.staff_pin
         try:
             s = CafeSettings(**{**body, "logo": old.logo if old else hub.config.cafe.logo, "setup_done": True})
         except ValidationError as exc:

@@ -37,7 +37,7 @@
     <Enabled>true</Enabled>
     <Hidden>false</Hidden>
     <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
-    <Priority>7</Priority>
+    <Priority>5</Priority>
     <RestartOnFailure>
       <Interval>PT1M</Interval>
       <Count>999</Count>

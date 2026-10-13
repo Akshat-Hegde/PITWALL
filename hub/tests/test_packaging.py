@@ -53,3 +53,17 @@ def test_task_xml_is_installed_and_the_setup_steps_are_called():
     last = [ln for ln in files.splitlines() if ln.startswith("Source:")][-1]
     assert 'Source: "pitwall-task.xml"' in last and "AfterInstall: AfterAllFiles" in last
     assert "procedure AfterAllFiles" in iss
+
+
+def test_task_runs_at_normal_priority():
+    ns = {"t": "http://schemas.microsoft.com/windows/2004/02/mit/task"}
+    root = ET.parse(PKG / "pitwall-task.xml").getroot()
+    assert root.find(".//t:Settings/t:Priority", ns).text == "5"            # normal CPU and I/O, not below normal
+
+
+def test_starter_config_is_shipped_without_overwriting():
+    files = _iss().split("[Files]")[1].split("[Dirs]")[0]
+    line = [ln for ln in files.splitlines() if "hub.example.toml" in ln]
+    assert len(line) == 1
+    assert r"{commonappdata}\{#AppName}\config" in line[0] and 'DestName: "hub.toml"' in line[0]
+    assert "onlyifdoesntexist" in line[0] and "uninsneveruninstall" in line[0]

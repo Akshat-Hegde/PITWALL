@@ -38,13 +38,35 @@ Each rig sends UDP telemetry to the hub's IP address on port 20777. See [RIG_SET
 
 ## Backups
 
-Every night the hub saves a zip of the laps, settings, branding and config in `C:\ProgramData\Pitwall\backups` and keeps the last 14. To keep them off the hub PC, set `[backup] directory` in `C:\ProgramData\Pitwall\config\hub.toml` to a folder on a USB stick (for example `directory = "E:\\Pitwall backups"`), then restart the hub.
+Every night the hub saves a zip of the laps, settings, branding and config in `C:\ProgramData\Pitwallackups` and keeps the last 14. If the hub PC was off at the backup hour, it makes one a couple of minutes after it next starts. To keep them off the hub PC, open `C:\ProgramData\Pitwall\config\hub.toml` (the installer puts a commented starter file there; remove the `#` in front of `directory` under `[backup]`) and point it at a folder on a USB stick (for example `directory = "E:/Pitwall backups"`), then restart the hub.
 
-To restore: stop the hub (end the task "Pitwall Hub" in Task Scheduler, or restart the PC with the hub disabled), then run in a command prompt:
+To restore, the hub must stay stopped, but its start-up task starts it again within a minute if it is only ended. So disable the task first:
 
-    "C:\Program Files\Pitwall\Pitwall.exe" restore "C:\ProgramData\Pitwall\backups\<the zip>"
+1. Task Scheduler, right-click "Pitwall Hub", **Disable**, then right-click it again, **End**. Or, in an administrator command prompt:
 
-then start the hub again (Task Scheduler, right-click "Pitwall Hub", Run). The restore is refused while the hub is running.
+        schtasks /Change /TN "Pitwall Hub" /Disable
+        schtasks /End /TN "Pitwall Hub"
+
+2. Restore:
+
+        "C:\Program Files\Pitwall\Pitwall.exe" restore "C:\ProgramData\Pitwallackups\<the zip>"
+
+   The restore is refused while the hub is running, and warns if the task is still enabled.
+
+3. Start the hub again: Task Scheduler, right-click "Pitwall Hub", **Enable**, then **Run**. Or:
+
+        schtasks /Change /TN "Pitwall Hub" /Enable
+        schtasks /Run /TN "Pitwall Hub"
+
+## Forgot the owner PIN?
+
+On the hub PC, in an administrator command prompt:
+
+    "C:\Program Files\Pitwall\Pitwall.exe" setup-code --reset
+
+It opens setup again (everything else is kept) and prints a new setup code. Open `http://localhost:8000/setup`, enter the code and choose a new owner PIN. The hub does not need a restart. This only works from the hub PC itself, which is the point.
+
+Editing `/setup` later: leave the PIN fields blank to keep the current PINs, or tick "Remove the staff PIN".
 
 ## Where things live
 
@@ -52,7 +74,7 @@ then start the hub again (Task Scheduler, right-click "Pitwall Hub", Run). The r
 |---|---|
 | Program | `C:\Program Files\Pitwall` |
 | Cafe data (laps, settings, logo, logs) | `C:\ProgramData\Pitwall\data` |
-| Config | `C:\ProgramData\Pitwall\config\hub.toml` |
+| Config (commented starter file, edit to change ports, backup folder and so on) | `C:\ProgramData\Pitwall\config\hub.toml` |
 | Backups | `C:\ProgramData\Pitwall\backups` |
 | Log | `C:\ProgramData\Pitwall\data\logs\hub.log` |
 | Start-up task | Task Scheduler, "Pitwall Hub" |
