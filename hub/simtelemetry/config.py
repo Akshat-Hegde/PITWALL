@@ -10,7 +10,7 @@ from typing import Any, get_args, get_origin
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, ValidationInfo, field_validator
 
-DEFAULT_CONFIG_PATH = Path("config/hub.toml")
+from . import paths
 
 
 class ConfigError(Exception):
@@ -165,21 +165,31 @@ class AppConfig(_Section):
 
 
 def load_config(path: Path | None = None) -> AppConfig:
-    """Load the given file, else config/hub.toml if present, else defaults."""
+    """Load the given file, else <home>/config/hub.toml if present, else defaults.
+
+    A relative data_dir is taken relative to the home folder (see paths.py), so an installed hub keeps
+    its data in ProgramData whatever folder it was started from.
+    """
     if path is None:
-        if not DEFAULT_CONFIG_PATH.exists():
-            return AppConfig()
-        path = DEFAULT_CONFIG_PATH
+        path = paths.config_path()
+        if not path.exists():
+            return _anchored(AppConfig())
     with path.open("rb") as f:
         try:
             data = tomllib.load(f)
         except tomllib.TOMLDecodeError as exc:
             raise ConfigError(f"Invalid config file {path}:\n  {_describe_syntax_error(path, exc)}") from None
     try:
-        return AppConfig.model_validate(data)
+        return _anchored(AppConfig.model_validate(data))
     except ValidationError as exc:
         problems = "\n".join(f"  {_describe(path, err)}" for err in exc.errors())
         raise ConfigError(f"Invalid config file {path}:\n{problems}") from None
+
+
+def _anchored(config: AppConfig) -> AppConfig:
+    if not config.data_dir.is_absolute():
+        config.data_dir = paths.home() / config.data_dir
+    return config
 
 
 # Python 3.11's TOMLDecodeError only carries the position inside its message.

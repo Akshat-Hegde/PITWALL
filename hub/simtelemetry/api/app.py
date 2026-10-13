@@ -14,14 +14,13 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from ..core.feed import FeedBuilder, FeedConnection
+from .. import paths
 from ..hub import Hub
 from .cards import card_router
 from .owner import owner_router
 from .staff import staff_router
 
 log = logging.getLogger(__name__)
-
-DEFAULT_DASHBOARD_DIR = Path(__file__).resolve().parents[3] / "dashboard" / "dist"
 
 NOT_BUILT_PAGE = """<!doctype html><meta charset="utf-8"><title>Dashboard not built</title>
 <body style="font-family:sans-serif;background:#18232d;color:#eef3f6;padding:2rem;max-width:40em">
@@ -77,7 +76,7 @@ def create_app(hub: Hub, dashboard_dir: Path | None = None) -> FastAPI:
         finally:
             log.info("Dashboard disconnected from %s", client)
 
-    directory = dashboard_dir or hub.config.dashboard.directory or DEFAULT_DASHBOARD_DIR
+    directory = dashboard_dir or hub.config.dashboard.directory or paths.dashboard_dir()
     if (directory / "index.html").is_file():
         @app.get("/portrait", include_in_schema=False)
         def portrait() -> FileResponse:

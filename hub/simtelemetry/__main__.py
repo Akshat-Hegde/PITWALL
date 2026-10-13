@@ -13,6 +13,7 @@ from pathlib import Path
 import uvicorn
 
 from .adapters.f1.adapter import F1Adapter
+from . import paths
 from .api.app import create_app
 from .config import AppConfig, ConfigError, load_config
 from .core.health import RigState
@@ -98,8 +99,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("seed-demo", help="fill a separate demo data folder with a busy cafe's history "
                                          "(for demoing the staff and owner pages)")
-    p.add_argument("--data-dir", type=Path, default=Path("data-demo"),
-                   help="demo data folder (default data-demo); must be empty or made by seed-demo before")
+    p.add_argument("--data-dir", type=Path, default=None,
+                   help="demo data folder (default data-demo in the home folder); must be empty or made by seed-demo before")
     p.add_argument("--days", type=int, default=60, help="days of history (default 60)")
 
     p = sub.add_parser("save-outline", help="save a track outline the hub learned as a bundled track file")
@@ -254,6 +255,8 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "seed-demo":
         from .tools.seed_demo import DemoTargetError, seed
+        if args.data_dir is None:
+            args.data_dir = paths.home() / "data-demo"
         try:
             counts = seed(args.data_dir, args.days)
         except DemoTargetError as exc:
@@ -314,7 +317,7 @@ def prepare_demo(args: argparse.Namespace, config: AppConfig) -> None:
     from .tools.demo_sim import DEMO_TRACK_NAME, TRACK_ID
     from .tools.seed_demo import seed
     if args.data_dir is None:
-        config.data_dir = Path("data-demo")
+        config.data_dir = paths.home() / "data-demo"
     counts = seed(config.data_dir)
     config.track_names[TRACK_ID] = DEMO_TRACK_NAME
     if not config.owner.pin:
