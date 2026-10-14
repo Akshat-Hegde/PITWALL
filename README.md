@@ -316,6 +316,28 @@ the track map, in the cafe's branding.
 **Privacy:** phone numbers, names and lap times stay in `data\laps.db` on the hub PC; nothing is sent
 anywhere. The TV and its WebSocket feed only ever carry names, never phone numbers.
 
+## Race podium and story cards
+
+Race sessions (Race, Race 2, Race 3) are handled differently from time trials. Each rig reports its own
+driver's Final Classification; results for the same track within 90 seconds form one race, and the hub
+publishes it 8 seconds after the last report (or at once when every driving rig has reported). Practice,
+qualifying and Time Trial never make a race result.
+
+- **Two or more cafe drivers:** the TV shows a 15 second podium with a QR code beside each name, then 25
+  seconds of "Grab your card" (up to 10 finishers). Cafe drivers are ranked by their in-game finishing
+  position; finishers come before DNF/DSQ.
+- **One cafe driver (racing the AI):** no podium, but they still get a race card through the corner card QR.
+- **Race card:** position, grid position and places gained, laps, best lap, total time plus penalties,
+  result, track and "1st of 4 at <cafe>". It is a story card with `kind: "race"`; the card page has
+  **Save for Instagram story** (1080x1920) and a hint to post it from the gallery.
+- **Phones must be on the cafe Wi-Fi** to open a card. In `/setup` the owner can add an optional guest
+  Wi-Fi (name, password, security). The TV then shows a "Join our Wi-Fi" QR beside the card QR codes, with
+  the network name only; the password is never shown as text. Use a guest network, not the cafe's main one.
+- **Feature flags:** `[features] race_podium = false` turns the podium and race cards off; `sharing = false`
+  turns off every QR code (cards, podium and Wi-Fi).
+- **Demo:** on `/staff` in demo mode, the Director has a **Race** button (`POST /api/staff/demo/race`) that
+  ends a simulated 4-rig race, for screenshots and manual checks.
+
 ## Lap database
 
 Every recorded lap goes into SQLite at `<data_dir>/laps.db` (default `data\laps.db`), together with each

@@ -30,7 +30,7 @@ The installer opens the firewall for the hub, starts it, and sets it to start wi
 
 ## Set the cafe up (`/setup`)
 
-The setup page asks for the code from the last page, then the cafe name, tagline, logo, colour, opening hours and the owner and staff PINs. Once saved, the code stops working and the owner PIN protects the page. The page is at `http://localhost:8000/setup` on the hub, or `http://<hub IP>:8000/setup` from another device.
+The setup page asks for the code from the last page, then the cafe name, tagline, logo, colour, opening hours and the owner and staff PINs. Optionally add a guest Wi-Fi (name, password, security); the TV shows it as a "Join our Wi-Fi" QR so customers can reach their story cards. Use a guest network, not the cafe's main one. Once saved, the code stops working and the owner PIN protects the page. The page is at `http://localhost:8000/setup` on the hub, or `http://<hub IP>:8000/setup` from another device.
 
 ## Point the rigs at the hub
 
@@ -38,7 +38,7 @@ Each rig sends UDP telemetry to the hub's IP address on port 20777. See [RIG_SET
 
 ## Backups
 
-Every night the hub saves a zip of the laps, settings, branding and config in `C:\ProgramData\Pitwall\backups` and keeps the last 14. If the hub PC was off at the backup hour, it makes one a couple of minutes after it next starts. To keep them off the hub PC, open `C:\ProgramData\Pitwall\config\hub.toml` (the installer puts a commented starter file there; remove the `#` in front of `directory` under `[backup]`) and point it at a folder on a USB stick (for example `directory = "E:/Pitwall backups"`), then restart the hub.
+Every night the hub saves a zip of the laps, settings, branding and config in `C:\ProgramData\Pitwall\backups` and keeps the last 14. Backups contain the owner and staff PINs and the guest Wi-Fi password, so keep the backup drive safe. If the hub PC was off at the backup hour, it makes one a couple of minutes after it next starts. To keep them off the hub PC, open `C:\ProgramData\Pitwall\config\hub.toml` (the installer puts a commented starter file there; remove the `#` in front of `directory` under `[backup]`) and point it at a folder on a USB stick (for example `directory = "E:/Pitwall backups"`), then restart the hub.
 
 To restore, the hub must stay stopped, but its start-up task starts it again within a minute if it is only ended. So disable the task first:
 

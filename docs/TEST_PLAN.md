@@ -197,6 +197,19 @@ On the dashboard, check:
 - [ ] Open `http://192.168.1.64:8000/portrait` on a phone held upright: cafe name, track record, top 10.
 - [ ] Press `5` on the TV PC: the welcome screen. Press `0` to go back to auto.
 
+## Part E3: LAN race, podium and race card (both rigs)
+
+- [ ] Optional: in `/setup` add a guest Wi-Fi name and password; a phone on that network can join via the TV QR.
+- [ ] Both rigs: new session, **Race** (any length, AI on), same track. Run `python -m simtelemetry listen`
+      (it records by default) so the packets are kept as a regression fixture for Final Classification.
+- [ ] Finish the race on both rigs. Within about 10 seconds the TV shows the race podium for 15 s, with a QR
+      beside each name, then "Grab your card" for 25 s with the Wi-Fi tile (SSID only, no password).
+- [ ] Scan a QR from a phone on the cafe Wi-Fi: the race card shows position (real race position), grid,
+      places gained, laps, best lap, total time, result, and "1st of 2 at <cafe>". **Save for Instagram story** works.
+- [ ] Repeat with only one rig racing: no podium, but the corner card QR shows a race card.
+- [ ] Time Trial and Practice sessions produce no podium.
+- [ ] Note any wrong Final Classification fields (position, grid, status, total time) and keep the `.f1rec`.
+
 ## Part F: Restart (leaderboard persistence) and track change
 
 - [ ] Both drivers stay on track, mid-lap. In the hub window press **Ctrl+C**.
