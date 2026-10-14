@@ -90,7 +90,9 @@ def setup_router(hub: Hub) -> APIRouter:
                 body["staff_pin"] = ""
             elif not body.get("staff_pin"):
                 body["staff_pin"] = old.staff_pin
-        if old is not None and not body.get("wifi_password") and body.get("wifi_security", "WPA") == "WPA":
+        if not (body.get("wifi_ssid") or "").strip():
+            body["wifi_password"] = ""                      # clearing the SSID clears the stored password too
+        elif old is not None and not body.get("wifi_password") and body.get("wifi_security", "WPA") == "WPA":
             body["wifi_password"] = old.wifi_password       # blank keeps the Wi-Fi password, like the PINs
         try:
             s = CafeSettings(**{**body, "logo": old.logo if old else hub.config.cafe.logo, "setup_done": True})

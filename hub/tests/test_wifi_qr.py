@@ -90,5 +90,17 @@ def test_password_only_in_qr_string(tmp_path):
     from simtelemetry.core.feed import FeedBuilder
     snap = FeedBuilder(hub).snapshot_body(0.0)
     assert snap["cafe"]["wifi"]["ssid"] == "Cafe Guest" and "secret-pass" not in snap["cafe"]["wifi"]["ssid"]
-    rest = {**snap, "cafe": {**snap["cafe"], "wifi": {"ssid": "Cafe Guest"}}}
-    assert "secret-pass" not in str(rest)
+    import json
+    wifi = {k: v for k, v in snap["cafe"]["wifi"].items() if k != "qr"}
+    rest = {**snap, "cafe": {**snap["cafe"], "wifi": wifi}}
+    assert "secret-pass" not in json.dumps(rest)
+    assert "secret-pass" in snap["cafe"]["wifi"]["qr"]
+
+
+def test_clearing_ssid_clears_password(tmp_path):
+    hub, client, code = _client(tmp_path)
+    client.post("/api/setup", json={**GOOD, **WIFI}, headers=code)
+    cleared = {**GOOD, "wifi_ssid": "", "wifi_password": "", "wifi_security": "WPA"}
+    assert client.post("/api/setup", json=cleared, headers={"X-Owner-Pin": "2468"}).status_code == 200
+    assert hub.config.cafe.wifi_password == ""
+    assert wifi_share(hub.config) is None

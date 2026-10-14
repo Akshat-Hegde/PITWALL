@@ -221,6 +221,7 @@
     $("wifi-ssid").value = s.wifi_ssid || "";
     $("wifi-security").value = s.wifi_security || "WPA";
     $("wifi-password").value = "";
+    syncWifiSecurity();
     $("wifi-password-label").textContent = s.has_settings && s.wifi_ssid ? "Password (leave blank to keep the current password)" : "Password (8 to 63 characters)";
     $("name").value = s.name;
     $("tagline").value = s.tagline || "";
@@ -267,6 +268,13 @@
     else say($("logo-msg"), await detail(r), "error");
   });
 
+  function syncWifiSecurity() {
+    const open = $("wifi-security").value === "nopass";
+    if (open) $("wifi-password").value = "";
+    $("wifi-password").disabled = open;
+  }
+  $("wifi-security").addEventListener("change", syncWifiSecurity);
+  syncWifiSecurity();
   $("form").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const body = {
