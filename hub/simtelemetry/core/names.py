@@ -15,7 +15,7 @@ from collections.abc import Iterable
 DEFAULT_BLOCKED = frozenset("""
 fuck fucker fucking fucked motherfucker shit shitty bullshit bitch bastard asshole ass arse cunt dick dickhead cock
 pussy slut whore wank wanker twat piss cum porn sex nigger nigga fag faggot retard rape rapist nazi hitler penis
-vagina boob boobs tits
+vagina boob boobs tits niga fagot pusy ashole bulshit shity
 madarchod maderchod bhenchod behenchod bhosdike bhosdika bsdk chutiya chutiye chut gandu gaandu gaand
 raand harami haramkhor kutta kamina lauda lawda loda lodu
 """.split())

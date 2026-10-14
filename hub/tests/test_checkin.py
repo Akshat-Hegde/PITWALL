@@ -190,14 +190,13 @@ async def test_name_filter_and_validation_on_the_api(tmp_path):
 # --- the bad-name filter ----------------------------------------------------------------------
 
 @pytest.mark.parametrize("name", ["fuck", "FUCK you", "what the f u c k", "sh1t", "b00bs", "@ss", "$hit",
-                                  "f.u.c.k", "fuuuuck", "madarchod", "Bhenchod", "x chutiya", "fück", "shït"])
+                                  "f.u.c.k", "fuuuuck", "madarchod", "Bhenchod", "x chutiya", "fück", "Niga", "N1ga", "Niiga", "Nigaa", "pusy", "shït"])
 def test_bad_names_are_blocked(name):
     assert is_blocked(name)
 
 
 @pytest.mark.parametrize("name", ["Ashish", "Scunthorpe", "Maya R", "Kofi", "Assam", "Dickson", "Classic",
-                                  "Hancock", "Sussex", "Lund", "Penistone", "Akshat", "Mia 2", "Rand", "Randi", "Kuta",
-                                  "Niga"])
+                                  "Hancock", "Sussex", "Lund", "Penistone", "Akshat", "Mia 2", "Rand", "Randi", "Kuta"])
 def test_normal_names_pass(name):
     assert not is_blocked(name)
 
