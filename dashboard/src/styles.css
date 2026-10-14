@@ -4497,3 +4497,267 @@ svg.flash.moment__stripes {
 .podium__steps {
   bottom: 0;
 }
+
+/* ==== Race podium (race_podium moment): podium with QR codes, then "Grab your card" ================= */
+/* On the 1920 x 1080 stage (1rem = 20px): podium QR codes are 15rem (300px, ~20 cm on a 55" TV). */
+
+.moment--race_podium {
+  place-items: stretch;
+}
+
+.racepodium {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s6);
+  width: 100%;
+  height: 100%;
+  padding: 2.2rem 2rem 2.4rem;
+  box-sizing: border-box;
+  animation: moment-in 300ms ease-out;
+}
+
+.racepodium__head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s3);
+}
+
+.racepodium__title {
+  margin: 0;
+  font-size: 3.4rem;
+  font-stretch: 125%;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.racepodium__sub {
+  color: var(--text-2);
+  font-family: var(--font-cond);
+  font-size: var(--fs-value);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* Phase 1: the podium (P2, P1, P3; P1 raised) */
+.racepodium__podium {
+  display: grid;
+  grid-template-columns: repeat(var(--n, 3), 29.4rem);
+  align-items: end;
+  gap: 1.1rem;
+}
+
+.racepodium__podium--n2 { --n: 2; }
+.racepodium__podium--n1 { --n: 1; }
+
+.racepodium__step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: var(--s5) var(--s5) var(--s5);
+  overflow: hidden;
+  background: var(--panel);
+  border-top: 6px solid var(--rig-colour);
+  animation: card-in 500ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.racepodium__step--r1 {
+  margin-bottom: 4.5rem;
+  background: var(--panel-2);
+  animation-delay: 300ms;
+}
+
+.racepodium__step--r2 {
+  margin-bottom: 2rem;
+  animation-delay: 150ms;
+}
+
+.racepodium__flash {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8.5rem;
+  height: 4.2rem;
+  opacity: 0.9;
+}
+
+.racepodium .label {
+  font-size: 0.8rem;
+}
+
+.racepodium__top {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+}
+
+.racepodium__pos {
+  font-family: var(--font-num);
+  font-size: 4rem;
+  font-stretch: 125%;
+  font-weight: 900;
+  line-height: 0.9;
+}
+
+.racepodium__pos--win {
+  color: var(--brand-accent);
+}
+
+.racepodium__body {
+  display: flex;
+  gap: var(--s5);
+  align-items: stretch;
+}
+
+.racepodium__qr {
+  flex: none;
+  width: 15rem;
+  height: 15rem;
+}
+
+.racepodium__who {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  min-width: 0;
+}
+
+.racepodium__name {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 1.7rem;
+  font-stretch: 112%;
+  font-weight: 900;
+  line-height: 1.02;
+  overflow-wrap: anywhere;
+  text-transform: uppercase;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.racepodium__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.racepodium__value {
+  font-family: var(--font-num);
+  font-size: 1.45rem;
+  font-stretch: 112%;
+  font-weight: 800;
+}
+
+.racepodium__scan {
+  margin-top: auto;
+  color: var(--text-2);
+  font-family: var(--font-cond);
+  font-size: var(--fs-small);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* Phase 2: "Grab your card" */
+.racepodium__grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 5), minmax(0, 17.5rem));
+  justify-content: center;
+  gap: 1rem;
+  width: 100%;
+}
+
+.racepodium__grid--two {
+  grid-template-columns: repeat(var(--cols, 6), minmax(0, 1fr));
+}
+
+.racepodium__tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+  padding: var(--s4);
+  background: var(--panel);
+  border-top: 6px solid var(--rig-colour, var(--text-3));
+  text-align: center;
+  animation: card-in 450ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.racepodium__tile--wifi {
+  border-top-color: var(--brand-accent);
+  background: #172238; /* navy, the pattern system's second colour */
+}
+
+.racepodium__tileqr {
+  width: 100%;
+  max-width: 15rem;
+  height: auto;
+  aspect-ratio: 1;
+}
+
+.racepodium__tilename {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 1.25rem;
+  font-stretch: 112%;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.racepodium__tilepos {
+  font-family: var(--font-num);
+  font-size: 1.6rem;
+  font-stretch: 125%;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.racepodium__ssid {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 1.1rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.racepodium__lines {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+/* Wi-Fi QR beside the corner card QR */
+.cardqr__wifi {
+  display: flex;
+  gap: var(--s5);
+  align-items: center;
+  padding-left: var(--s5);
+  border-left: var(--hairline);
+}
+
+.cardqr__ssid {
+  font-size: var(--fs-name);
+  font-weight: 800;
+}
+
+/* Card page: the Instagram help line */
+.cardpage__help {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 14px;
+  text-align: center;
+}

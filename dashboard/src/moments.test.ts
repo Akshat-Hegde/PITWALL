@@ -5,7 +5,7 @@ import { LapTraceTracker } from "./state/laptrace";
 import { battleCandidate } from "./components/Moments";
 import { DEFAULT_MOCK_OPTIONS, MockHub } from "./mock/sim";
 import type { HubMessage, Moment } from "./schema";
-import { ALL_FEATURES, applyMessage, initialState, type DashboardState } from "./state/reducer";
+import { ALL_FEATURES, MOMENTS_MAX, applyMessage, initialState, type DashboardState } from "./state/reducer";
 import { DashboardStore } from "./state/store";
 import { validateMessage } from "./testing/validate";
 
@@ -134,5 +134,63 @@ describe("head to head colours", () => {
     const [a, b] = distinctColours("#e85fae", "#f06a6a");                            // pink vs salmon
     expect(a).toBe("#e85fae");
     expect(b).toBe("#3987e5");
+  });
+});
+
+describe("race podium", () => {
+  const wifi = { ssid: "Cafe Guest", qr: "WIFI:T:WPA;S:Cafe Guest;P:racefast1;;" };
+  const race = (at: number) => ({ v: 1, type: "moment", seq: 1, ts: at, moment: {
+    kind: "race_podium", at, track_key: "F1:7", track_name: "Silverstone", session_type: "Race", wifi,
+    drivers: [1, 2].map((rank) => ({ rank, position: rank + 2, driver: `D${rank}`, rig_id: `r${rank}`, grid_position: 5,
+      laps: 5, best_lap_ms: 87_000, total_time_s: 440.5, status: "finished", card_url: `http://hub/card/t${rank}`,
+      card_token: `t${rank}` })) } }) as unknown as HubMessage;
+
+  test("a race_podium moment validates and queues; off with sharing or race_podium off", () => {
+    expect(validateMessage(race(1))).toEqual([]);
+    let s: DashboardState = { ...initialState("hub"), link: "live", receivedVersion: 1 };
+    s = applyMessage(s, race(1), 0);
+    expect(s.moments.map((m) => m.kind)).toEqual(["race_podium"]);
+    const off = (f: Partial<typeof ALL_FEATURES>) =>
+      applyMessage({ ...s, moments: [], features: { ...ALL_FEATURES, ...f } }, race(2), 0).moments;
+    expect(off({ sharing: false })).toEqual([]);
+    expect(off({ race_podium: false })).toEqual([]);
+    expect(off({ moments: false })).toHaveLength(1); // its own switch, not the moments one
+  });
+
+  test("a full queue never drops the moment on screen (the 40 s race podium)", () => {
+    let s: DashboardState = { ...initialState("hub"), link: "live", receivedVersion: 1 };
+    s = applyMessage(s, race(1), 0);
+    for (let i = 2; i < 12; i++) s = applyMessage(s, moment("now_driving", i), 0);
+    expect(s.moments).toHaveLength(MOMENTS_MAX);
+    expect(s.moments[0]!.kind).toBe("race_podium");
+    expect(s.moments.at(-1)!.at).toBe(11);
+  });
+
+  test("a bad race_podium moment fails validation", () => {
+    const bad = race(1) as unknown as { moment: { drivers: { card_url: unknown }[] } };
+    bad.moment.drivers[0]!.card_url = 5;
+    expect(validateMessage(bad as unknown as HubMessage).length).toBeGreaterThan(0);
+  });
+
+  test("cafe.wifi comes from the snapshot and the cafe message", () => {
+    const snap = run(0)[0]! as unknown as { cafe: Record<string, unknown> };
+    snap.cafe = { ...snap.cafe, wifi };
+    expect(validateMessage(snap as unknown as HubMessage)).toEqual([]);
+    let s = applyMessage(initialState("hub"), snap as unknown as HubMessage, 0);
+    expect(s.cafe.wifi).toEqual(wifi);
+    const cafe = { v: 1, type: "cafe", seq: 2, ts: 0, cafe: { name: "X", branding: {}, wifi: null } } as unknown as HubMessage;
+    expect(validateMessage(cafe)).toEqual([]);
+    s = applyMessage(s, cafe, 0);
+    expect(s.cafe.wifi).toBeNull();
+    expect(validateMessage({ ...cafe, cafe: { name: "X", branding: {}, wifi: { ssid: 3 } } } as unknown as HubMessage))
+      .not.toEqual([]);
+  });
+
+  test("a solo race card moment keeps its race fields", () => {
+    const card = { v: 1, type: "moment", seq: 1, ts: 5, moment: { kind: "card", at: 5, rig_id: "r", driver: "Maya",
+      token: "t", url: "http://hub/card/t", best_ms: 88000, track_name: null, card_kind: "race", position: 4 } } as unknown as HubMessage;
+    const s = applyMessage({ ...initialState("hub"), link: "live", receivedVersion: 1 }, card, 0);
+    expect(s.cards[0]?.card_kind).toBe("race");
+    expect(s.cards[0]?.position).toBe(4);
   });
 });

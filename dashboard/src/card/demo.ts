@@ -1,5 +1,5 @@
 import { buildTrack } from "../mock/track";
-import type { StoryCard } from "../schema";
+import type { RaceStoryCard, StoryCard } from "../schema";
 
 /** A sample card for demos (/card/demo) and the mock's QR codes; no hub needed. */
 export function demoCard(): StoryCard {
@@ -30,5 +30,32 @@ export function demoCard(): StoryCard {
       points: track.points.filter((_, i) => i % step === 0).map(([x, z]) => [Math.round(x), Math.round(z)]),
       display: { flip_x: false, flip_z: false, rotate_deg: 0 },
     },
+  };
+}
+
+/** A sample race card (/card/demo-race): P4 from P7 on the grid, best of 4 cafe drivers. */
+export function demoRaceCard(): RaceStoryCard {
+  return {
+    kind: "race",
+    token: "demo-race",
+    created_at: Date.now(),
+    driver: "Maya R",
+    rig_name: "Rig 2",
+    track_key: "F1:900",
+    track_name: "Practice circuit",
+    cafe: { name: "Sim Racing Cafe", branding: {} },
+    session_type: "Race",
+    position: 4,
+    grid_position: 7,
+    positions_gained: 3,
+    laps: 5,
+    best_ms: 87_259,
+    best_lap_ms: 87_259,
+    total_time_s: 462.315,
+    penalties_s: 0,
+    status: "finished",
+    num_cars: 20,
+    cafe_rank: 1,
+    cafe_drivers: 4,
   };
 }

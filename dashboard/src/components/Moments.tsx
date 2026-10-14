@@ -6,11 +6,13 @@ import type { DashboardStore } from "../state/store";
 import { playSound } from "../sounds";
 import { findBattle } from "./Battle";
 import { ChallengeWinner } from "./Competition";
+import { RacePodium } from "./RacePodium";
 import { Avatar, EdgeLines, KineticType, StripeBundle, Tab } from "./Motifs";
 
 /** How long each moment stays on screen (DESIGN.md §4). */
 export const MOMENT_MS: Record<Moment["kind"], number> = {
   now_driving: 4000, record: 6000, podium: 10000, challenge_winner: 10000,
+  race_podium: 40_000, // 15 s podium, then 25 s "Grab your card" (RacePodium)
 };
 export const BATTLE_POPUP_MS = 5000;
 /** A pair (or "on course") pop-up isn't repeated within this time. */
@@ -21,7 +23,7 @@ export function MomentLayer({ store, state }: { store: DashboardStore; state: Da
   const moment = state.moments[0] ?? null;
   useEffect(() => {
     if (!moment) return;
-    if (state.sounds.enabled && moment.kind !== "podium") {
+    if (state.sounds.enabled && moment.kind !== "podium" && moment.kind !== "race_podium") {
       playSound(moment.kind === "record" ? "record" : "session_start", state.sounds.volume);
     }
     const timer = setTimeout(() => store.shiftMoment(moment.at), MOMENT_MS[moment.kind] ?? 5000);
@@ -36,6 +38,7 @@ export function MomentLayer({ store, state }: { store: DashboardStore; state: Da
       {moment.kind === "record" && <RecordBroken m={moment} colour={colour(moment.rig_id)} />}
       {moment.kind === "podium" && <Podium m={moment} colour={colour} />}
       {moment.kind === "challenge_winner" && <ChallengeWinner m={moment} />}
+      {moment.kind === "race_podium" && <RacePodium m={moment} state={state} />}
     </div>
   );
 }

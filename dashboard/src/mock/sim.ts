@@ -46,7 +46,12 @@ export interface MockOptions {
   event: boolean;
   /** A weekly challenge is running (?challenge=0 turns it off). */
   challenge: boolean;
+  /** The cafe has a guest Wi-Fi (?wifi=1, and demo mode): its QR shows beside card QR codes. */
+  wifi?: boolean;
 }
+
+/** The mock cafe's guest Wi-Fi (a made-up network). */
+export const MOCK_WIFI = { ssid: "Cafe Guest", qr: "WIFI:T:WPA;S:Cafe Guest;P:racefast1;;" };
 
 export const DEFAULT_MOCK_OPTIONS: MockOptions = {
   seed: 7,
@@ -265,9 +270,10 @@ export class MockHub {
       hub: { version: "mock", games: ["F1"], frame_hz: this.options.frameHz, udp_port: 20777,
              lan_address: "192.168.1.10", steering_rotation_deg: 360,
              features: { moments: true, battles: true, podium: true, attract: true, portrait: true,
-                         head_to_head: true, onboard: true, sharing: true, challenges: true, events: true },
+                         head_to_head: true, onboard: true, sharing: true, challenges: true, events: true,
+                         race_podium: true },
              moments: { battle_margin_ms: 300 }, sounds: { enabled: false, volume: 0.6 } },
-      cafe: { name: "Sim Racing Cafe", branding: {} },
+      cafe: { name: "Sim Racing Cafe", branding: {}, wifi: this.options.wifi ? MOCK_WIFI : null },
       status: this.status(),
       rigs: this.rigs.map((r) => r.spec.info),
       frame: { rigs: this.rigs.map((r) => this.frame(r)), comparison: this.comparison() },
@@ -470,6 +476,18 @@ export class MockHub {
         kind: "card", at: this.clock(), rig_id: rig.spec.info.rig_id, driver: rig.spec.driver ?? "Driver",
         token: "demo", url: `${globalThis.location?.origin ?? ""}/card/demo`, best_ms: rig.best?.lap_ms ?? 87_259,
         track_name: TRACK_NAME } };
+    }
+    if (kind === "race_podium") {
+      // Every driving rig raced; finishing order shuffled by the seed, real positions spread over 20 cars.
+      const racers = this.rigs.filter((r) => !r.spec.offline);
+      const origin = globalThis.location?.origin ?? "";
+      return this.moment({ kind: "race_podium", at: this.clock(), track_key: TRACK_KEY, track_name: TRACK_NAME,
+        session_type: "Race", wifi: this.options.wifi ? MOCK_WIFI : null,
+        drivers: racers.map((r, i) => ({
+          rank: i + 1, position: i * 2 + 1 + (i % 2), driver: r.spec.driver ?? r.spec.info.name, rig_id: r.spec.info.rig_id,
+          grid_position: ((i * 7) % 20) + 1, laps: 5, best_lap_ms: 87_100 + i * 140, total_time_s: 441.2 + i * 3.6,
+          status: "finished", card_url: `${origin}/card/demo-race`, card_token: `demo-race-${i}`,
+        })) });
     }
     if (kind === "record") {
       const top = this.leaderboard?.entries[0];
@@ -766,7 +784,7 @@ export function mockOptionsFromQuery(query: URLSearchParams): MockOptions {
   if (query.get("demo") === "1") {
     // Demo mode: a busy cafe. Six rigs, a full board, a podium every 3 minutes, a corporate event.
     return { ...DEFAULT_MOCK_OPTIONS, rigs: Number(query.get("rigs") ?? 6) || 6, pastDrivers: 14,
-             offlineRig: false, podiumEveryMs: 180_000, event: true };
+             offlineRig: false, podiumEveryMs: 180_000, event: true, wifi: true };
   }
   return {
     ...DEFAULT_MOCK_OPTIONS,
@@ -781,5 +799,6 @@ export function mockOptionsFromQuery(query: URLSearchParams): MockOptions {
     podiumEveryMs: Math.max(0, Number(query.get("podium") ?? 0) || 0) * 1000,
     event: query.get("event") === "1",
     challenge: query.get("challenge") !== "0",
+    wifi: query.get("wifi") === "1",
   };
 }

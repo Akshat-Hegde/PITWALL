@@ -2,9 +2,9 @@
 // Same design language as the TV (DESIGN.md): flat near-black, Saira wide numerals, kerb strip, stripe bundle,
 // timing colours only on timing values.
 
-import { formatDelta, formatLapTime } from "../format";
+import { formatDelta, formatLapTime, formatRaceTime, ordinal, raceResult } from "../format";
 import { IDENTITY_DISPLAY, emptyBounds, extend, fitBounds, project, toMapPlane } from "../map/geometry";
-import type { StoryCard } from "../schema";
+import type { AnyStoryCard, RaceStoryCard, StoryCard } from "../schema";
 
 export const CARD_W = 1080;
 export const CARD_H = 1920;
@@ -214,19 +214,18 @@ function miniMap(ctx: Ctx, card: StoryCard, x: number, y: number, w: number, h: 
   ctx.stroke();
 }
 
-export function drawCard(canvas: HTMLCanvasElement, card: StoryCard, accent = "#e10600"): void {
+/** Background, corner lines, kerb and the cafe line shared by both cards. Returns the context, or null. */
+function begin(canvas: HTMLCanvasElement, card: AnyStoryCard, accent: string, report: string): Ctx | null {
   canvas.width = CARD_W;
   canvas.height = CARD_H;
-  const ctx = canvas.getContext("2d") as Ctx | null;
-  if (!ctx) return;
+  const ctx = (canvas.getContext?.("2d") ?? null) as Ctx | null;
+  if (!ctx) return null;
   ctx.textBaseline = "alphabetic";
   ctx.fillStyle = C.bg;
   ctx.fillRect(0, 0, CARD_W, CARD_H);
   stripes(ctx, accent);
   kerb(ctx, 0, 0, 420, 12, accent);
-
   const left = 72;
-  // cafe
   ctx.fillStyle = accent;
   ctx.fillRect(left, 118, 22, 22);
   font(ctx, 800, 40, true);
@@ -235,7 +234,20 @@ export function drawCard(canvas: HTMLCanvasElement, card: StoryCard, accent = "#
   ctx.fillText((card.cafe.name || "Live timing").toUpperCase(), left + 38, 140);
   spaced(ctx, 0, 40);
   const date = new Date(card.created_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
-  label(ctx, `Session report · ${date}`, left, 210);
+  label(ctx, `${report} · ${date}`, left, 210);
+  return ctx;
+}
+
+/** Draws the story card: the race card for `kind: "race"`, else the session card. */
+export function drawCard(canvas: HTMLCanvasElement, card: AnyStoryCard, accent = "#e10600"): void {
+  if (card.kind === "race") drawRaceCard(canvas, card, accent);
+  else drawSessionCard(canvas, card, accent);
+}
+
+function drawSessionCard(canvas: HTMLCanvasElement, card: StoryCard, accent: string): void {
+  const ctx = begin(canvas, card, accent, "Session report");
+  if (!ctx) return;
+  const left = 72;
 
   // driver
   const name = card.driver.toUpperCase();
@@ -295,4 +307,117 @@ export function drawCard(canvas: HTMLCanvasElement, card: StoryCard, accent = "#
   font(ctx, 700, 34, true);
   ctx.fillStyle = C.text;
   ctx.fillText("COME BACK AND BEAT IT.", left, CARD_H - 80);
+}
+
+// ---- Race card ------------------------------------------------------------------------------------------
+
+/** What the race card says, worked out from the card data (kept apart from the drawing so it can be tested). */
+export interface RaceCardText {
+  /** "P4", or DNF / DSQ / NC / RET. */
+  big: string;
+  /** "Race · Silverstone". */
+  title: string;
+  /** "P7 → P4", or null without a grid position. */
+  grid: string | null;
+  /** "+3 places", "−2 places", "Held position", or null. */
+  gained: string | null;
+  gainedTone: "up" | "down" | "flat";
+  best: string;
+  total: string;
+  penalties: string | null;
+  laps: string;
+  /** "1st of 4 at <cafe>" (or "Raced at <cafe>" alone). */
+  cafe: string;
+}
+
+export function raceCardText(card: RaceStoryCard): RaceCardText {
+  const g = card.positions_gained;
+  const places = (n: number) => `${n} place${n === 1 ? "" : "s"}`;
+  const cafeName = card.cafe.name || "the cafe";
+  const best = card.best_lap_ms ?? card.best_ms;
+  return {
+    big: raceResult(card.status, card.position),
+    title: `${card.session_type && card.session_type !== "Race" ? card.session_type : "Race"} · ${card.track_name ?? "Track"}`,
+    grid: card.grid_position ? `P${card.grid_position} → P${card.position}` : null,
+    gained: g == null ? null : g > 0 ? `+${places(g)}` : g < 0 ? `−${places(-g)}` : "Held position",
+    gainedTone: g == null || g === 0 ? "flat" : g > 0 ? "up" : "down",
+    best: best ? formatLapTime(best) : "–",
+    total: formatRaceTime(card.total_time_s),
+    penalties: card.penalties_s > 0 ? `+${card.penalties_s} s penalty` : null,
+    laps: String(card.laps),
+    cafe: card.cafe_drivers >= 2 ? `${ordinal(card.cafe_rank)} of ${card.cafe_drivers} at ${cafeName}`
+      : `Raced at ${cafeName}`,
+  };
+}
+
+function drawRaceCard(canvas: HTMLCanvasElement, card: RaceStoryCard, accent: string): void {
+  const ctx = begin(canvas, card, accent, "Race report");
+  if (!ctx) return;
+  const t = raceCardText(card);
+  const left = 72;
+  const width = CARD_W - left * 2;
+
+  // The result, huge.
+  const bigSize = fitText(ctx, t.big, 900, 360, width - 160, true);
+  ctx.fillStyle = card.position === 1 && card.status === "finished" ? accent : C.text;
+  const bigBottom = 260 + bigSize * 0.78;
+  ctx.fillText(t.big, left - 10, bigBottom);
+  if (card.num_cars && t.big.startsWith("P")) {
+    const w = ctx.measureText(t.big).width;
+    label(ctx, `of ${card.num_cars}`, left + w + 10, bigBottom - 14, C.text2, 40);
+  }
+  label(ctx, t.title, left, bigBottom + 76, C.text, 40);
+
+  // Driver.
+  const name = card.driver.toUpperCase();
+  const nameSize = fitText(ctx, name, 900, 130, width, true);
+  ctx.fillStyle = C.text;
+  const nameY = bigBottom + 110 + nameSize * 0.95;
+  ctx.fillText(name, left, nameY);
+  label(ctx, card.rig_name, left, nameY + 56, C.text2, 30);
+
+  // Stats.
+  const gridY = nameY + 170;
+  ctx.fillStyle = C.line;
+  ctx.fillRect(left, gridY - 50, width, 2);
+  const col2 = CARD_W / 2 + 10;
+  stat(ctx, left, gridY, "Grid → finish", t.grid ?? t.big, null);
+  if (t.gained) {
+    const tone = t.gainedTone === "up" ? C.green : t.gainedTone === "down" ? C.yellow : C.text2;
+    label(ctx, t.gained, left, gridY + 136, tone, 32);
+  }
+  stat(ctx, col2, gridY, "Best lap", t.best, null, C.text);
+  stat(ctx, left, gridY + 200, "Race time", t.total, null);
+  if (t.penalties) label(ctx, t.penalties, left, gridY + 336, C.yellow, 30);
+  stat(ctx, col2, gridY + 200, "Laps", t.laps, null);
+
+  // The cafe result.
+  const cafeY = gridY + 430;
+  ctx.fillStyle = C.line;
+  ctx.fillRect(left, cafeY - 50, width, 2);
+  tab(ctx, "Cafe result", card.cafe_drivers >= 2 ? `${card.cafe_drivers} drivers` : null, left, cafeY, accent);
+  const cafeText = t.cafe.toUpperCase();
+  const cafeSize = fitText(ctx, cafeText, 900, 84, width, true);
+  ctx.fillStyle = C.text;
+  ctx.fillText(cafeText, left, cafeY + 60 + cafeSize);
+
+  // Slanted flash blocks above the footer (the pattern system: 60° lean, red and navy).
+  const flashY = CARD_H - 290;
+  const h = 100;
+  const d = h * SLANT;
+  [[0, 300, accent], [330, 380, "#22324D"], [410, 425, accent]].forEach(([x0, x1, fill]) => {
+    ctx.fillStyle = fill as string;
+    ctx.beginPath();
+    ctx.moveTo(left + (x0 as number) + d, flashY);
+    ctx.lineTo(left + (x1 as number) + d, flashY);
+    ctx.lineTo(left + (x1 as number), flashY + h);
+    ctx.lineTo(left + (x0 as number), flashY + h);
+    ctx.closePath();
+    ctx.fill();
+  });
+
+  kerb(ctx, CARD_W - 420, CARD_H - 12, 420, 12, accent);
+  font(ctx, 700, 34, true);
+  ctx.fillStyle = C.text;
+  ctx.fillText("COME BACK AND RACE AGAIN.", left, CARD_H - 80);
 }

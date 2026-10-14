@@ -202,6 +202,23 @@ export interface Features {
   sharing: boolean;
   challenges: boolean;
   events: boolean;
+  /** Race podium and race cards when a race ends (needs sharing). */
+  race_podium: boolean;
+}
+
+/** Added in v1 (optional): the cafe's guest Wi-Fi for a "Join our Wi-Fi" QR. `qr` is a WIFI: URI that holds the
+ *  password: render it only as a QR code, and show only `ssid` as text. */
+export interface WifiShare {
+  ssid: string;
+  qr: string;
+}
+
+export interface CafeInfo {
+  name: string;
+  branding: Record<string, string>;
+  tagline?: string;
+  logo?: string | null;
+  wifi?: WifiShare | null;
 }
 
 export interface RecordBroken {
@@ -255,6 +272,37 @@ export interface CardMoment {
   url: string;
   best_ms: number;
   track_name: string | null;
+  /** Added in v1 (optional): "race" for a solo race result, with the real race position. */
+  card_kind?: "race" | "session" | string;
+  position?: number;
+}
+
+/** One cafe driver of a race that just ended (the race podium). */
+export interface RaceDriver {
+  /** Cafe ranking (1 = best cafe driver in this race). */
+  rank: number;
+  /** Real race position. */
+  position: number;
+  driver: string;
+  rig_id: string;
+  grid_position: number | null;
+  laps: number;
+  best_lap_ms: number | null;
+  total_time_s: number | null;
+  status: "finished" | "dnf" | "dsq" | "not_classified" | "retired" | string;
+  card_url: string;
+  card_token: string;
+}
+
+/** Added in v1: a race ended with 2 or more cafe drivers: the podium, then "Grab your card" with every QR. */
+export interface RacePodiumMoment {
+  kind: "race_podium";
+  at: number;
+  track_key: string | null;
+  track_name: string | null;
+  session_type: string | null;
+  drivers: RaceDriver[];
+  wifi: WifiShare | null;
 }
 
 /** A battle pop-up sent by the hub (the demo director); normally the TV finds battles itself. */
@@ -269,6 +317,7 @@ export interface BattleMoment {
 
 /** Story card data (GET /api/cards/<token>), drawn by the card page. Not part of the WebSocket feed. */
 export interface StoryCard {
+  kind?: "session";
   token: string;
   created_at: number;
   driver: string;
@@ -291,6 +340,33 @@ export interface StoryCard {
   outline: { points: [number, number][]; display: TrackOutline["display"] } | null;
 }
 
+/** Race story card data (GET /api/cards/<token> with kind "race"). */
+export interface RaceStoryCard {
+  kind: "race";
+  token: string;
+  created_at: number;
+  driver: string;
+  rig_name: string;
+  track_key: string | null;
+  track_name: string | null;
+  cafe: { name: string; branding: Record<string, string> };
+  session_type?: string | null;
+  position: number;
+  grid_position: number | null;
+  positions_gained: number | null;
+  laps: number;
+  best_ms: number | null;
+  best_lap_ms: number | null;
+  total_time_s: number | null;
+  penalties_s: number;
+  status: RaceDriver["status"];
+  num_cars?: number;
+  cafe_rank: number;
+  cafe_drivers: number;
+}
+
+export type AnyStoryCard = StoryCard | RaceStoryCard;
+
 export interface ChallengeWinnerMoment {
   kind: "challenge_winner";
   at: number;
@@ -304,8 +380,9 @@ export interface ChallengeWinnerMoment {
 }
 
 /** Added in v1 (optional): a full-screen broadcast moment. Unknown kinds are ignored. */
-export type Moment = NowDrivingMoment | RecordMoment | PodiumMoment | ChallengeWinnerMoment;
-export const MOMENT_KINDS: ReadonlySet<string> = new Set(["now_driving", "record", "podium", "challenge_winner"]);
+export type Moment = NowDrivingMoment | RecordMoment | PodiumMoment | ChallengeWinnerMoment | RacePodiumMoment;
+export const MOMENT_KINDS: ReadonlySet<string> = new Set(["now_driving", "record", "podium", "challenge_winner",
+  "race_podium"]);
 
 export interface LeaderboardEntry {
   rank: number;
@@ -442,7 +519,7 @@ export interface SnapshotMessage extends Envelope<"snapshot"> {
     moments?: { battle_margin_ms: number };
     sounds?: { enabled: boolean; volume: number };
   };
-  cafe: { name: string; branding: Record<string, string>; tagline?: string; logo?: string | null };
+  cafe: CafeInfo;
   status: HubStatus;
   rigs: RigInfo[];
   frame: { rigs: RigFrame[]; comparison: Comparison | null };
@@ -516,7 +593,7 @@ export interface HeadToHeadMessage extends Envelope<"head_to_head"> {
 }
 
 export interface CafeMessage extends Envelope<"cafe"> {
-  cafe: { name: string; branding: Record<string, string>; tagline?: string; logo?: string | null };
+  cafe: CafeInfo;
 }
 
 export interface TvMessage extends Envelope<"tv"> {

@@ -35,6 +35,39 @@ class Checker {
   }
 }
 
+/** cafe (snapshot and cafe message); `wifi` is optional: null or { ssid, qr }. */
+function cafeInfo(c: Checker, v: unknown, p: string) {
+  c.object(v, p, (cafe) => {
+    c.field(cafe, "name", isStr, p);
+    c.field(cafe, "branding", isObj, p);
+    if ("wifi" in cafe && cafe.wifi !== null) wifi(c, cafe.wifi, `${p}.wifi`);
+  });
+}
+
+function wifi(c: Checker, v: unknown, p: string) {
+  c.object(v, p, (w) => {
+    c.field(w, "ssid", isStr, p);
+    c.field(w, "qr", (x) => isStr(x) && (x as string).startsWith("WIFI:"), p);
+  });
+}
+
+function racePodium(c: Checker, mo: Obj, p: string) {
+  c.field(mo, "track_key", orNull(isStr), p);
+  c.field(mo, "track_name", orNull(isStr), p);
+  c.field(mo, "session_type", orNull(isStr), p);
+  if (!("wifi" in mo)) c.errors.push(`${p}.wifi: missing`);
+  else if (mo.wifi !== null) wifi(c, mo.wifi, `${p}.wifi`);
+  c.array(mo.drivers, `${p}.drivers`, (d, dp) =>
+    c.object(d, dp, (o) => {
+      for (const k of ["rank", "position", "laps"]) c.field(o, k, isInt, dp);
+      for (const k of ["driver", "rig_id", "status", "card_url", "card_token"]) c.field(o, k, isStr, dp);
+      c.field(o, "grid_position", orNull(isInt), dp);
+      c.field(o, "best_lap_ms", orNull(isInt), dp);
+      c.field(o, "total_time_s", orNull(isNum), dp);
+    }),
+  );
+}
+
 const RIG_STATES = new Set(["driving", "in_menu_paused", "no_data"]);
 const RATINGS = new Set(["session_best", "personal_best", "normal"]);
 
@@ -225,10 +258,7 @@ export function validateMessage(msg: unknown): string[] {
           c.field(h, "version", isStr, `${p}.hub`);
           c.field(h, "frame_hz", isNum, `${p}.hub`);
         });
-        c.object(m.cafe, `${p}.cafe`, (cafe) => {
-          c.field(cafe, "name", isStr, `${p}.cafe`);
-          c.field(cafe, "branding", isObj, `${p}.cafe`);
-        });
+        cafeInfo(c, m.cafe, `${p}.cafe`);
         status(c, m.status, `${p}.status`);
         c.array(m.rigs, `${p}.rigs`, (r, rp) => rigInfo(c, r, rp));
         c.object(m.frame, `${p}.frame`, (f) => {
@@ -295,7 +325,14 @@ export function validateMessage(msg: unknown): string[] {
         c.object(m.moment, `${p}.moment`, (mo) => {
           c.field(mo, "kind", isStr, `${p}.moment`);
           c.field(mo, "at", isInt, `${p}.moment`);
+          if (mo.kind === "race_podium") racePodium(c, mo, `${p}.moment`);
         });
+        break;
+      case "cafe":
+        cafeInfo(c, m.cafe, `${p}.cafe`);
+        break;
+      case "tv":
+        c.field(m, "tv", isObj, p);
         break;
       default:
         c.errors.push(`${p}: unknown type`);

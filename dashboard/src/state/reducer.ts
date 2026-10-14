@@ -7,6 +7,7 @@ import {
   type Features,
   MOMENT_KINDS,
   type BattleMoment,
+  type CafeInfo,
   type CardMoment,
   type Competition,
   type HeadToHead,
@@ -31,7 +32,7 @@ export interface DashboardState {
   /** "hub" when talking to a real hub, "mock" for the built-in simulation. */
   source: "hub" | "mock";
   receivedVersion: number | null;
-  cafe: { name: string; branding: Record<string, string>; tagline?: string; logo?: string | null };
+  cafe: CafeInfo;
   frameHz: number;
   /** Where games send telemetry, from the hub (for the waiting screen). */
   telemetryTarget: { address: string | null; port: number };
@@ -73,7 +74,7 @@ export interface DashboardState {
 
 export const ALL_FEATURES: Features = {
   moments: true, battles: true, podium: true, attract: true, portrait: true, head_to_head: true, onboard: true,
-  sharing: true, challenges: true, events: true,
+  sharing: true, challenges: true, events: true, race_podium: true,
 };
 export const CARDS_MAX = 3;
 export const MOMENTS_MAX = 5;
@@ -117,7 +118,14 @@ function momentAllowed(moment: Moment, features: Features): boolean {
   if (!moment || !MOMENT_KINDS.has(moment.kind)) return false;
   if (moment.kind === "podium") return features.podium;
   if (moment.kind === "challenge_winner") return features.challenges;
+  if (moment.kind === "race_podium") return features.sharing && features.race_podium;
   return features.moments;
+}
+
+/** Add a moment to the queue. When it's full, the oldest waiting ones go, never the head: it is on screen. */
+function queueMoment(queue: Moment[], moment: Moment): Moment[] {
+  const next = [...queue, moment];
+  return next.length <= MOMENTS_MAX ? next : [next[0]!, ...next.slice(-(MOMENTS_MAX - 1))];
 }
 
 function isPeriod(period: string): period is BoardPeriod {
@@ -233,7 +241,7 @@ export function applyMessage(state: DashboardState, msg: HubMessage, now: number
         return { ...state, cards: [...state.cards, msg.moment as CardMoment].slice(-CARDS_MAX) };
       }
       if (!momentAllowed(msg.moment as Moment, state.features)) return state;
-      return { ...state, moments: [...state.moments, msg.moment as Moment].slice(-MOMENTS_MAX) };
+      return { ...state, moments: queueMoment(state.moments, msg.moment as Moment) };
     case "leaderboard": {
       const period = msg.leaderboard.period;
       if (!isPeriod(period)) return state;
