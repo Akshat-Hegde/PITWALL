@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Check-in stickers · {{PRODUCT_NAME}}</title>
+<style>
+  @page { size: A4; margin: 10mm; }
+  :root { --accent: #e10600; --ink: #0c0d11; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #e9eaee; color: var(--ink); font: 16px/1.3 "Saira", "Segoe UI", system-ui, sans-serif; }
+  .toolbar { display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--ink); color: #fff; }
+  .toolbar span { flex: 1; font-weight: 700; }
+  .toolbar button { padding: 9px 18px; border: 0; background: var(--accent); color: #fff; font: inherit; font-weight: 800; cursor: pointer; }
+  .msg { padding: 16px; color: #b00; }
+  form#pin-form { max-width: 320px; margin: 24px auto; padding: 16px; background: #fff; }
+  form#pin-form input { width: 100%; padding: 10px; font: inherit; margin: 8px 0; }
+  form#pin-form button { padding: 9px 18px; border: 0; background: var(--accent); color: #fff; font: inherit; font-weight: 800; }
+  .sheet { width: 190mm; margin: 12px auto; display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; }
+  .sticker { position: relative; background: #fff; border: 0.4mm dashed #888; padding: 6mm 6mm 5mm; text-align: center; break-inside: avoid; page-break-inside: avoid; min-height: 88mm; display: flex; flex-direction: column; align-items: center; }
+  .sticker::before { content: ""; position: absolute; left: 0; top: 0; width: 100%; height: 3mm; background: linear-gradient(180deg, var(--accent) 0 0.8mm, transparent 0.8mm 1.6mm, var(--accent) 1.6mm 3mm); }
+  .tag { display: inline-block; margin-top: 2mm; background: var(--accent); color: #fff; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; font-size: 22pt; padding: 1mm 6mm 1mm 4mm; transform: skewX(-10deg); }
+  .tag > span { display: inline-block; transform: skewX(10deg); }
+  .qr { width: 52mm; height: 52mm; margin: 4mm 0 2mm; }
+  .qr svg { width: 100%; height: 100%; display: block; }
+  .scan { font-weight: 700; font-size: 12pt; }
+  .wifi { margin-top: auto; padding-top: 2mm; display: flex; align-items: center; gap: 3mm; text-align: left; font-size: 8.5pt; color: #444; }
+  .wifi .wq { width: 17mm; height: 17mm; flex: none; }
+  .wifi .wq svg { width: 100%; height: 100%; display: block; }
+  .wifi b { display: block; font-size: 9.5pt; color: var(--ink); }
+  @media print {
+    body { background: #fff; }
+    .toolbar, .msg, #pin-form { display: none !important; }
+    .sheet { margin: 0; width: auto; }
+    .sticker { border: 0.3mm dashed #aaa; }
+  }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="toolbar"><span>Check-in stickers: print, cut and stick one on each rig</span><button type="button" id="print">Print</button></div>
+<form id="pin-form" hidden>
+  <label for="pin">Staff PIN</label>
+  <input id="pin" type="password" inputmode="numeric" autocomplete="off">
+  <button type="submit">Show stickers</button>
+</form>
+<p class="msg" id="msg" role="alert"></p>
+<div class="sheet" id="sheet"></div>
+
+<script>
+(() => {
+  const PIN_KEY = "simtelemetry-staff-pin";           // the same one /staff stores
+  const $ = (id) => document.getElementById(id);
+  function pin() { try { return sessionStorage.getItem(PIN_KEY) || ""; } catch { return ""; } }
+
+  function svgInto(box, svg) {                         // the SVG comes from the hub's own QR generator, never from user input
+    box.innerHTML = svg;
+  }
+
+  function sticker(rig, wifi) {
+    const el = document.createElement("div");
+    el.className = "sticker";
+    const tag = document.createElement("div"); tag.className = "tag";
+    const label = document.createElement("span"); label.textContent = rig.rig_name; tag.appendChild(label);
+    const qr = document.createElement("div"); qr.className = "qr"; svgInto(qr, rig.svg);
+    const scan = document.createElement("div"); scan.className = "scan"; scan.textContent = "Scan to put your name on " + rig.rig_name;
+    el.append(tag, qr, scan);
+    if (wifi) {
+      const w = document.createElement("div"); w.className = "wifi";
+      const wq = document.createElement("div"); wq.className = "wq"; svgInto(wq, wifi.svg);
+      const text = document.createElement("div");
+      const head = document.createElement("b"); head.textContent = "Join our Wi-Fi first";
+      const net = document.createElement("span"); net.textContent = wifi.ssid;
+      text.append(head, net); w.append(wq, text); el.appendChild(w);
+    }
+    return el;
+  }
+
+  async function load() {
+    $("msg").textContent = "";
+    const res = await fetch("/api/staff/checkin/sheet", { headers: { "X-Staff-Pin": pin() } });
+    let data = null;
+    try { data = await res.json(); } catch { /* empty */ }
+    if (res.status === 401 || res.status === 429) {
+      $("pin-form").hidden = false; $("msg").textContent = (data && data.detail) || ""; $("pin").focus(); return;
+    }
+    if (!res.ok) { $("msg").textContent = (data && data.detail) || "The hub answered " + res.status + "."; return; }
+    $("pin-form").hidden = true;
+    if (!data.enabled) $("msg").textContent = "Self check-in is switched off, so these stickers will show a notice. Turn it on in the settings.";
+    if (!data.rigs.length) $("msg").textContent = "No rigs yet. Each rig appears as soon as its game sends telemetry.";
+    const sheet = $("sheet"); sheet.textContent = "";
+    for (const rig of data.rigs) sheet.appendChild(sticker(rig, data.wifi));
+  }
+
+  $("pin-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    try { sessionStorage.setItem(PIN_KEY, $("pin").value); } catch { /* private mode */ }
+    load();
+  });
+  $("print").addEventListener("click", () => window.print());
+  load();
+})();
+</script>
+</body>
+</html>

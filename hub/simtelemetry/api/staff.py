@@ -19,6 +19,7 @@ from fastapi.responses import HTMLResponse
 from ..core.drivers import EXTEND_PROMPT_MS, DriverError
 from ..core.feed import FeedBuilder, lan_address
 from ..core.tv import TvError
+from ..core.wifi import wifi_share
 from ..core.health import RigState
 from .pages import render_page
 
@@ -30,6 +31,7 @@ MAX_FAILURES = 5
 FAILURE_WINDOW_S = 60.0
 
 STAFF_PAGE = Path(__file__).with_name("staff.html")
+PRINT_PAGE = Path(__file__).with_name("checkin_print.html")
 STATE_TEXT = {RigState.DRIVING: "On track", RigState.IN_MENU: "In menu", RigState.NO_DATA: "No data"}
 
 
@@ -95,6 +97,10 @@ def staff_router(hub: Hub) -> APIRouter:
     @router.get("/staff", response_class=HTMLResponse, include_in_schema=False)
     def page() -> HTMLResponse:
         return render_page(STAFF_PAGE)
+
+    @router.get("/staff/checkin-print", response_class=HTMLResponse, include_in_schema=False)
+    def checkin_print_page() -> HTMLResponse:
+        return render_page(PRINT_PAGE)       # the page asks for the PIN itself, like /staff
 
     @router.get("/api/staff/rigs", dependencies=[Depends(guard)])
     def rigs() -> dict[str, Any]:
@@ -194,6 +200,16 @@ def staff_router(hub: Hub) -> APIRouter:
         codes = hub.checkin.codes()
         return {"enabled": hub.config.features.self_checkin,
                 "rigs": [code_row(r, codes[r.ip]) for r in hub.registry.all() if r.ip in codes]}
+
+    @router.get("/api/staff/checkin/sheet", dependencies=[Depends(guard)])
+    def checkin_sheet() -> dict[str, Any]:
+        """Everything the printable sticker sheet needs: a QR (inline SVG) per rig, and the guest Wi-Fi QR if set."""
+        codes = hub.checkin.codes()
+        rigs = [{**row, "svg": _qr_svg(row["url"])}
+                for row in (code_row(r, codes[r.ip]) for r in hub.registry.all() if r.ip in codes)]
+        share = wifi_share(hub.config)
+        return {"enabled": hub.config.features.self_checkin, "rigs": rigs,
+                "wifi": {"ssid": share["ssid"], "svg": _qr_svg(share["qr"])} if share else None}
 
     @router.post("/api/staff/checkin/codes/{rig_id}/regenerate", dependencies=[Depends(guard)])
     def checkin_regenerate(rig_id: str) -> dict[str, Any]:
@@ -325,6 +341,15 @@ def staff_router(hub: Hub) -> APIRouter:
         return {"shown": True, "entries": len(moment["entries"])}
 
     return router
+
+
+def _qr_svg(text: str) -> str:
+    import io
+
+    import segno
+    out = io.BytesIO()
+    segno.make(text, error="m").save(out, kind="svg", scale=8, border=1, dark="#000", light="#fff", xmldecl=False)
+    return out.getvalue().decode("utf-8")
 
 
 def _card_link(card: dict[str, Any] | None) -> dict[str, Any] | None:

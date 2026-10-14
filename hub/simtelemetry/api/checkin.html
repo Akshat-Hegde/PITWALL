@@ -2,10 +2,178 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0c0d11">
 <title>{{PRODUCT_NAME}} check-in</title>
+<style>
+  :root {
+    --bg: #0c0d11; --panel: #14151b; --panel-2: #1b1c24; --edge: #262731; --line: rgba(255,255,255,0.08);
+    --text: #fff; --text-2: rgba(255,255,255,0.6); --text-3: rgba(255,255,255,0.38);
+    --accent: #e10600; --ok: #38d97a; --error: #ff6b6b;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
+    font: 16px/1.4 "Saira", "Segoe UI", system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+  .kerb { height: 7px; width: 300px; max-width: 80%; background: linear-gradient(180deg, var(--accent) 0 2px, transparent 2px 4px, var(--accent) 4px 7px); clip-path: polygon(0 0, 100% 0, calc(100% - 6px) 100%, 0 100%); }
+  .bar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  .brand { flex: 1; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+  main { max-width: 480px; margin: 0 auto; padding: 20px 16px 40px; }
+  .tag { display: inline-block; background: var(--accent); color: #fff; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.8rem; padding: 3px 14px 3px 10px; transform: skewX(-10deg); }
+  .tag > span { display: inline-block; transform: skewX(10deg); }
+  h1 { margin: 12px 0 4px; font-size: 2.4rem; line-height: 1.05; font-weight: 800; text-transform: uppercase; letter-spacing: 0.01em; }
+  h2 { margin: 0 0 8px; font-size: 1.5rem; font-weight: 800; text-transform: uppercase; }
+  .muted { color: var(--text-2); }
+  .panel { position: relative; background: var(--panel); padding: 18px 16px; margin-top: 18px; border-left: 4px solid var(--accent);
+    clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%); }
+  label { display: block; font-size: 0.85rem; color: var(--text-2); margin: 0 0 6px; letter-spacing: 0.04em; }
+  input { width: 100%; padding: 14px 12px; font: inherit; font-size: 1.2rem; color: var(--text); background: var(--panel-2); border: 1px solid var(--edge); border-radius: 0; }
+  input:focus { outline: 2px solid var(--accent); outline-offset: 0; }
+  button.btn { display: block; width: 100%; margin-top: 14px; padding: 16px; border: 1px solid var(--edge); background: var(--panel-2); color: var(--text);
+    font: inherit; font-size: 1.15rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; }
+  button.btn.primary { background: var(--accent); border-color: var(--accent); }
+  button.btn.big { padding: 22px 16px; font-size: 1.4rem; }
+  button.btn:disabled { opacity: 0.5; }
+  a.btn { display: block; margin-top: 14px; padding: 18px 16px; text-align: center; text-decoration: none; background: var(--accent); color: #fff;
+    font-size: 1.2rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+  .msg { min-height: 1.4em; margin: 10px 0 0; color: var(--error); font-size: 0.95rem; }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
+  .stat { background: var(--panel-2); padding: 12px; }
+  .stat small { display: block; color: var(--text-3); font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; }
+  .stat b { font-size: 2rem; font-weight: 800; }
+  .live { display: inline-block; width: 10px; height: 10px; background: var(--ok); margin-right: 6px; }
+  [hidden] { display: none !important; }
+</style>
 </head>
-<body style="font-family:system-ui,sans-serif;background:#10161c;color:#eef3f6;margin:0;padding:2rem 16px;text-align:center">
-<h1 style="font-size:1.4rem">Check-in is coming soon</h1>
+<body>
+<div class="kerb"></div>
+<div class="bar"><span class="brand">{{PRODUCT_NAME}}</span></div>
+<main>
+  <section id="view-free" hidden>
+    <span class="tag"><span id="free-rig"></span></span>
+    <h1>Drive this rig</h1>
+    <p class="muted">Put your name on the leaderboard and get your own lap card when you finish.</p>
+    <form class="panel" id="form">
+      <label for="name">What's your name?</label>
+      <input id="name" maxlength="32" autocomplete="given-name" autocapitalize="words" placeholder="First name" required>
+      <button class="btn primary" type="submit" id="start">Start</button>
+      <p class="msg" id="start-msg" role="alert"></p>
+    </form>
+  </section>
+
+  <section id="view-busy" hidden>
+    <span class="tag"><span id="busy-rig"></span></span>
+    <h1>Someone is driving</h1>
+    <p class="muted">This rig is in use right now. Try again in a few minutes, or ask the staff.</p>
+  </section>
+
+  <section id="view-yours" hidden>
+    <span class="tag"><span id="yours-rig"></span></span>
+    <h1 id="yours-title"></h1>
+    <p class="muted"><span class="live"></span>Your laps are counting. Have fun!</p>
+    <div class="stats">
+      <div class="stat"><small>Laps</small><b id="laps">0</b></div>
+      <div class="stat"><small>Best lap</small><b id="best">--</b></div>
+    </div>
+    <button class="btn big primary" type="button" id="done" style="margin-top:22px">I'm done</button>
+    <p class="msg" id="done-msg" role="alert"></p>
+  </section>
+
+  <section id="view-ended" hidden>
+    <span class="tag"><span>Finished</span></span>
+    <h1>Nice driving</h1>
+    <div class="panel" id="card-box" hidden>
+      <h2>Your card</h2>
+      <p class="muted">Save it and post it to your Instagram story.</p>
+      <a class="btn" id="card-link" href="#">Save for Instagram story</a>
+    </div>
+    <p class="muted" id="no-card" hidden>No laps counted this time, so there is no card. Come back and set a time!</p>
+    <button class="btn" type="button" id="again" style="margin-top:22px">Drive again</button>
+  </section>
+
+  <section id="view-error" hidden>
+    <h1>Check-in</h1>
+    <p class="muted" id="error-text"></p>
+  </section>
+</main>
+
+<script>
+(() => {
+  const KEY = "pitwall-checkin";
+  const $ = (id) => document.getElementById(id);
+  const code = decodeURIComponent(location.pathname.split("/").filter(Boolean).pop() || "");
+  const views = ["free", "busy", "yours", "ended", "error"];
+  let secret = "";
+  let timer = null;
+
+  function load() { try { const v = JSON.parse(localStorage.getItem(KEY) || "null"); return v && v.code === code ? v.secret : ""; } catch { return ""; } }
+  function save() { try { if (secret) localStorage.setItem(KEY, JSON.stringify({ code, secret })); else localStorage.removeItem(KEY); } catch { /* private mode */ } }
+  function show(name) { for (const v of views) $("view-" + v).hidden = v !== name; }
+  function fmt(ms) { const m = Math.floor(ms / 60000), s = (ms % 60000) / 1000; return m + ":" + s.toFixed(3).padStart(6, "0"); }
+  function fail(text) { show("error"); $("error-text").textContent = text; clearInterval(timer); }
+
+  async function call(method, path, body) {
+    const res = await fetch(path, { method, headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
+    let data = null;
+    try { data = await res.json(); } catch { /* empty body */ }
+    if (!res.ok) {
+      const e = new Error((data && typeof data.detail === "string" && data.detail) || "Something went wrong (" + res.status + ").");
+      e.status = res.status;
+      throw e;
+    }
+    return data;
+  }
+
+  function render(s) {
+    for (const id of ["free-rig", "busy-rig", "yours-rig"]) $(id).textContent = s.rig_name;
+    if (s.state === "yours") {
+      $("yours-title").textContent = "You're on " + s.rig_name + ". Drive!";
+      $("laps").textContent = s.laps;
+      $("best").textContent = s.best_ms ? fmt(s.best_ms) : "--";
+      show("yours");
+    } else if (s.state === "ended") {
+      $("card-box").hidden = !s.card_url;
+      $("no-card").hidden = !!s.card_url;
+      if (s.card_url) $("card-link").href = s.card_url;
+      show("ended");
+      clearInterval(timer);
+    } else {
+      show(s.state === "busy" ? "busy" : "free");
+    }
+  }
+
+  async function poll() {
+    try {
+      render(await call("GET", "/api/checkin/" + encodeURIComponent(code) + (secret ? "?secret=" + encodeURIComponent(secret) : "")));
+    } catch (err) { if (err.status) fail(err.message); }   // network blips: keep the last screen
+  }
+  function start() { clearInterval(timer); poll(); timer = setInterval(poll, 3000); }
+
+  $("form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    $("start").disabled = true; $("start-msg").textContent = "";
+    try {
+      const r = await call("POST", "/api/checkin/" + encodeURIComponent(code), { name: $("name").value });
+      secret = r.secret; save(); start();
+    } catch (err) { $("start-msg").textContent = err.message; }
+    $("start").disabled = false;
+  });
+
+  $("done").addEventListener("click", async () => {
+    if (!confirm("Finish your session?")) return;
+    $("done").disabled = true; $("done-msg").textContent = "";
+    try { await call("POST", "/api/checkin/" + encodeURIComponent(code) + "/done", { secret }); await poll(); }
+    catch (err) { $("done-msg").textContent = err.message; }
+    $("done").disabled = false;
+  });
+
+  $("again").addEventListener("click", () => { secret = ""; save(); show("free"); start(); });
+
+  const m = /(?:^|[#&])s=([^&]+)/.exec(location.hash);          // a secret in the link resumes that session
+  if (m) { secret = decodeURIComponent(m[1]); save(); history.replaceState(null, "", location.pathname); }
+  else secret = load();
+  start();
+})();
+</script>
 </body>
 </html>

@@ -332,6 +332,10 @@
       </div>
       <div class="actions"><button class="btn primary" type="submit">Start session</button></div>
     </form>
+    <div class="actions rig__checkin" hidden>
+      <a class="btn small" href="/staff/checkin-print" target="_blank" rel="noopener" style="text-decoration:none">Check-in QR</a>
+      <button class="btn small rig__newcode" type="button">New code</button>
+    </div>
     <p class="msg rig__msg" role="status"></p>
   </section>
 </template>
@@ -430,6 +434,13 @@
     el.querySelector(".rig__state").textContent = rig.state_text + (rig.track_name ? " · " + rig.track_name : "");
     const msg = el.querySelector(".rig__msg");
     const s = rig.session;
+    const checkin = el.querySelector(".rig__checkin");
+    checkin.hidden = !(state.features && state.features.self_checkin);
+    el.querySelector(".rig__newcode").addEventListener("click", async () => {
+      if (!confirm("Make a new check-in code for " + rig.rig_name + "? Old stickers stop working.")) return;
+      try { await api("POST", `/api/staff/checkin/codes/${encodeURIComponent(rig.rig_id)}/regenerate`); say(msg, "New code made. Print the stickers again.", "ok"); }
+      catch (err) { fail(msg, err); }
+    });
     el.querySelector(".rig__session").hidden = !s;
     el.querySelector(".rig__start").hidden = !!s;
     if (s) {

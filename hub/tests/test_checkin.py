@@ -274,3 +274,43 @@ async def test_corrupt_codes_file_warns_and_regenerates(tmp_path, caplog):
     (tmp_path / "checkin.json").write_text("{not json", encoding="utf-8")
     hub, client, code = await checkin_client(tmp_path)
     assert len(code) == 8 and "stickers stop working" in caplog.text
+
+
+# --- pages and the print sheet -----------------------------------------------------------------
+
+async def test_phone_page_is_real_and_has_the_name_filled(tmp_path):
+    from simtelemetry import brand
+    hub, client, code = await checkin_client(tmp_path)
+    r = client.get(f"/checkin/{code}")
+    assert r.status_code == 200 and "{{PRODUCT_NAME}}" not in r.text and brand.PRODUCT_NAME in r.text
+    assert "What's your name?" in r.text and "innerHTML" not in r.text
+
+
+async def test_print_page_and_sheet_have_one_qr_per_rig(tmp_path):
+    hub, client, code = await checkin_client(tmp_path)
+    page = client.get("/staff/checkin-print")
+    assert page.status_code == 200 and "{{PRODUCT_NAME}}" not in page.text
+    sheet = client.get("/api/staff/checkin/sheet").json()
+    assert len(sheet["rigs"]) == 1 and sheet["wifi"] is None
+    rig = sheet["rigs"][0]
+    assert rig["svg"].lstrip().startswith("<svg") and rig["url"].endswith(f"/checkin/{code}")
+
+
+async def test_print_sheet_has_the_wifi_qr_when_set(tmp_path):
+    from simtelemetry.config import CafeConfig
+    hub, client, code = await checkin_client(tmp_path, cafe=CafeConfig(wifi_ssid="CafeNet", wifi_password="pw123456"))
+    sheet = client.get("/api/staff/checkin/sheet").json()
+    assert sheet["wifi"]["ssid"] == "CafeNet" and "<svg" in sheet["wifi"]["svg"]
+
+
+async def test_print_sheet_needs_the_pin(tmp_path):
+    from simtelemetry.config import StaffConfig
+    hub, client = await client_with_rig(tmp_path, staff=StaffConfig(pin="1234"))
+    assert client.get("/api/staff/checkin/sheet").status_code == 401
+    assert client.get("/staff/checkin-print").status_code == 200          # the page asks for the PIN itself
+
+
+def test_staff_page_has_the_checkin_controls():
+    from pathlib import Path
+    text = (Path(__file__).parents[1] / "simtelemetry" / "api" / "staff.html").read_text(encoding="utf-8")
+    assert "Check-in QR" in text and "New code" in text and "Old stickers stop working" in text
