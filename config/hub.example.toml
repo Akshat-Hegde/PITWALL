@@ -50,6 +50,10 @@ steering_wheel_rotation_deg = 360       # lock-to-lock rotation of the TV's whee
 # challenges = true                    # weekly challenges
 # events = true                        # corporate events with teams
 # race_podium = true                   # race podium and race story cards (needs sharing = true)
+# self_checkin = true                  # guests scan a QR sticker on the rig and type their own name
+
+[checkin]
+# blocked_words = ["somename"]         # extra words the self check-in name filter rejects (whole words)
 
 [moments]
 battle_margin_ms = 300                 # battle pop-up when two best laps are this close

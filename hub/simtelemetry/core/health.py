@@ -70,5 +70,10 @@ class HealthMonitor:
             return RigState.DRIVING
         return RigState.IN_MENU
 
+    def seconds_since_driving(self, ip: str, now: float) -> float | None:
+        """Seconds since the last driving packet; None if this rig has not driven since the hub started."""
+        rig = self._rigs.get(ip)
+        return None if rig is None or rig.last_driving is None else max(0.0, now - rig.last_driving)
+
     def get(self, ip: str) -> RigHealth | None:
         return self._rigs.get(ip)

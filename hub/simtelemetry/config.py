@@ -119,6 +119,12 @@ class FeaturesConfig(_Section):
     events: bool = True           # corporate events: teams, team leaderboard, company branding
     owner: bool = True            # /owner analytics page
     race_podium: bool = True      # race podium + race cards when a race ends (needs sharing)
+    self_checkin: bool = True     # guests put their own name on a rig from their phone (QR sticker per rig)
+
+
+class CheckinConfig(_Section):
+    # Extra words the self check-in name filter rejects, on top of the built-in list (whole words, case-insensitive).
+    blocked_words: list[str] = Field(default_factory=list)
 
 
 class MomentsConfig(_Section):
@@ -165,6 +171,7 @@ class AppConfig(_Section):
     staff: StaffConfig = Field(default_factory=StaffConfig)
     owner: OwnerConfig = Field(default_factory=OwnerConfig)
     features: FeaturesConfig = Field(default_factory=FeaturesConfig)
+    checkin: CheckinConfig = Field(default_factory=CheckinConfig)
     moments: MomentsConfig = Field(default_factory=MomentsConfig)
     sounds: SoundsConfig = Field(default_factory=SoundsConfig)
     backup: BackupConfig = Field(default_factory=BackupConfig)

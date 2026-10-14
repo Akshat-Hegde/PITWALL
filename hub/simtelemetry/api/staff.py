@@ -182,6 +182,25 @@ def staff_router(hub: Hub) -> APIRouter:
         card = hub.end_session(rig.ip)
         return {**rig_row(rig, time.monotonic()), "card": _card_link(card)}
 
+    # --- self check-in codes -------------------------------------------------------------------
+
+    def code_row(rig, code: str) -> dict[str, Any]:
+        address = lan_address() or "localhost"
+        return {"rig_id": rig.ip, "rig_name": rig.name, "code": code,
+                "url": f"http://{address}:{hub.config.network.http_port}/checkin/{code}"}
+
+    @router.get("/api/staff/checkin/codes", dependencies=[Depends(guard)])
+    def checkin_codes() -> dict[str, Any]:
+        codes = hub.checkin.codes()
+        return {"enabled": hub.config.features.self_checkin,
+                "rigs": [code_row(r, codes[r.ip]) for r in hub.registry.all() if r.ip in codes]}
+
+    @router.post("/api/staff/checkin/codes/{rig_id}/regenerate", dependencies=[Depends(guard)])
+    def checkin_regenerate(rig_id: str) -> dict[str, Any]:
+        """A new code for one rig: the sticker with the old code stops working."""
+        rig = find_rig(rig_id)
+        return code_row(rig, hub.checkin.regenerate(rig.ip))
+
     # --- driver profiles -----------------------------------------------------------------------
 
     @router.get("/api/staff/drivers", dependencies=[Depends(guard)])

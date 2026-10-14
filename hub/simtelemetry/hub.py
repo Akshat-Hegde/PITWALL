@@ -58,6 +58,8 @@ class Hub:
                             day_start_hour=config.leaderboard.day_start_hour, bundled_outlines=bundled_outlines)
         self.drivers = DriverRegistry(store)
         self.races = RaceBook()
+        from .core.checkin import CheckinService
+        self.checkin = CheckinService(self)
         from .core.tv import TvControl
         self.tv = TvControl(config.data_dir / "tv.json" if store is not None and store.path is not None else None)
         from .core.competitions import Competitions
