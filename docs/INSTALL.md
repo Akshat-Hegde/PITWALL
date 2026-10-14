@@ -32,6 +32,10 @@ The installer opens the firewall for the hub, starts it, and sets it to start wi
 
 The setup page asks for the code from the last page, then the cafe name, tagline, logo, colour, opening hours and the owner and staff PINs. Optionally add a guest Wi-Fi (name, password, security); the TV shows it as a "Join our Wi-Fi" QR so customers can reach their story cards. Use a guest network, not the cafe's main one. Once saved, the code stops working and the owner PIN protects the page. The page is at `http://localhost:8000/setup` on the hub, or `http://<hub IP>:8000/setup` from another device.
 
+## Check-in stickers
+
+Open Staff (`http://<hub IP>:8000/staff`) and choose **Check-in QR**: it opens a printable A4 sheet with one QR sticker per rig. Print it, cut the stickers out and stick one on each rig, where the driver can see it. Guests scan it with their phone (on the cafe Wi-Fi) to put their name on the rig. If you press **New code** for a rig, its old sticker stops working: reprint and replace it. Reprint too if you add a rig.
+
 ## Point the rigs at the hub
 
 Each rig sends UDP telemetry to the hub's IP address on port 20777. See [RIG_SETUP.md](RIG_SETUP.md) for the in-game settings.

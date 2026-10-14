@@ -299,6 +299,33 @@ winner and a story card QR (from a real session with a clean lap, so give the ri
 `python -m simtelemetry seed-demo` only fills the folder, without running anything.
 `seed-demo` only writes to an empty folder (or one it made before), never to your real `data\`.
 
+## Self check-in
+
+Guests can put their own name on a rig without staff. Each rig has its own QR sticker (print them from
+**Staff -> Check-in QR**, see below). The flow on the guest's phone:
+
+1. Scan the sticker on the rig (the phone must be on the cafe Wi-Fi). The page shows the rig and asks for a name.
+2. Type a name and tap **Start**. The rig shows **Now driving** on the TV and the leaderboard, exactly as if
+   staff had started the session; laps count for that name.
+3. The phone shows the laps and best lap so far. **I'm done** ends the session and the **story card** opens on
+   the same phone (**Save for Instagram story**). If staff end the session, or the timer runs out, the phone
+   shows the card link too. **Drive again** starts over.
+
+Details:
+
+- **Busy rigs:** if someone is already driving, the page says "Someone is driving"; a second check-in is
+  refused, so a guest can't take over a rig by scanning it.
+- **Idle takeover:** if the current session has not been driving for 2 minutes (nobody on track), a new
+  check-in replaces it; the earlier driver still gets their card.
+- **Bad names:** names are checked against a built-in list of slurs and swear words (English and common
+  Hindi, with look-alike spellings). Add your own words under `[checkin] blocked_words = ["word", ...]` in
+  `config\hub.toml`. Staff can still start any name from the Rigs tab.
+- **Switch it off:** `[features] self_checkin = false`; the stickers then show "Check-in is switched off".
+- **Printing stickers:** **Staff -> Check-in QR** opens an A4 sheet with one sticker per rig (and the guest
+  Wi-Fi QR if one is set in `/setup`). Print, cut and stick one on each rig.
+- **New code:** the Rigs tab has **New code** per rig. It invalidates that rig's old sticker immediately (use
+  it if a sticker was photographed or stolen), so print and stick the new one.
+
 ## Sharing: session story cards
 
 When staff end a session (or start the next driver on the rig), the hub makes a **story card** if the driver

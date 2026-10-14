@@ -214,6 +214,20 @@ On the dashboard, check:
 - [ ] Time Trial and Practice sessions produce no podium.
 - [ ] Note any wrong Final Classification fields (position, grid, status, total time) and keep the `.f1rec`.
 
+## Part E4: Phone check-in (one rig, hub still running)
+
+- [ ] Staff -> **Check-in QR**: print the sheet (or open it on screen). It has one sticker per rig.
+- [ ] Phone on the cafe Wi-Fi: scan the Rig 1 sticker. The page says "Drive this rig" and asks for a name.
+- [ ] Enter a name and tap **Start**: the TV shows **Now driving** with that name. The phone shows
+      "You're on Rig 1. Drive!".
+- [ ] Drive a lap: the phone's Laps and Best lap update within a few seconds; the lap is saved under that name.
+- [ ] Tap **I'm done** and confirm: the phone shows "Nice driving" and **Save for Instagram story** opens the card.
+- [ ] Busy rig: start a session from the staff page, then scan that rig's sticker: "Someone is driving", no way to check in.
+- [ ] Takeover: check in on a phone, leave the game in the menu (not driving) for over 2 minutes, then check in
+      from a second phone: it succeeds, and the first phone shows its card link.
+- [ ] Try a rude name: it is refused with a friendly message.
+- [ ] **New code** on Rig 1: scanning the old sticker says the code is no longer valid.
+
 ## Part F: Restart (leaderboard persistence) and track change
 
 - [ ] Both drivers stay on track, mid-lap. In the hub window press **Ctrl+C**.
