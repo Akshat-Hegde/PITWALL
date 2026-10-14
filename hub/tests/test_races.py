@@ -102,6 +102,15 @@ def test_a_participant_who_never_reports_holds_the_race_for_the_group_window():
     assert [rig for rig, _ in race.results] == ["a"]
 
 
+def test_a_reporter_missing_from_the_participants_does_not_delay_the_podium():
+    book = RaceBook()
+    book.note_racing("b", TRACK, 0.0)                # a's "racing" note was never seen (or expired)
+    book.add("a", fin(1), 1.0)
+    book.add("b", fin(2), 2.0)
+    (race,) = book.due(2.0)                          # every participant has reported: at once
+    assert [rig for rig, _ in race.results] == ["a", "b"]
+
+
 def test_a_rig_racing_on_another_track_does_not_hold_the_race():
     book = RaceBook()
     book.note_racing("a", TRACK, 0.0)

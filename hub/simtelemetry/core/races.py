@@ -83,7 +83,7 @@ class RaceBook:
             people = self.participants(race.track_key, now)
             reported = race.rigs()
             if people:
-                ready = people == reported or now >= max(race.finished_at + RACE_SETTLE_S,
+                ready = people <= reported or now >= max(race.finished_at + RACE_SETTLE_S,
                                                          race.first_at + RACE_GROUP_WINDOW_S)
             else:
                 ready = now - race.finished_at >= RACE_SETTLE_S
