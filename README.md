@@ -320,7 +320,9 @@ anywhere. The TV and its WebSocket feed only ever carry names, never phone numbe
 
 Race sessions (Race, Race 2, Race 3) are handled differently from time trials. Each rig reports its own
 driver's Final Classification; results for the same track within 90 seconds form one race, and the hub
-publishes it 8 seconds after the last report (or at once when every driving rig has reported). Practice,
+publishes it at once when every rig seen racing on that track in the last 90 seconds has reported. Otherwise
+it waits 8 seconds after the last report, and at least 90 seconds after the first, so a slower finisher on the
+same LAN race is not split into a separate result. Practice,
 qualifying and Time Trial never make a race result.
 
 - **Two or more cafe drivers:** the TV shows a 15 second podium with a QR code beside each name, then 25
@@ -335,7 +337,7 @@ qualifying and Time Trial never make a race result.
   the network name only; the password is never shown as text. Use a guest network, not the cafe's main one.
 - **Feature flags:** `[features] race_podium = false` turns the podium and race cards off; `sharing = false`
   turns off every QR code (cards, podium and Wi-Fi).
-- **Demo:** on `/staff` in demo mode, the Director has a **Race** button (`POST /api/staff/demo/race`) that
+- **Demo:** on `/staff` in demo mode, the Director has a **Race podium** button (`POST /api/staff/demo/race`) that
   ends a simulated 4-rig race, for screenshots and manual checks.
 
 ## Lap database

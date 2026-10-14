@@ -139,8 +139,9 @@ def staff_router(hub: Hub) -> APIRouter:
             raise HTTPException(400, str(exc)) from None
 
     @router.post("/api/staff/demo/{action}", dependencies=[Depends(guard)])
-    def demo(action: str, body: dict[str, Any] = Body(default={})) -> dict[str, Any]:
-        """Demo director (run --demo only): trigger a moment on demand."""
+    async def demo(action: str, body: dict[str, Any] = Body(default={})) -> dict[str, Any]:
+        """Demo director (run --demo only): trigger a moment on demand. async so it runs on the event loop,
+        the only place the RaceBook is touched."""
         if hub.demo is None:
             raise HTTPException(404, "The demo director only exists in demo mode (run --demo).")
         try:
