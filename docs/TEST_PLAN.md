@@ -223,8 +223,14 @@ On the dashboard, check:
 - [ ] Drive a lap: the phone's Laps and Best lap update within a few seconds; the lap is saved under that name.
 - [ ] Tap **I'm done** and confirm: the phone shows "Nice driving" and **Save for Instagram story** opens the card.
 - [ ] Busy rig: start a session from the staff page, then scan that rig's sticker: "Someone is driving", no way to check in.
-- [ ] Takeover: check in on a phone, leave the game in the menu (not driving) for over 2 minutes, then check in
-      from a second phone: it succeeds, and the first phone shows its card link.
+- [ ] Staff session is never taken over: start a session from the staff page, leave the game in the menu (not
+      driving) for over 2 minutes, then scan the sticker from a phone: still "Someone is driving", no name form.
+      End it from the staff page.
+- [ ] Takeover: on phone A check in as one name and drive one lap (so a card exists), then go back to the game
+      menu and leave it there for over 2 minutes. Scan the same sticker on phone B (a different phone, or a
+      private/incognito tab so it has no saved session): it says "This rig looks free" with the name form.
+      Enter a second name and tap **Start**: phone B shows "You're on Rig 1", the TV shows the new name, and
+      within a few seconds phone A shows "Nice driving" with **Save for Instagram story** for its lap.
 - [ ] Try a rude name: it is refused with a friendly message.
 - [ ] **New code** on Rig 1: scanning the old sticker says the code is no longer valid.
 

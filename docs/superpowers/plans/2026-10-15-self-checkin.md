@@ -34,13 +34,19 @@
   - **Free rig** (no current assignment): start a session with `hub.drivers.assign(rig_id, name=name)`, no booking minutes, and the same "Now driving" moment and feed updates a staff start gets.
   - **Takeover:** if the rig has a session but its health state has not been DRIVING for at least `CHECKIN_TAKEOVER_IDLE_S = 120` s, end it first with `hub.end_session(rig_id)`, so the previous driver's card is still made, then start the new one.
   - **Otherwise:** 409 "Rig N is in use. Please ask staff."
+  - **Amendment (user ruling, 2026-10-15):** idle takeover applies ONLY to sessions that were started by a phone
+    check-in (tracked through the registered check-in secrets: rig_id + started_at). Sessions started by staff
+    (paid bookings) can never be taken over from a phone, however idle; staff end those. A check-in POST against
+    an idle staff session is 409 like any busy rig.
   - Returns `{"rig_name", "driver", "secret", "status_url"}`. The secret is random and stored in memory with the session (rig_id, started_at).
   - Rate limit: at most 10 check-in POSTs per minute per client IP, else 429.
 - **C3. Status.** `GET /api/checkin/<code>?secret=...`:
-  - Returns `{"rig_name", "state": "free"|"busy"|"yours"|"ended", "driver"?, "laps", "best_ms"?, "card_url"?}`.
+  - Returns `{"rig_name", "state": "free"|"idle"|"busy"|"yours"|"ended", "driver"?, "laps", "best_ms"?, "card_url"?}`.
+  - "idle" (added with the C2 amendment): the rig has a check-in session that may be taken over (C2), so the page
+    shows the name form with "This rig looks free. Check in to take over." No driver name, like "busy".
   - "yours" while the secret's session is current. Laps and best come from `hub.laps.laps` for that rig, driver key and `completed_at >= started_at`.
   - "ended" once that session has ended, with `card_url` if a card was made: the URL `end_session` returned, remembered against the secret for 2 hours.
-  - Without a secret, or with a wrong one: only "free" or "busy" (and "busy" includes no driver name).
+  - Without a secret, or with a wrong one: only "free", "idle" or "busy" (none of them includes a driver name).
 - **C4. Done.** `POST /api/checkin/<code>/done` with body `{"secret"}`.
   - Ends the session only if the secret matches the current session, then returns `{"card_url"}` (or null when there were no counted laps).
   - A wrong or old secret gets 403.

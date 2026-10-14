@@ -308,15 +308,17 @@ Guests can put their own name on a rig without staff. Each rig has its own QR st
 2. Type a name and tap **Start**. The rig shows **Now driving** on the TV and the leaderboard, exactly as if
    staff had started the session; laps count for that name.
 3. The phone shows the laps and best lap so far. **I'm done** ends the session and the **story card** opens on
-   the same phone (**Save for Instagram story**). If staff end the session, or the timer runs out, the phone
-   shows the card link too. **Drive again** starts over.
+   the same phone (**Save for Instagram story**). If staff end the session, the phone shows the card link
+   too. **Drive again** starts over.
 
 Details:
 
 - **Busy rigs:** if someone is already driving, the page says "Someone is driving"; a second check-in is
   refused, so a guest can't take over a rig by scanning it.
-- **Idle takeover:** if the current session has not been driving for 2 minutes (nobody on track), a new
-  check-in replaces it; the earlier driver still gets their card.
+- **Idle takeover (check-in sessions only):** if a session that a guest started from their phone has not been
+  driving for 2 minutes (nobody on track), the sticker shows "This rig looks free" and a new check-in replaces it;
+  the earlier driver still gets their card. Sessions staff started (paid bookings) are never taken over from a
+  phone, however idle: the page says "Someone is driving" and staff end them.
 - **Bad names:** names are checked against a built-in list of slurs and swear words (English and common
   Hindi, with look-alike spellings). Add your own words under `[checkin] blocked_words = ["word", ...]` in
   `config\hub.toml`. Staff can still start any name from the Rigs tab.
