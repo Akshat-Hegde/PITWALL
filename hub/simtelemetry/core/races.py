@@ -50,6 +50,10 @@ class RaceBook:
             return
         if result.session_uid is not None and (rig_id, result.track_key, result.session_uid) in self._settled:
             return
+        if result.session_uid is not None and any(
+                rig_id == rig and r.session_uid == result.session_uid and race.track_key == result.track_key
+                for race in self._open for rig, r in race.results):
+            return                                           # a resend while its race is still open
         race = next((r for r in self._open
                      if r.track_key == result.track_key and 0 <= now - r.first_at <= RACE_GROUP_WINDOW_S), None)
         if race is None:

@@ -233,7 +233,7 @@ class Hub:
         from .core.feed import lan_address
         features = self.config.features
         race.track_name = race.track_name or self.race_track_name(race)
-        if not features.sharing:
+        if not (features.sharing and features.race_podium):
             return {"cards": [], "moment": None}
         base = f"http://{lan_address() or 'localhost'}:{self.config.network.http_port}/card/"
         cards = []
@@ -249,7 +249,7 @@ class Hub:
             self.laps.publish_moment("card", rig_id=rig, driver=card["driver"], token=card["token"],
                                      url=base + card["token"], best_ms=card["best_ms"],
                                      track_name=card["track_name"], card_kind="race", position=card["position"])
-        elif cards and features.race_podium:
+        elif cards:
             moment = self.laps.publish_moment(
                 "race_podium", track_key=race.track_key, track_name=race.track_name,
                 session_type=race.session_type,

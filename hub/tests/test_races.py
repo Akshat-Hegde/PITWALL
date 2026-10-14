@@ -45,6 +45,13 @@ def test_a_late_report_is_a_new_race_and_duplicates_are_ignored():
     assert book.due(600.0, set()) == []
 
 
+def test_resend_after_the_window_while_open_is_ignored():
+    book = RaceBook()
+    book.add("a", fin(2, uid="u1"), 0.0)
+    book.add("a", fin(2, uid="u1"), 100.0)
+    assert len(book.due(200.0, set())) == 1
+
+
 def test_dnf_is_ranked_last_by_laps_then_position():
     book = RaceBook()
     book.add("a", fin(2, status="dnf", laps=3), 0.0)
@@ -97,10 +104,13 @@ def test_solo_race_makes_a_card_but_no_podium(tmp_path):
     assert hub.drivers.card(card["token"])["kind"] == "race"
 
 
-def test_flags_suppress_the_moment(tmp_path):
+def test_flags_suppress_cards_and_moments(tmp_path):
     hub = make_hub(tmp_path, features={"race_podium": False})
     finish_race(hub, [1, 2])
-    assert not moments(hub, "race_podium")
+    assert not moments(hub, "race_podium") and not moments(hub, "card")
+    hub = make_hub(tmp_path / "c", features={"race_podium": False})
+    finish_race(hub, [3])
+    assert not moments(hub, "race_podium") and not moments(hub, "card")
     hub = make_hub(tmp_path / "b", features={"sharing": False})
     finish_race(hub, [1, 2])
     assert not moments(hub, "race_podium") and not moments(hub, "card")
@@ -114,3 +124,5 @@ def test_demo_race_action_shows_four_drivers(tmp_path):
     assert director.run("race", {})["shown"] == "race_podium"
     (m,) = moments(hub, "race_podium")
     assert len(m["drivers"]) == 4
+    assert all(300 < d["total_time_s"] < 600 for d in m["drivers"])
+    assert len({d["grid_position"] for d in m["drivers"]}) == 4

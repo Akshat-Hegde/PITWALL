@@ -116,6 +116,7 @@ def build_race_card(hub: Hub, rig_id: str, result: RaceFinished, race: Race) -> 
         "positions_gained": gained,
         "laps": result.laps,
         "best_ms": result.best_lap_ms,
+        "best_lap_ms": result.best_lap_ms,
         "total_time_s": result.total_time_s,
         "penalties_s": result.penalties_s,
         "status": result.status,

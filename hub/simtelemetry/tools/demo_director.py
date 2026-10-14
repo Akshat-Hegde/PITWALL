@@ -120,14 +120,15 @@ class DemoDirector:
         order = list(range(1, len(rigs) + 1))
         self.rng.shuffle(order)
         now = time.monotonic()
-        base = 5_400 + self.rng.randint(0, 600)
-        for rig, pos in zip(rigs, order):
+        base = 5 * 87.0 + self.rng.uniform(0, 8)
+        grid = self.rng.sample(range(1, 21), len(rigs))
+        for rig, pos, grid_pos in zip(rigs, order, grid):
             self.hub.races.add(rig.ip, RaceFinished(
                 track_key=TRACK_KEY, session_type="Race", session_uid=f"demo{self.rng.getrandbits(32):08x}",
-                position=pos, grid_position=self.rng.randint(1, 20), laps=5,
+                position=pos, grid_position=grid_pos, laps=5,
                 best_lap_ms=87_000 + pos * 90 + self.rng.randint(0, 300), total_time_s=base + pos * 3.7,
                 penalties_s=0, status="finished", num_cars=20), now)
         done = self.hub.settle_races(now + RACE_SETTLE_S + 1)
-        if not done:
+        if not done or done[0]["moment"] is None:
             raise DriverError("The race could not be shown (sharing is off in [features]).")
         return {"shown": "race_podium", "drivers": len(rigs)}
