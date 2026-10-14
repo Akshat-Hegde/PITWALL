@@ -19,6 +19,7 @@ from .. import __version__
 from ..hub import personal_best_key, tyre_dict
 from ..tools.recorder import RecorderState
 from .health import RigState
+from .wifi import wifi_share
 
 if TYPE_CHECKING:
     from ..hub import Hub
@@ -284,7 +285,8 @@ class FeedBuilder:
     def cafe(self) -> dict[str, Any]:
         c = self.hub.config.cafe
         return {"name": c.name, "branding": dict(c.branding), "tagline": c.tagline,
-                "logo": f"/api/cafe/logo?v={c.logo}" if c.logo else None}
+                "logo": f"/api/cafe/logo?v={c.logo}" if c.logo else None,
+                "wifi": wifi_share(self.hub.config)}
 
     def snapshot_body(self, now: float) -> dict[str, Any]:
         frame = self.frame_body(now)

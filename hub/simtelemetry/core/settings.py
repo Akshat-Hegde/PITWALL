@@ -30,6 +30,9 @@ class CafeSettings(BaseModel):
     open_hour: int = Field(10, ge=0, le=23)
     close_hour: int = Field(22, ge=1, le=24)
     setup_done: bool = False
+    wifi_ssid: str = Field("", max_length=32)
+    wifi_password: str = Field("", max_length=63)
+    wifi_security: str = "WPA"
 
     @field_validator("accent")
     @classmethod
@@ -44,6 +47,18 @@ class CafeSettings(BaseModel):
         if not _PIN.match(value):
             raise ValueError("PINs are 4 to 8 digits")
         return value
+
+    @model_validator(mode="after")
+    def _wifi(self) -> "CafeSettings":
+        if self.wifi_security not in ("WPA", "nopass"):
+            raise ValueError("Wi-Fi security must be WPA or nopass")
+        if not self.wifi_ssid:
+            return self
+        if self.wifi_security == "WPA" and not 8 <= len(self.wifi_password) <= 63:
+            raise ValueError("a WPA Wi-Fi password is 8 to 63 characters")
+        if self.wifi_security == "nopass" and self.wifi_password:
+            raise ValueError("an open Wi-Fi network has no password")
+        return self
 
     @model_validator(mode="after")
     def _hours(self) -> "CafeSettings":
@@ -84,3 +99,5 @@ def apply_settings(config: AppConfig, s: CafeSettings) -> None:
     config.owner.pin = s.owner_pin
     config.staff.pin = s.staff_pin
     config.owner.open_hour, config.owner.close_hour = s.open_hour, s.close_hour
+    config.cafe.wifi_ssid, config.cafe.wifi_password = s.wifi_ssid, s.wifi_password
+    config.cafe.wifi_security = s.wifi_security

@@ -130,5 +130,5 @@ class DemoDirector:
                 penalties_s=0, status="finished", num_cars=20), now)
         done = self.hub.settle_races(now + RACE_SETTLE_S + 1)
         if not done or done[0]["moment"] is None:
-            raise DriverError("The race could not be shown (sharing is off in [features]).")
+            raise DriverError("Race podium is switched off ([features] sharing / race_podium).")
         return {"shown": "race_podium", "drivers": len(rigs)}

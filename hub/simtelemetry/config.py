@@ -28,6 +28,10 @@ class CafeConfig(_Section):
     logo: str | None = None  # file name in <data_dir>/branding/, set from /setup
     # CSS custom properties for the dashboard, e.g. {"--brand-accent" = "#e10600"}.
     branding: dict[str, str] = Field(default_factory=dict)
+    # Optional guest Wi-Fi, set from /setup; the password is only ever sent inside the TV's QR string.
+    wifi_ssid: str = ""
+    wifi_password: str = ""
+    wifi_security: str = "WPA"
 
 
 class NetworkConfig(_Section):

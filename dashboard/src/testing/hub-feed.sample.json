@@ -39,7 +39,8 @@
    "name": "Sim Racing Cafe",
    "branding": {},
    "tagline": "",
-   "logo": null
+   "logo": null,
+   "wifi": null
   },
   "status": {
    "format_mismatch": true,
@@ -392,7 +393,7 @@
    },
    "personal_best": true,
    "session_best": true,
-   "completed_at": 1791979862091,
+   "completed_at": 1791980503263,
    "lap_class": "open"
   }
  },
@@ -4376,7 +4377,7 @@
       "age_laps": 2
      },
      "lap_number": 1,
-     "set_at": 1791979862091
+     "set_at": 1791980503263
     }
    ],
    "record_minis": [
@@ -4463,7 +4464,7 @@
       "age_laps": 2
      },
      "lap_number": 1,
-     "set_at": 1791979862091
+     "set_at": 1791980503263
     }
    ]
   }
@@ -4498,7 +4499,7 @@
       "age_laps": 2
      },
      "lap_number": 1,
-     "set_at": 1791979862091
+     "set_at": 1791980503263
     }
    ]
   }
@@ -4661,7 +4662,7 @@
       26656
      ],
      "lap_number": 1,
-     "set_at": 1791979862091
+     "set_at": 1791980503263
     },
     "personal_best": {
      "lap_ms": 88123,
@@ -4671,7 +4672,7 @@
       26656
      ],
      "lap_number": 1,
-     "set_at": 1791979862091
+     "set_at": 1791980503263
     },
     "booking": null
    },
@@ -4882,7 +4883,7 @@
    {
     "rig_id": "192.168.1.22",
     "state": "driving",
-    "last_seen_ms": 31,
+    "last_seen_ms": 32,
     "driver": "Guest",
     "session": {
      "session_id": "0000000000000022",

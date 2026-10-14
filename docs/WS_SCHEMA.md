@@ -66,7 +66,7 @@ Compatibility rules:
 | `head_to_head` *(added in v1, optional)* | The closest pair on the shown track changes | `{ "head_to_head": HeadToHead \| null }` |
 | `competition` *(added in v1, optional)* | The challenge or the corporate event changes (also when their boards change) | `{ "competition": Competition }` |
 | `tv` *(added in v1, optional)* | Staff change the TV page, the pinned rig or the view over the page | `{ "tv": TvSetting }` |
-| `cafe` *(added in v1, optional)* | The cafe name, tagline, colour or logo changes (owner saved `/setup`) | `{ "cafe": { "name", "branding", "tagline", "logo" } }`: full replacement |
+| `cafe` *(added in v1, optional)* | The cafe name, tagline, colour or logo changes (owner saved `/setup`) | `{ "cafe": { "name", "branding", "tagline", "logo", "wifi" } }`: full replacement |
 | `queue` *(added in v1, optional)* | The waiting queue changes | `{ "queue": [QueueEntry] }`: full replacement |
 | `moment` *(added in v1, optional)* | A broadcast moment: a driver starts, a record falls, the podium | `{ "moment": Moment }` |
 | `leaderboard` | A board of the shown track changes | `{ "leaderboard": Leaderboard }`: full replacement of the board for its `period`. Boards for another track replace all boards. |
@@ -100,6 +100,7 @@ Compatibility rules:
 - `cafe.branding`: CSS custom properties from `[cafe.branding]` in the hub config. The dashboard applies
   them to `:root` as-is (keys must start with `--`; others are ignored).
 - `cafe.tagline` *(added in v1, optional, default `""`)*: the line shown on the attract and portrait screens; empty means the built-in line.
+- `cafe.wifi` *(added in v1, optional)*: `{ "ssid", "qr" }` or `null`. `qr` is the ready-made `WIFI:T:WPA;S:<ssid>;P:<password>;;` string (`\ ; , : "` backslash-escaped; open networks are `WIFI:T:nopass;S:<ssid>;;`) for the TV to render as a "Join our Wi-Fi" QR code. Show only `ssid` as text, never the password. `null` when `features.sharing` is off or no SSID is set. The same object is the `wifi` field of the `race_podium` moment.
 - `cafe.logo` *(added in v1, optional)*: `"/api/cafe/logo?v=<file name>"` or `null`. The TV shows it in the header badge in place of the cafe's first letter.
 - `outlines`: every outline the hub has (bundled track files, and tracks where a full lap was driven).
 - `session_story` *(added in v1, optional)*: laps on the shown track in the last hour, oldest first: `{ "rig_id", "driver", "track_key", "lap_ms", "valid", "out_lap", "lap_class", "completed_at" }` (the LIVE page's session story; later laps arrive as `lap_completed`).
@@ -316,8 +317,8 @@ Something the TV shows full screen for a few seconds, then returns to the view i
 |---|---|
 | `now_driving` | `rig_id`, `rig_name`, `driver`, `track_key`, `track_name`, `today_record` (`{ "driver", "lap_ms" }` \| null), `personal_best_ms` (int \| null). Sent when staff start a session on a rig. |
 | `record` | `rig_id`, `driver`, `track_key`, `track_name`, `lap_ms`, `lap_class`, `records`: what the lap beat, most important first, each `{ "period": "all_time" \| "today", "lap_class": "pro" \| "open", "previous_ms", "previous_driver", "gap_ms" }` (`gap_ms` negative). Only sent when an existing record is beaten. |
-| `card` | `rig_id`, `driver`, `token`, `url`, `best_ms`, `track_name`. A session ended and its story card is ready: the TV shows a QR code to `url` for 30 s (not full screen). The card itself is `GET /api/cards/<token>`, outside this feed. | *(Added in v1, optional: `card_kind` = `"race"` and `position` (int, real race position) when the card is a solo race result.)* A race card (`kind: "race"`, served at `/api/cards/<token>`) has `position`, `grid_position`, `positions_gained`, `laps`, `best_lap_ms` (also `best_ms`), `total_time_s`, `penalties_s`, `status`, `track_name`, `cafe_rank`, `cafe_drivers`.
-| `race_podium` | `track_key`, `track_name`, `session_type`, `drivers` (`rank`, `position`, `driver`, `rig_id`, `grid_position`, `laps`, `best_lap_ms`, `total_time_s`, `status`, `card_url`, `card_token`), `wifi` (`null` for now). *(Added in v1.)* A race ended with 2 or more cafe drivers; needs `sharing` and `race_podium`. `rank` is the cafe ranking, `position` the real race position. |
+| `card` | `rig_id`, `driver`, `token`, `url`, `best_ms`, `track_name`. A session ended and its story card is ready: the TV shows a QR code to `url` for 30 s (not full screen). The card itself is `GET /api/cards/<token>`, outside this feed. *(Added in v1, optional: `card_kind` = `"race"` and `position` (int, real race position) when the card is a solo race result.)* A race card (`kind: "race"`, served at `/api/cards/<token>`) has `position`, `grid_position`, `positions_gained`, `laps`, `best_lap_ms` (also `best_ms`), `total_time_s`, `penalties_s`, `status`, `track_name`, `cafe_rank`, `cafe_drivers`.
+| `race_podium` | `track_key`, `track_name`, `session_type`, `drivers` (`rank`, `position`, `driver`, `rig_id`, `grid_position`, `laps`, `best_lap_ms`, `total_time_s`, `status`, `card_url`, `card_token`), `wifi` (as `cafe.wifi`, or `null`). *(Added in v1.)* A race ended with 2 or more cafe drivers; needs `sharing` and `race_podium`. `rank` is the cafe ranking, `position` the real race position. |
 | `challenge_winner` | `challenge_id`, `title`, `track_name`, `lap_class`, `prize`, `winner` (entry \| null), `runners_up` (entries). Sent once when a challenge ends. |
 | `podium` | `reason` (`"hourly"`, `"scheduled"` or `"staff"`), `track_key`, `track_name`, `entries`: today's top three (LeaderboardEntry). |
 

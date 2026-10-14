@@ -68,6 +68,7 @@ def setup_router(hub: Hub) -> APIRouter:
             "has_settings": s is not None,          # earlier settings (and PINs) exist; blank PIN fields keep them
             "needs_code": not (s and s.setup_done),
             "name": c.cafe.name, "tagline": c.cafe.tagline, "logo": c.cafe.logo,
+            "wifi_ssid": c.cafe.wifi_ssid, "wifi_security": c.cafe.wifi_security,   # never the password
             "accent": c.cafe.branding.get("--brand-accent", "#E10600"),
             "open_hour": c.owner.open_hour, "close_hour": c.owner.close_hour,
             "hub_address": lan_address(), "http_port": c.network.http_port, "udp_port": c.network.udp_port,
@@ -89,6 +90,8 @@ def setup_router(hub: Hub) -> APIRouter:
                 body["staff_pin"] = ""
             elif not body.get("staff_pin"):
                 body["staff_pin"] = old.staff_pin
+        if old is not None and not body.get("wifi_password") and body.get("wifi_security", "WPA") == "WPA":
+            body["wifi_password"] = old.wifi_password       # blank keeps the Wi-Fi password, like the PINs
         try:
             s = CafeSettings(**{**body, "logo": old.logo if old else hub.config.cafe.logo, "setup_done": True})
         except ValidationError as exc:

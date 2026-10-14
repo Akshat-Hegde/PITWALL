@@ -263,7 +263,7 @@ async def test_connection_sequence(tmp_path):
     t = last_seen(hub)
     snap = conn.start(t)
     assert (snap["v"], snap["type"], snap["seq"], snap["ts"]) == (1, "snapshot", 0, 1_791_302_400_123)
-    assert snap["cafe"] == {"name": "Pit Stop", "branding": {"--brand-accent": "#0a7cff"}, "tagline": "", "logo": None}
+    assert snap["cafe"] == {"name": "Pit Stop", "branding": {"--brand-accent": "#0a7cff"}, "tagline": "", "logo": None, "wifi": None}
     assert snap["hub"]["frame_hz"] == 15 and snap["outlines"] == []
     assert [(b["period"], b["lap_class"], b["track_name"], b["entries"]) for b in snap["leaderboards"]] == \
         [(p, c, "Silverstone", []) for c in ("open", "pro") for p in ("today", "week", "all_time")]
@@ -449,7 +449,7 @@ def test_cafe_message_on_branding_change(tmp_path):
     hub = make_hub(tmp_path, store=False)
     conn = FeedConnection(FeedBuilder(hub))
     snap = conn.start(0.0)
-    assert snap["cafe"] == {"name": hub.config.cafe.name, "branding": {}, "tagline": "", "logo": None}
+    assert snap["cafe"] == {"name": hub.config.cafe.name, "branding": {}, "tagline": "", "logo": None, "wifi": None}
     assert not [m for m in conn.tick(0.0) if m["type"] == "cafe"]
     hub.config.cafe.name, hub.config.cafe.logo = "Lap Lab", "logo.png"
     (msg,) = [m for m in conn.tick(0.0) if m["type"] == "cafe"]

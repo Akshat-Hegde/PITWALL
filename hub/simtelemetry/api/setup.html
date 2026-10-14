@@ -132,6 +132,19 @@
     </section>
 
     <section class="panel">
+      <div class="title">Guest Wi-Fi (optional)</div>
+      <div class="grid2">
+        <div><label for="wifi-ssid">Network name</label>
+          <input id="wifi-ssid" maxlength="32" autocomplete="off"></div>
+        <div><label for="wifi-security">Security</label>
+          <select id="wifi-security"><option value="WPA">Password (WPA)</option><option value="nopass">Open (no password)</option></select></div>
+        <div><label for="wifi-password" id="wifi-password-label">Password (8 to 63 characters)</label>
+          <input id="wifi-password" type="password" maxlength="63" autocomplete="new-password"></div>
+      </div>
+      <div class="muted">Shown as a QR code on the TV. Use a guest network.</div>
+    </section>
+
+    <section class="panel">
       <div class="title">Rigs</div>
       <div class="rigbox">
         On each rig in F1 25 (Settings, Telemetry): UDP telemetry on, UDP IP address
@@ -205,6 +218,10 @@
     $("remove-staff").checked = false;
     $("owner-pin").value = "";
     $("staff-pin").value = "";
+    $("wifi-ssid").value = s.wifi_ssid || "";
+    $("wifi-security").value = s.wifi_security || "WPA";
+    $("wifi-password").value = "";
+    $("wifi-password-label").textContent = s.has_settings && s.wifi_ssid ? "Password (leave blank to keep the current password)" : "Password (8 to 63 characters)";
     $("name").value = s.name;
     $("tagline").value = s.tagline || "";
     $("open").value = s.open_hour;
@@ -256,6 +273,7 @@
       name: $("name").value.trim(), tagline: $("tagline").value.trim(), accent: $("accent").value.toUpperCase(),
       owner_pin: $("owner-pin").value, staff_pin: $("staff-pin").value,
       remove_staff_pin: $("remove-staff").checked,
+      wifi_ssid: $("wifi-ssid").value.trim(), wifi_security: $("wifi-security").value, wifi_password: $("wifi-password").value,
       open_hour: Number($("open").value), close_hour: Number($("close").value),
     };
     $("save").disabled = true;

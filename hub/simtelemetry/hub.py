@@ -231,6 +231,7 @@ class Hub:
         """Race cards for every rig that finished, plus the podium moment when 2 or more cafe drivers raced."""
         from .core.cards import build_race_card
         from .core.feed import lan_address
+        from .core.wifi import wifi_share
         features = self.config.features
         race.track_name = race.track_name or self.race_track_name(race)
         if not (features.sharing and features.race_podium):
@@ -258,7 +259,7 @@ class Hub:
                           "total_time_s": res.total_time_s, "status": res.status,
                           "card_url": base + card["token"], "card_token": card["token"]}
                          for i, (rig, res, card) in enumerate(cards, 1)],
-                wifi=None)   # Task 3 fills this from the shared Wi-Fi helper
+                wifi=wifi_share(self.config))
         return {"cards": [c for _, _, c in cards], "moment": moment}
 
     async def tick_races(self) -> None:
