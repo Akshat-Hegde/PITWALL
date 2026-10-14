@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
 from simtelemetry.api.app import create_app
@@ -104,3 +105,15 @@ def test_clearing_ssid_clears_password(tmp_path):
     assert client.post("/api/setup", json=cleared, headers={"X-Owner-Pin": "2468"}).status_code == 200
     assert hub.config.cafe.wifi_password == ""
     assert wifi_share(hub.config) is None
+
+
+def test_ssid_is_stripped_and_limited_to_32_bytes():
+    from simtelemetry.core.settings import CafeSettings
+    base = {"name": "Lap Lab", "owner_pin": "2468"}
+    assert CafeSettings(**base, wifi_ssid="   ", wifi_password="").wifi_ssid == ""
+    assert CafeSettings(**base, wifi_ssid="  Cafe  ", wifi_password="secret-pass").wifi_ssid == "Cafe"
+    assert CafeSettings(**base, wifi_ssid="a" * 32, wifi_password="secret-pass")
+    ok = "é" * 16                                                # 16 characters, 32 bytes
+    assert CafeSettings(**base, wifi_ssid=ok, wifi_password="secret-pass").wifi_ssid == ok
+    with pytest.raises(ValueError):
+        CafeSettings(**base, wifi_ssid="é" * 17, wifi_password="secret-pass")   # 17 characters, 34 bytes

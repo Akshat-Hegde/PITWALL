@@ -30,7 +30,7 @@ class CafeSettings(BaseModel):
     open_hour: int = Field(10, ge=0, le=23)
     close_hour: int = Field(22, ge=1, le=24)
     setup_done: bool = False
-    wifi_ssid: str = Field("", max_length=32)
+    wifi_ssid: str = ""             # at most 32 BYTES of UTF-8 (checked below)
     wifi_password: str = Field("", max_length=63)
     wifi_security: str = "WPA"
 
@@ -40,6 +40,11 @@ class CafeSettings(BaseModel):
         if not _HEX.match(value):
             raise ValueError("accent must be a colour like #E10600")
         return value.upper()
+
+    @field_validator("wifi_ssid")
+    @classmethod
+    def _strip_ssid(cls, value: str) -> str:
+        return value.strip()                  # whitespace only means no Wi-Fi
 
     @field_validator("owner_pin", "staff_pin")
     @classmethod
@@ -54,6 +59,8 @@ class CafeSettings(BaseModel):
             raise ValueError("Wi-Fi security must be WPA or nopass")
         if not self.wifi_ssid:
             return self
+        if len(self.wifi_ssid.encode("utf-8")) > 32:
+            raise ValueError("a Wi-Fi name is at most 32 bytes (fewer letters if it has accents or emoji)")
         if self.wifi_security == "WPA" and not 8 <= len(self.wifi_password) <= 63:
             raise ValueError("a WPA Wi-Fi password is 8 to 63 characters")
         if self.wifi_security == "nopass" and self.wifi_password:
