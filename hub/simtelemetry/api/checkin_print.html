@@ -11,6 +11,7 @@
   body { margin: 0; background: #e9eaee; color: var(--ink); font: 16px/1.3 "Saira", "Segoe UI", system-ui, sans-serif; }
   .toolbar { display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--ink); color: #fff; }
   .toolbar span { flex: 1; font-weight: 700; }
+  .toolbar a { color: #fff; font-weight: 700; text-decoration: none; }
   .toolbar button { padding: 9px 18px; border: 0; background: var(--accent); color: #fff; font: inherit; font-weight: 800; cursor: pointer; }
   .msg { padding: 16px; color: #b00; }
   form#pin-form { max-width: 320px; margin: 24px auto; padding: 16px; background: #fff; }
@@ -38,7 +39,7 @@
 </style>
 </head>
 <body>
-<div class="toolbar"><span>Check-in stickers: print, cut and stick one on each rig</span><button type="button" id="print">Print</button></div>
+<div class="toolbar"><a href="/staff">&larr; Staff</a><span>Check-in stickers: print, cut and stick one on each rig</span><button type="button" id="print">Print</button></div>
 <form id="pin-form" hidden>
   <label for="pin">Staff PIN</label>
   <input id="pin" type="password" inputmode="numeric" autocomplete="off">
