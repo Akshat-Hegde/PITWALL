@@ -200,8 +200,12 @@ On the dashboard, check:
 ## Part E3: LAN race, podium and race card (both rigs)
 
 - [ ] Optional: in `/setup` add a guest Wi-Fi name and password; a phone on that network can join via the TV QR.
-- [ ] Both rigs: new session, **Race** (any length, AI on), same track. Run `python -m simtelemetry listen`
-      (it records by default) so the packets are kept as a regression fixture for Final Classification.
+- [ ] The hub from Part B is still running and recording (`.venv\Scripts\python -m simtelemetry run --record
+      --lap-debug` holds UDP 20777), so do not start `listen` or a second hub. That recording is the regression
+      fixture for Final Classification: keep the `.f1rec` from this race in `dataecordings\` (note its name:
+      `______________________`).
+- [ ] Both rigs join ONE F1 25 LAN lobby race (Multiplayer > LAN, one hosts, the other joins; AI on, any
+      length) on the same track. Two separate single-player races on the same track do not count.
 - [ ] Finish the race on both rigs. Within about 10 seconds the TV shows the race podium for 15 s, with a QR
       beside each name, then "Grab your card" for 25 s with the Wi-Fi tile (SSID only, no password).
 - [ ] Scan a QR from a phone on the cafe Wi-Fi: the race card shows position (real race position), grid,
