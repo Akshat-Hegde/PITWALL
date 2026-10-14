@@ -102,6 +102,7 @@ class Hub:
                 self.registry.set_driver_name(ip, summary.driver_name)
                 if summary.speed_kph and self.drivers.get(ip) is not None:
                     self._session_top_kph[ip] = max(self._session_top_kph.get(ip, 0), summary.speed_kph)
+            self.note_race_participant(ip, received)
             if result.race_results:
                 for finished in result.race_results:
                     self.races.add(ip, finished, received)
@@ -196,21 +197,17 @@ class Hub:
 
     # --- race podium -------------------------------------------------------------------
 
-    def driving_race_rigs(self, now: float) -> set[str]:
-        """Rigs driving right now in a race session (the race settles at once when all of them have reported)."""
+    def note_race_participant(self, ip: str, now: float) -> None:
+        """A rig in a race session on a known track is a participant (even on its results screen)."""
         from .adapters.f1.adapter import RACE_SESSIONS
-        out = set()
-        for rig in self.registry.all():
-            s = self.adapter.live_summary(rig.ip)
-            if (s is not None and s.session_type in RACE_SESSIONS
-                    and self.health.state(rig.ip, now) is RigState.DRIVING):
-                out.add(rig.ip)
-        return out
+        s = self.adapter.live_summary(ip)
+        if s is not None and s.session_type in RACE_SESSIONS and s.track_key:
+            self.races.note_racing(ip, s.track_key, now)
 
     def settle_races(self, now: float | None = None) -> list[dict[str, Any]]:
         now = time.monotonic() if now is None else now
         done = []
-        for race in self.races.due(now, self.driving_race_rigs(now)):
+        for race in self.races.due(now):
             try:
                 done.append(self.finish_race(race))
             except Exception:  # a race must never stop the packet pipeline

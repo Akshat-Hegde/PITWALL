@@ -113,7 +113,7 @@ class DemoDirector:
     def race(self, body: dict[str, Any]) -> dict[str, Any]:
         """A 4-rig race ends: every rig reports its result, so the TV shows the race podium and 'Grab your card'."""
         from ..core.adapter import RaceFinished
-        from ..core.races import RACE_SETTLE_S
+        from ..core.races import RACE_GROUP_WINDOW_S
         rigs = self.sim.rigs[:4]
         if len(rigs) < 2:
             raise DriverError("The demo needs at least two rigs for a race.")
@@ -128,7 +128,7 @@ class DemoDirector:
                 position=pos, grid_position=grid_pos, laps=5,
                 best_lap_ms=87_000 + pos * 90 + self.rng.randint(0, 300), total_time_s=base + pos * 3.7,
                 penalties_s=0, status="finished", num_cars=20), now)
-        done = self.hub.settle_races(now + RACE_SETTLE_S + 1)
+        done = self.hub.settle_races(now + RACE_GROUP_WINDOW_S + 1)
         if not done or done[0]["moment"] is None:
             raise DriverError("Race podium is switched off ([features] sharing / race_podium).")
         return {"shown": "race_podium", "drivers": len(rigs)}

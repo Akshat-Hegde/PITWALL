@@ -1,7 +1,10 @@
 """Races: each rig reports its own player's result; results on one track close together form one race.
 
-Rulings: reports for the same track within RACE_GROUP_WINDOW_S of the first one belong to one race. The race is
-due RACE_SETTLE_S after the last report, or at once when every rig still driving in a race has reported.
+Rulings (R12): reports for the same track within RACE_GROUP_WINDOW_S of the first one belong to one race.
+Participants of a track are the rigs seen in a race session on it within the last RACE_GROUP_WINDOW_S (a rig on its
+results screen still counts). The race is due at once when the participants are known and every one has reported;
+else, with other participants still unreported, at max(last report + RACE_SETTLE_S, first report + RACE_GROUP_WINDOW_S);
+with no participants known at all (demo, tests) RACE_SETTLE_S after the last report.
 A rig's duplicate report (the game can resend) is ignored. Ranking is by finishing position, finishers
 before DNF / DSQ / not classified.
 """
@@ -43,6 +46,15 @@ class RaceBook:
         self._clock = clock
         self._open: list[Race] = []
         self._settled: dict[tuple[str, str, str], float] = {}   # (rig, track, session uid) -> when
+        self._racing: dict[tuple[str, str], float] = {}         # (rig, track) -> last seen in a race session
+
+    def note_racing(self, rig_id: str, track_key: str, now: float | None = None) -> None:
+        """The rig is in a race session on this track right now (called for every packet / tick)."""
+        self._racing[(rig_id, track_key)] = self._clock() if now is None else now
+
+    def participants(self, track_key: str, now: float) -> set[str]:
+        return {rig for (rig, track), t in self._racing.items()
+                if track == track_key and 0 <= now - t <= RACE_GROUP_WINDOW_S}
 
     def add(self, rig_id: str, result: RaceFinished, now: float | None = None) -> None:
         now = self._clock() if now is None else now
@@ -64,12 +76,18 @@ class RaceBook:
         race.results.append((rig_id, result))
         race.finished_at = now
 
-    def due(self, now: float, driving_race_rigs: set[str]) -> list[Race]:
+    def due(self, now: float) -> list[Race]:
         """Races to publish now (removed from the book), each with its results ranked."""
         out = []
         for race in list(self._open):
-            waiting = driving_race_rigs - race.rigs()
-            if now - race.finished_at >= RACE_SETTLE_S or (driving_race_rigs and not waiting):
+            people = self.participants(race.track_key, now)
+            reported = race.rigs()
+            if people:
+                ready = people == reported or now >= max(race.finished_at + RACE_SETTLE_S,
+                                                         race.first_at + RACE_GROUP_WINDOW_S)
+            else:
+                ready = now - race.finished_at >= RACE_SETTLE_S
+            if ready:
                 self._open.remove(race)
                 race.results = race.ranked()
                 for rig, r in race.results:
@@ -77,4 +95,5 @@ class RaceBook:
                         self._settled[(rig, race.track_key, r.session_uid)] = now
                 out.append(race)
         self._settled = {k: t for k, t in self._settled.items() if now - t < _SETTLED_KEEP_S}
+        self._racing = {k: t for k, t in self._racing.items() if now - t <= RACE_GROUP_WINDOW_S}
         return out
