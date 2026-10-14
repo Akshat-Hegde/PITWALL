@@ -7,6 +7,7 @@ session code, so what the TV shows is exactly what a real event would look like.
 from __future__ import annotations
 
 import random
+import time
 from typing import TYPE_CHECKING, Any
 
 from ..core.drivers import DriverError
@@ -16,7 +17,7 @@ if TYPE_CHECKING:
     from ..hub import Hub
 
 TRACK_KEY = f"F1:{TRACK_ID}"
-ACTIONS = ("now_driving", "record", "battle", "podium", "challenge_winner", "card")
+ACTIONS = ("now_driving", "record", "battle", "podium", "challenge_winner", "card", "race")
 
 
 class DemoDirector:
@@ -108,3 +109,25 @@ class DemoDirector:
             if card:
                 return {"shown": "card", "url": card["url"], "token": card["token"]}
         raise DriverError("No driver has finished a clean lap in this session yet: give it two or three minutes.")
+
+    def race(self, body: dict[str, Any]) -> dict[str, Any]:
+        """A 4-rig race ends: every rig reports its result, so the TV shows the race podium and 'Grab your card'."""
+        from ..core.adapter import RaceFinished
+        from ..core.races import RACE_SETTLE_S
+        rigs = self.sim.rigs[:4]
+        if len(rigs) < 2:
+            raise DriverError("The demo needs at least two rigs for a race.")
+        order = list(range(1, len(rigs) + 1))
+        self.rng.shuffle(order)
+        now = time.monotonic()
+        base = 5_400 + self.rng.randint(0, 600)
+        for rig, pos in zip(rigs, order):
+            self.hub.races.add(rig.ip, RaceFinished(
+                track_key=TRACK_KEY, session_type="Race", session_uid=f"demo{self.rng.getrandbits(32):08x}",
+                position=pos, grid_position=self.rng.randint(1, 20), laps=5,
+                best_lap_ms=87_000 + pos * 90 + self.rng.randint(0, 300), total_time_s=base + pos * 3.7,
+                penalties_s=0, status="finished", num_cars=20), now)
+        done = self.hub.settle_races(now + RACE_SETTLE_S + 1)
+        if not done:
+            raise DriverError("The race could not be shown (sharing is off in [features]).")
+        return {"shown": "race_podium", "drivers": len(rigs)}

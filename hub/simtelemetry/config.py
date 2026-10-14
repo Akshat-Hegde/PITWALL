@@ -114,6 +114,7 @@ class FeaturesConfig(_Section):
     challenges: bool = True       # weekly challenges on the TV
     events: bool = True           # corporate events: teams, team leaderboard, company branding
     owner: bool = True            # /owner analytics page
+    race_podium: bool = True      # race podium + race cards when a race ends (needs sharing)
 
 
 class MomentsConfig(_Section):

@@ -9,6 +9,7 @@ to open it (docs: "Sharing").
 from __future__ import annotations
 
 import secrets
+import time
 from collections import Counter
 from typing import TYPE_CHECKING, Any
 
@@ -16,7 +17,9 @@ from .laps import LapRecord, driver_key
 
 if TYPE_CHECKING:
     from ..hub import Hub
+    from .adapter import RaceFinished
     from .drivers import Assignment
+    from .races import Race
 
 
 def new_token() -> str:
@@ -87,4 +90,36 @@ def build_card(hub: Hub, rig_id: str, session: Assignment, ended_at: int) -> dic
         "improvement": improvement,
         "minis": mini_ratings(best, on_track, hub.laps.today_best_minis(track_key)),
         "outline": {"points": outline["points"], "display": outline["display"]} if outline else None,
+    }
+
+
+def build_race_card(hub: Hub, rig_id: str, result: RaceFinished, race: Race) -> dict[str, Any] | None:
+    """Card data for one rig's race result (`kind: "race"`), stored and served like a session card."""
+    ranked = [rig for rig, _ in race.ranked()]
+    if rig_id not in ranked:
+        return None
+    rig = hub.registry.get(rig_id)
+    cafe = hub.config.cafe
+    gained = result.grid_position - result.position if result.grid_position else None
+    return {
+        "kind": "race",
+        "token": new_token(),
+        "created_at": round(time.time() * 1000),
+        "driver": hub.drivers.lap_name(rig_id, rig.driver_name if rig else None, hub.rig_label(rig_id)),
+        "rig_name": hub.rig_label(rig_id),
+        "track_key": race.track_key,
+        "track_name": race.track_name,
+        "cafe": {"name": cafe.name, "branding": dict(cafe.branding)},
+        "session_type": race.session_type,
+        "position": result.position,
+        "grid_position": result.grid_position,
+        "positions_gained": gained,
+        "laps": result.laps,
+        "best_ms": result.best_lap_ms,
+        "total_time_s": result.total_time_s,
+        "penalties_s": result.penalties_s,
+        "status": result.status,
+        "num_cars": result.num_cars,
+        "cafe_rank": ranked.index(rig_id) + 1,
+        "cafe_drivers": len(ranked),
     }

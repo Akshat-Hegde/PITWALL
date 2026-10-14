@@ -16,6 +16,7 @@ from .core.health import HealthMonitor, RigState
 from .core.drivers import DriverRegistry
 from .core.laps import LapBook, LapContext, driver_key
 from .core.store import LapStore
+from .core.races import RaceBook
 from .core.rigs import Rig, RigRegistry
 from .tools.recorder import Recorder
 
@@ -56,6 +57,7 @@ class Hub:
         self.laps = LapBook(outline_display=config.map.model_dump(), store=store,
                             day_start_hour=config.leaderboard.day_start_hour, bundled_outlines=bundled_outlines)
         self.drivers = DriverRegistry(store)
+        self.races = RaceBook()
         from .core.tv import TvControl
         self.tv = TvControl(config.data_dir / "tv.json" if store is not None and store.path is not None else None)
         from .core.competitions import Competitions
@@ -100,6 +102,10 @@ class Hub:
                 self.registry.set_driver_name(ip, summary.driver_name)
                 if summary.speed_kph and self.drivers.get(ip) is not None:
                     self._session_top_kph[ip] = max(self._session_top_kph.get(ip, 0), summary.speed_kph)
+            if result.race_results:
+                for finished in result.race_results:
+                    self.races.add(ip, finished, received)
+                self.settle_races(received)
             if result.lap_events or result.lap_update:
                 try:
                     self.laps.update(ip, self.lap_context(ip), self.adapter.live_lap(ip), result.lap_events)
@@ -187,6 +193,81 @@ class Hub:
         self.laps.publish_moment("card", rig_id=ip, driver=card["driver"], token=card["token"], url=url,
                                  best_ms=card["best_ms"], track_name=card["track_name"])
         return {**card, "url": url}
+
+    # --- race podium -------------------------------------------------------------------
+
+    def driving_race_rigs(self, now: float) -> set[str]:
+        """Rigs driving right now in a race session (the race settles at once when all of them have reported)."""
+        from .adapters.f1.adapter import RACE_SESSIONS
+        out = set()
+        for rig in self.registry.all():
+            s = self.adapter.live_summary(rig.ip)
+            if (s is not None and s.session_type in RACE_SESSIONS
+                    and self.health.state(rig.ip, now) is RigState.DRIVING):
+                out.add(rig.ip)
+        return out
+
+    def settle_races(self, now: float | None = None) -> list[dict[str, Any]]:
+        now = time.monotonic() if now is None else now
+        done = []
+        for race in self.races.due(now, self.driving_race_rigs(now)):
+            try:
+                done.append(self.finish_race(race))
+            except Exception:  # a race must never stop the packet pipeline
+                log.exception("Could not publish the race on %s", race.track_key)
+        return done
+
+    def race_track_name(self, race: Any) -> str | None:
+        for rig, _ in race.results:
+            s = self.adapter.live_summary(rig)
+            if s is not None and s.track_key == race.track_key and s.track:
+                return s.track
+        try:
+            return self.config.track_names.get(int(race.track_key.split(":", 1)[1]))
+        except (IndexError, ValueError):
+            return None
+
+    def finish_race(self, race: Any) -> dict[str, Any]:
+        """Race cards for every rig that finished, plus the podium moment when 2 or more cafe drivers raced."""
+        from .core.cards import build_race_card
+        from .core.feed import lan_address
+        features = self.config.features
+        race.track_name = race.track_name or self.race_track_name(race)
+        if not features.sharing:
+            return {"cards": [], "moment": None}
+        base = f"http://{lan_address() or 'localhost'}:{self.config.network.http_port}/card/"
+        cards = []
+        for rig, result in race.results:
+            card = build_race_card(self, rig, result, race)
+            if card is None:
+                continue
+            self.drivers.save_card(rig, self.drivers.driver_id(rig), card)
+            cards.append((rig, result, card))
+        moment = None
+        if len(cards) == 1:
+            rig, result, card = cards[0]
+            self.laps.publish_moment("card", rig_id=rig, driver=card["driver"], token=card["token"],
+                                     url=base + card["token"], best_ms=card["best_ms"],
+                                     track_name=card["track_name"], card_kind="race", position=card["position"])
+        elif cards and features.race_podium:
+            moment = self.laps.publish_moment(
+                "race_podium", track_key=race.track_key, track_name=race.track_name,
+                session_type=race.session_type,
+                drivers=[{"rank": i, "position": res.position, "driver": card["driver"], "rig_id": rig,
+                          "grid_position": res.grid_position, "laps": res.laps, "best_lap_ms": res.best_lap_ms,
+                          "total_time_s": res.total_time_s, "status": res.status,
+                          "card_url": base + card["token"], "card_token": card["token"]}
+                         for i, (rig, res, card) in enumerate(cards, 1)],
+                wifi=None)   # Task 3 fills this from the shared Wi-Fi helper
+        return {"cards": [c for _, _, c in cards], "moment": moment}
+
+    async def tick_races(self) -> None:
+        while True:
+            await asyncio.sleep(1.0)
+            try:
+                self.settle_races()
+            except Exception:
+                log.exception("Race check failed")
 
     def announce_driver(self, ip: str) -> dict[str, Any] | None:
         """'Now driving' moment when staff start a session on a rig."""

@@ -224,7 +224,8 @@ async def run_hub(args: argparse.Namespace, hub: Hub, selection: SourceSelection
     if hub.recorder is not None:
         hub.recorder.start()
     tasks = [asyncio.create_task(hub.consume()), asyncio.create_task(hub.tick_health()),
-             asyncio.create_task(hub.tick_podium()), asyncio.create_task(hub.tick_competitions())]
+             asyncio.create_task(hub.tick_podium()), asyncio.create_task(hub.tick_competitions()),
+             asyncio.create_task(hub.tick_races())]
     if cmd == "run" and not demo and hub.config.backup.enabled and hub.drivers.store.path is not None:
         tasks.append(asyncio.create_task(hub.backup_loop()))
     if print_lines:
