@@ -21,10 +21,28 @@ class Checked:
 
 
 @dataclass(slots=True)
+class RaceFinished:
+    """The rig's player finished (or was classified in) a race session. Game-agnostic."""
+
+    track_key: str | None
+    session_type: str            # e.g. "Race"
+    session_uid: str | None
+    position: int                # player's finishing position (1-based)
+    grid_position: int | None
+    laps: int
+    best_lap_ms: int | None      # 0 from the game -> None
+    total_time_s: float | None   # race time plus penalties
+    penalties_s: int
+    status: str                  # finished | dnf | dsq | not_classified | retired | active | inactive | invalid
+    num_cars: int
+
+
+@dataclass(slots=True)
 class DecodeResult:
     driving: bool = False           # True for packets that mean "car is on track, player in control"
     lap_events: list[LapEvent] = field(default_factory=list)
     lap_update: bool = False        # the live lap changed (new lap timing data)
+    race_results: list[RaceFinished] = field(default_factory=list)
 
 
 @dataclass(slots=True)

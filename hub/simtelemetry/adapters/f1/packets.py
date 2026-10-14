@@ -246,6 +246,21 @@ class TimeTrial:
 
 
 @dataclass(frozen=True, slots=True)
+class FinalClassification:
+    """The player car's row of the end-of-session classification."""
+
+    header: PacketHeader
+    num_cars: int
+    position: int
+    num_laps: int
+    grid_position: int
+    result_status: int               # 0 invalid, 1 inactive, 2 active, 3 finished, 4 dnf, 5 dsq, 6 not classified, 7 retired
+    best_lap_time_ms: int
+    total_race_time_s: float         # without penalties
+    penalties_time_s: int
+
+
+@dataclass(frozen=True, slots=True)
 class NoPlayerCar:
     """A per-car packet whose header has no usable m_playerCarIndex (255 or out of range)."""
 
@@ -254,4 +269,4 @@ class NoPlayerCar:
 
 
 Decoded = (Motion | Session | LapData | Event | Participant | CarTelemetry | CarStatus | CarDamage | SessionHistory
-           | TimeTrial | MotionEx)
+           | TimeTrial | MotionEx | FinalClassification)

@@ -24,6 +24,7 @@ class FormatLayouts:
     car_damage: Layout
     lap_history: Layout
     tyre_stint: Layout
+    final_classification: Layout
     time_trial_set: Layout
     event_members: dict[str, Layout]
 
@@ -41,6 +42,7 @@ def _build(module: ModuleType, packet_format: int, gforce_divisor: float | None)
             PacketId.PARTICIPANTS: module.PacketParticipantsData,
             PacketId.CAR_TELEMETRY: module.PacketCarTelemetryData,
             PacketId.CAR_STATUS: module.PacketCarStatusData,
+            PacketId.FINAL_CLASSIFICATION: module.PacketFinalClassificationData,
             PacketId.CAR_DAMAGE: module.PacketCarDamageData,
             PacketId.MOTION_EX: module.PacketMotionExData,
             PacketId.SESSION_HISTORY: module.PacketSessionHistoryData,
@@ -54,6 +56,7 @@ def _build(module: ModuleType, packet_format: int, gforce_divisor: float | None)
         car_damage=module.CarDamageData,
         lap_history=module.LapHistoryData,
         tyre_stint=module.TyreStintHistoryData,
+        final_classification=module.FinalClassificationData,
         time_trial_set=module.TimeTrialDataSet,
         event_members=module.EVENT_MEMBERS,
     )

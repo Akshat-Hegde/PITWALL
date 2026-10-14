@@ -20,6 +20,7 @@ from .packets import (
     CarTelemetry,
     Decoded,
     Event,
+    FinalClassification,
     FastestLapDetails,
     FlashbackDetails,
     LapData,
@@ -368,6 +369,26 @@ def _decode_time_trial(header: PacketHeader, data: Buffer, layouts: FormatLayout
     )
 
 
+def _decode_final_classification(header: PacketHeader, data: Buffer,
+                                 layouts: FormatLayouts) -> FinalClassification | NoPlayerCar:
+    idx = player_index(header, layouts)
+    if idx is None:
+        return NoPlayerCar(header, PacketId.FINAL_CLASSIFICATION)
+    packet = layouts.packets[PacketId.FINAL_CLASSIFICATION]
+    car = _player_car(data, packet, "m_classificationData", layouts.final_classification, idx)
+    return FinalClassification(
+        header=header,
+        num_cars=data[packet.offset_of("m_numCars")],
+        position=car["m_position"],
+        num_laps=car["m_numLaps"],
+        grid_position=car["m_gridPosition"],
+        result_status=car["m_resultStatus"],
+        best_lap_time_ms=car["m_bestLapTimeInMS"],
+        total_race_time_s=car["m_totalRaceTime"],
+        penalties_time_s=car["m_penaltiesTime"],
+    )
+
+
 _HANDLERS: dict[PacketId, Callable[[PacketHeader, Buffer, FormatLayouts], Any]] = {
     PacketId.MOTION: _decode_motion,
     PacketId.SESSION: _decode_session,
@@ -377,6 +398,7 @@ _HANDLERS: dict[PacketId, Callable[[PacketHeader, Buffer, FormatLayouts], Any]] 
     PacketId.CAR_TELEMETRY: _decode_car_telemetry,
     PacketId.CAR_STATUS: _decode_car_status,
     PacketId.CAR_DAMAGE: _decode_car_damage,
+    PacketId.FINAL_CLASSIFICATION: _decode_final_classification,
     PacketId.MOTION_EX: _decode_motion_ex,
     PacketId.SESSION_HISTORY: _decode_session_history,
     PacketId.TIME_TRIAL: _decode_time_trial,

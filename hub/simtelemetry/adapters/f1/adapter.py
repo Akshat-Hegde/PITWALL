@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from ...core.adapter import Checked, DecodeResult, LiveSummary
+from ...core.adapter import Checked, DecodeResult, LiveSummary, RaceFinished
 from ...core.laps import LiveLap
 from .appendix import session_type_name, track_name
 from .decode import decode
@@ -13,7 +13,7 @@ import math
 import time
 
 from ...core.slides import SlideDetector
-from .packets import CarDamage, CarStatus, CarTelemetry, LapData, Motion, MotionEx, Participant, Session
+from .packets import CarDamage, CarStatus, FinalClassification, CarTelemetry, LapData, Motion, MotionEx, Participant, Session
 from .sizes import SUPPORTED_FORMATS, PacketId
 from .tyres import Compound, TyreCompound
 from .validate import Accepted, PacketGate
@@ -142,6 +142,22 @@ class F1Adapter:
             }
         elif isinstance(packet, Participant):
             live.driver_name = packet.name or None
+        elif isinstance(packet, FinalClassification):
+            if live.session_type in RACE_SESSIONS:  # practice, qualifying and Time Trial make no podium
+                total = packet.total_race_time_s + packet.penalties_time_s if packet.total_race_time_s else None
+                result.race_results.append(RaceFinished(
+                    track_key=live.track_key,
+                    session_type=live.session_type,
+                    session_uid=f"{packet.header.session_uid:016x}",
+                    position=packet.position,
+                    grid_position=packet.grid_position or None,
+                    laps=packet.num_laps,
+                    best_lap_ms=packet.best_lap_time_ms or None,
+                    total_time_s=total,
+                    penalties_s=packet.penalties_time_s,
+                    status=RESULT_STATUS.get(packet.result_status, "invalid"),
+                    num_cars=packet.num_cars,
+                ))
         return result
 
     def live_summary(self, source: str) -> LiveSummary | None:
@@ -155,6 +171,11 @@ class F1Adapter:
         return data_format.isdigit() and int(data_format) in SUPPORTED_FORMATS
 
 
+# Session types 15-17 (appendix.SESSION_TYPES): Race, Race 2, Race 3
+RACE_SESSIONS = frozenset(session_type_name(i) for i in (15, 16, 17))
+# FinalClassificationData m_resultStatus
+RESULT_STATUS = {0: "invalid", 1: "inactive", 2: "active", 3: "finished", 4: "dnf", 5: "dsq",
+                 6: "not_classified", 7: "retired"}
 # Session m_weather: 0 = clear, 1 = light cloud, 2 = overcast, 3 = light rain, 4 = heavy rain, 5 = storm
 WEATHER = {0: "clear", 1: "light_cloud", 2: "overcast", 3: "light_rain", 4: "heavy_rain", 5: "storm"}
 # CarStatus m_ersDeployMode: 0 = none, 1 = medium, 2 = hotlap, 3 = overtake

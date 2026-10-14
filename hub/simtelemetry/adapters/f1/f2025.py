@@ -457,3 +457,28 @@ PacketTimeTrialData = Layout("PacketTimeTrialData", [
     (TimeTrialDataSet, "m_personalBestDataSet"),
     (TimeTrialDataSet, "m_rivalDataSet"),
 ])
+
+# --- Final Classification (8) ---------------------------------------------------
+FinalClassificationData = Layout("FinalClassificationData", [
+    ("uint8", "m_position"),
+    ("uint8", "m_numLaps"),
+    ("uint8", "m_gridPosition"),
+    ("uint8", "m_points"),
+    ("uint8", "m_numPitStops"),
+    ("uint8", "m_resultStatus"),
+    ("uint8", "m_resultReason"),
+    ("uint32", "m_bestLapTimeInMS"),
+    ("double", "m_totalRaceTime"),
+    ("uint8", "m_penaltiesTime"),
+    ("uint8", "m_numPenalties"),
+    ("uint8", "m_numTyreStints"),
+    ("uint8", "m_tyreStintsActual", MAX_TYRE_STINTS),
+    ("uint8", "m_tyreStintsVisual", MAX_TYRE_STINTS),
+    ("uint8", "m_tyreStintsEndLaps", MAX_TYRE_STINTS),
+])
+
+PacketFinalClassificationData = Layout("PacketFinalClassificationData", [
+    (PacketHeader, "m_header"),
+    ("uint8", "m_numCars"),
+    (FinalClassificationData, "m_classificationData", MAX_CARS),
+])

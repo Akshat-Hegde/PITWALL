@@ -13,6 +13,7 @@ from .f2025 import (  # noqa: F401  (unchanged in 2026; re-exported so both modu
     EVENT_STRING_CODE_LEN,
     LapData,
     LapHistoryData,
+    FinalClassificationData,
     LiveryColour,
     MAX_PARTICIPANT_NAME_LEN,
     PacketHeader,
@@ -225,4 +226,11 @@ PacketTimeTrialData = Layout("PacketTimeTrialData", [
     (TimeTrialDataSet, "m_playerSessionBestDataSet"),
     (TimeTrialDataSet, "m_personalBestDataSet"),
     (TimeTrialDataSet, "m_rivalDataSet"),
+])
+
+# --- Final Classification (8): per-car struct unchanged, array is 24 -----------
+PacketFinalClassificationData = Layout("PacketFinalClassificationData", [
+    (PacketHeader, "m_header"),
+    ("uint8", "m_numCars"),
+    (FinalClassificationData, "m_classificationData", MAX_CARS),
 ])

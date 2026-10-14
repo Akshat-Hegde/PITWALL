@@ -42,3 +42,29 @@ def decode_packet(data: bytes | bytearray):
     accepted = validate(data)
     assert isinstance(accepted, Accepted), accepted
     return decode(accepted, data)
+
+
+FINAL_CLASSIFICATION_CAR = "<7BIdBBB8B8B8B"   # 46 bytes per car, both formats (cs_maxTyreStints = 8)
+
+
+def session_packet(packet_format: int, session_type: int, track_id: int = 7, *, session_uid: int = 0xDEADBEEF12345678,
+                   player: int = 3) -> bytearray:
+    pkt = blank_packet(packet_format, 1, session_uid=session_uid, player=player)
+    struct.pack_into("<HBbB", pkt, 33, 5793, session_type, track_id, 0)
+    return pkt
+
+
+def final_classification_packet(packet_format: int, *, player: int = 3, cars: dict[int, dict] | None = None,
+                                num_cars: int = 20, session_uid: int = 0xDEADBEEF12345678) -> bytearray:
+    """Packet id 8. `cars` maps a car index to field overrides; all other slots hold decoys."""
+    pkt = blank_packet(packet_format, 8, player=player, session_uid=session_uid)
+    pkt[29] = num_cars
+    base = dict(position=1, laps=0, grid=0, points=0, pits=0, status=0, reason=0, best_ms=0, total_s=0.0,
+                pen_s=0, num_pen=0, stints=0)
+    n_slots = (len(pkt) - 30) // struct.calcsize(FINAL_CLASSIFICATION_CAR)
+    for idx in range(n_slots):
+        v = {**base, **(cars or {}).get(idx, dict(position=21, laps=99, grid=22, best_ms=1, total_s=1.0))}
+        struct.pack_into(FINAL_CLASSIFICATION_CAR, pkt, 30 + idx * struct.calcsize(FINAL_CLASSIFICATION_CAR),
+                         v["position"], v["laps"], v["grid"], v["points"], v["pits"], v["status"], v["reason"],
+                         v["best_ms"], v["total_s"], v["pen_s"], v["num_pen"], v["stints"], *([0] * 24))
+    return pkt

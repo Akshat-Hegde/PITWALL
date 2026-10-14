@@ -84,6 +84,7 @@ USED_PACKETS: frozenset[PacketId] = frozenset({
     PacketId.PARTICIPANTS,
     PacketId.CAR_TELEMETRY,
     PacketId.CAR_STATUS,
+    PacketId.FINAL_CLASSIFICATION,
     PacketId.SESSION_HISTORY,
     PacketId.TIME_TRIAL,
 })
