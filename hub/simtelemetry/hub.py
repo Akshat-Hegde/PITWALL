@@ -195,6 +195,7 @@ class Hub:
         url = f"http://{lan_address() or 'localhost'}:{self.config.network.http_port}/card/{card['token']}"
         self.laps.publish_moment("card", rig_id=ip, driver=card["driver"], token=card["token"], url=url,
                                  best_ms=card["best_ms"], track_name=card["track_name"])
+        self.checkin.card_made(ip, session.started_at, url)   # the guest's phone can fetch it later
         return {**card, "url": url}
 
     # --- race podium -------------------------------------------------------------------

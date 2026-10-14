@@ -8,6 +8,7 @@ Cafes add their own words with [checkin] blocked_words.
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections.abc import Iterable
 
 # A small default list: common English and Hindi/Hinglish profanity, slurs and a few obvious troll names.
@@ -15,7 +16,7 @@ DEFAULT_BLOCKED = frozenset("""
 fuck fucker fucking fucked motherfucker shit shitty bullshit bitch bastard asshole ass arse cunt dick dickhead cock
 pussy slut whore wank wanker twat piss cum porn sex nigger nigga fag faggot retard rape rapist nazi hitler penis
 vagina boob boobs tits
-madarchod maderchod bhenchod behenchod bhosdike bhosdika bsdk chutiya chutiye chut gandu gaandu gaand randi
+madarchod maderchod bhenchod behenchod bhosdike bhosdika bsdk chutiya chutiye chut gandu gaandu gaand
 raand harami haramkhor kutta kamina lauda lawda loda lodu
 """.split())
 
@@ -30,7 +31,8 @@ def _squeeze(word: str) -> str:
 
 def _forms(text: str) -> set[str]:
     """Every word in the text, plus runs of single letters joined into one word."""
-    tokens = _TOKEN.findall(text.casefold().translate(_LEET))
+    folded = "".join(c for c in unicodedata.normalize("NFKD", text) if not unicodedata.combining(c))
+    tokens = _TOKEN.findall(folded.casefold().translate(_LEET))
     words = set(tokens)
     run = ""
     for token in tokens + [""]:
@@ -46,8 +48,8 @@ def _forms(text: str) -> set[str]:
 def is_blocked(name: str, extra: Iterable[str] = ()) -> bool:
     blocked = set(DEFAULT_BLOCKED)
     blocked.update(w.casefold().translate(_LEET) for w in extra if w and w.strip())
-    squeezed = {_squeeze(w) for w in blocked if len(w) >= 4}   # "fuuuck" -> "fuck"; short words stay exact
     for word in _forms(name):
-        if word in blocked or (len(word) >= 4 and _squeeze(word) in squeezed):
+        # "fuuuck" -> "fuck": only the typed word is squeezed, list entries are compared as written
+        if word in blocked or (len(word) >= 4 and _squeeze(word) in blocked):
             return True
     return False

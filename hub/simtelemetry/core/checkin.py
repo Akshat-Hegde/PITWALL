@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import secrets
+import threading
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
@@ -26,6 +27,7 @@ CHECKIN_TAKEOVER_IDLE_S = 120.0      # a session not DRIVING for this long can b
 RATE_LIMIT = 10                      # check-in POSTs per client per minute
 RATE_WINDOW_S = 60.0
 ENDED_KEEP_S = 2 * 3600.0            # an ended session's card link stays available this long
+MAX_AGE_S = 12 * 3600.0              # any session record is dropped after this, ended or not
 CODE_BYTES = 6                       # token_urlsafe(6) is exactly 8 characters
 
 
@@ -47,6 +49,7 @@ class CheckinService:
         self.secrets: dict[str, CheckinSession] = {}
         self._posts: dict[str, deque[float]] = defaultdict(deque)
         self._codes: dict[str, str] | None = None
+        self.lock = threading.Lock()  # check-in is check-then-assign: one at a time
 
     # --- codes -----------------------------------------------------------------------------
 
@@ -59,7 +62,11 @@ class CheckinService:
             try:
                 data = json.loads(self._path.read_text(encoding="utf-8"))
                 self._codes = {str(k): str(v) for k, v in data.items()}
+            except FileNotFoundError:
+                self._codes = {}
             except (OSError, ValueError, AttributeError):
+                log.warning("Could not read %s: making new check-in codes, so printed QR stickers stop working "
+                            "and must be reprinted", self._path)
                 self._codes = {}
         return self._codes
 
@@ -95,6 +102,8 @@ class CheckinService:
         return code
 
     def rig_for(self, code: str) -> str | None:
+        if not code.isascii() or len(code) > 64:
+            return None
         return next((rig for rig, c in self.codes().items() if secrets.compare_digest(c, code)
                      and self._hub.registry.get(rig) is not None), None)
 
@@ -102,6 +111,8 @@ class CheckinService:
 
     def allow(self, client: str) -> bool:
         now = self.clock()
+        for other in [k for k, d in self._posts.items() if k != client and (not d or now - d[-1] > RATE_WINDOW_S)]:
+            del self._posts[other]
         posts = self._posts[client]
         while posts and now - posts[0] > RATE_WINDOW_S:
             posts.popleft()
@@ -141,11 +152,17 @@ class CheckinService:
             rec.ended_at = self.wall()
         return False
 
-    def mark_ended(self, rig_id: str, started_at: int, card: dict[str, Any] | None) -> None:
+    def mark_ended(self, rig_id: str, started_at: int) -> None:
+        for rec in self.secrets.values():
+            if rec.rig_id == rig_id and rec.started_at == started_at and rec.ended_at is None:
+                rec.ended_at = self.wall()
+
+    def card_made(self, rig_id: str, started_at: int, url: str | None) -> None:
+        """Called by the hub whenever a session's card is made, however the session ended."""
         for rec in self.secrets.values():
             if rec.rig_id == rig_id and rec.started_at == started_at:
                 rec.ended_at = self.wall()
-                rec.card_url = card["url"] if card else None
+                rec.card_url = url
 
     def laps(self, rec: CheckinSession) -> list:
         key = driver_key(rec.name, rec.rig_id, rec.driver_id)
@@ -155,5 +172,6 @@ class CheckinService:
     def _prune(self) -> None:
         now = self.wall()
         for secret in [s for s, rec in self.secrets.items()
-                       if rec.ended_at is not None and now - rec.ended_at > ENDED_KEEP_S]:
+                       if now - rec.started_at / 1000 > MAX_AGE_S
+                       or (rec.ended_at is not None and now - rec.ended_at > ENDED_KEEP_S)]:
             del self.secrets[secret]

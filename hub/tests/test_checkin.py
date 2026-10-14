@@ -190,13 +190,14 @@ async def test_name_filter_and_validation_on_the_api(tmp_path):
 # --- the bad-name filter ----------------------------------------------------------------------
 
 @pytest.mark.parametrize("name", ["fuck", "FUCK you", "what the f u c k", "sh1t", "b00bs", "@ss", "$hit",
-                                  "f.u.c.k", "fuuuuck", "madarchod", "Bhenchod", "x chutiya"])
+                                  "f.u.c.k", "fuuuuck", "madarchod", "Bhenchod", "x chutiya", "fück", "shït"])
 def test_bad_names_are_blocked(name):
     assert is_blocked(name)
 
 
 @pytest.mark.parametrize("name", ["Ashish", "Scunthorpe", "Maya R", "Kofi", "Assam", "Dickson", "Classic",
-                                  "Hancock", "Sussex", "Lund", "Penistone", "Akshat", "Mia 2"])
+                                  "Hancock", "Sussex", "Lund", "Penistone", "Akshat", "Mia 2", "Rand", "Randi", "Kuta",
+                                  "Niga"])
 def test_normal_names_pass(name):
     assert not is_blocked(name)
 
@@ -227,3 +228,50 @@ async def test_staff_codes_need_the_pin(tmp_path):
     assert client.post(f"/api/staff/checkin/codes/{RIG}/regenerate").status_code == 401
     ok = client.get("/api/staff/checkin/codes", headers={"X-Staff-Pin": "1234"})
     assert ok.status_code == 200 and ok.json()["rigs"][0]["rig_name"] == "Rig 1"
+
+
+# --- fix round 1 -------------------------------------------------------------------------------
+
+async def test_non_ascii_codes_are_just_invalid(tmp_path):
+    hub, client, code = await checkin_client(tmp_path)
+    assert client.get("/api/checkin/é").status_code == 404
+    assert client.post("/api/checkin/é", json={"name": "Maya"}).status_code == 404
+    assert client.post("/api/checkin/é/done", json={"secret": "x"}).status_code == 404
+    page = client.get("/checkin/é")
+    assert page.status_code == 404 and "no longer valid" in page.text
+    assert client.get("/checkin/" + "a" * 500).status_code == 404
+
+
+async def test_staff_ending_the_session_keeps_the_card_link(tmp_path):
+    hub = make_hub(tmp_path)
+    await feed(hub, [session(2025, UID), participants(2025, UID, b"Akshat")])
+    client = TestClient(create_app(hub, dashboard_dir=tmp_path / "none"))
+    code = client.get("/api/staff/checkin/codes").json()["rigs"][0]["code"]
+    secret = post(client, code, "Maya").json()["secret"]
+    await feed(hub, lap_packets(1, 89000, [LAP1], 10.0))
+    ended = client.delete(f"/api/staff/rigs/{RIG}/driver").json()
+    assert ended["card"]["url"]
+    status = client.get(f"/api/checkin/{code}", params={"secret": secret}).json()
+    assert status["state"] == "ended" and status["card_url"] == ended["card"]["url"]
+    hub.laps.store.close()
+
+
+async def test_old_secrets_and_idle_clients_are_pruned(tmp_path):
+    hub, client, code = await checkin_client(tmp_path)
+    svc = hub.checkin
+    now = [time.time()]
+    svc.wall = lambda: now[0]
+    svc.clock = lambda: now[0]
+    secret = post(client, code, "Maya").json()["secret"]
+    assert secret in svc.secrets and "testclient" in svc._posts
+    now[0] += 13 * 3600                       # still "current" but over 12 h old
+    svc.allow("someone-else")
+    svc.lookup(RIG, secret)
+    assert secret not in svc.secrets
+    assert "testclient" not in svc._posts
+
+
+async def test_corrupt_codes_file_warns_and_regenerates(tmp_path, caplog):
+    (tmp_path / "checkin.json").write_text("{not json", encoding="utf-8")
+    hub, client, code = await checkin_client(tmp_path)
+    assert len(code) == 8 and "stickers stop working" in caplog.text

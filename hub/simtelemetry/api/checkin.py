@@ -89,15 +89,16 @@ def checkin_router(hub: Hub) -> APIRouter:
             raise HTTPException(400, str(exc)) from None
         if is_blocked(name, hub.config.checkin.blocked_words):
             raise HTTPException(400, BAD_NAME)
-        current = drivers.get(rig.ip)
-        if current is not None:
-            if not svc.can_take_over(rig.ip, current):
-                raise HTTPException(409, f"{rig.name} is in use. Please ask staff.")
-            card = hub.end_session(rig.ip)          # the previous driver still gets their card
-            svc.mark_ended(rig.ip, current.started_at, card)
-        session = drivers.assign(rig.ip, name)      # same start as staff: "Now driving" and the feed follow
-        hub.session_started(rig.ip)
-        secret = svc.register(rig.ip, session)
+        with svc.lock:                              # two phones at once must not both get the rig
+            current = drivers.get(rig.ip)
+            if current is not None:
+                if not svc.can_take_over(rig.ip, current):
+                    raise HTTPException(409, f"{rig.name} is in use. Please ask staff.")
+                hub.end_session(rig.ip)             # the previous driver still gets their card
+                svc.mark_ended(rig.ip, current.started_at)
+            session = drivers.assign(rig.ip, name)  # same start as staff: "Now driving" and the feed follow
+            hub.session_started(rig.ip)
+            secret = svc.register(rig.ip, session)
         return {"rig_name": rig.name, "driver": session.name, "secret": secret,
                 "status_url": f"/api/checkin/{code}?secret={secret}"}
 
@@ -108,8 +109,11 @@ def checkin_router(hub: Hub) -> APIRouter:
         rec = svc.lookup(rig.ip, str(body.get("secret") or ""))
         if rec is None or not svc.is_current(rec):
             raise HTTPException(403, "This isn't your session any more.")
-        card = hub.end_session(rig.ip)
-        svc.mark_ended(rig.ip, rec.started_at, card)
+        with svc.lock:
+            if not svc.is_current(rec):
+                raise HTTPException(403, "This isn't your session any more.")
+            card = hub.end_session(rig.ip)
+            svc.mark_ended(rig.ip, rec.started_at)
         return {"card_url": card["url"] if card else None}
 
     return router
