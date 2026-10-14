@@ -19,6 +19,8 @@ def test_no_control_characters():
             continue
         data = (ROOT / rel).read_bytes()
         for n, line in enumerate(data.split(b"\n"), 1):
-            if any(c < 32 and c not in ALLOWED for c in line):
+            # A CR is only allowed as the CRLF line ending; a lone CR is a mangled "\r" (e.g. data\recordings).
+            body = line[:-1] if line.endswith(b"\r") else line
+            if any(c < 32 and c not in ALLOWED for c in line) or b"\r" in body:
                 bad.append(f"{rel}:{n}")
     assert not bad, "control characters in: " + ", ".join(bad)

@@ -202,7 +202,7 @@ On the dashboard, check:
 - [ ] Optional: in `/setup` add a guest Wi-Fi name and password; a phone on that network can join via the TV QR.
 - [ ] The hub from Part B is still running and recording (`.venv\Scripts\python -m simtelemetry run --record
       --lap-debug` holds UDP 20777), so do not start `listen` or a second hub. That recording is the regression
-      fixture for Final Classification: keep the `.f1rec` from this race in `dataecordings\` (note its name:
+      fixture for Final Classification: keep the `.f1rec` from this race in `data\recordings\` (note its name:
       `______________________`).
 - [ ] Both rigs join ONE F1 25 LAN lobby race (Multiplayer > LAN, one hosts, the other joins; AI on, any
       length) on the same track. Two separate single-player races on the same track do not count.
