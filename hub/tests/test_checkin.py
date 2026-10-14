@@ -93,6 +93,67 @@ async def test_idle_takeover_after_120_s_makes_the_previous_card(tmp_path):
     hub.laps.store.close()
 
 
+def make_idle(hub, seconds=130):
+    """The rig last drove this many seconds ago and is in the menus now."""
+    now = time.monotonic()
+    hub.health.on_packet(RIG, "motion", now - seconds, True)
+    hub.health.on_packet(RIG, "session", now - 1, False)
+
+
+async def test_status_shows_the_form_for_an_idle_checkin_session(tmp_path):
+    hub, client, code = await checkin_client(tmp_path)
+    hub.drivers._clock = lambda: time.time() - 600
+    first = post(client, code, "Maya").json()
+    hub.drivers._clock = time.time
+    hub.health.on_packet(RIG, "motion", time.monotonic() - 10, True)   # driving 10 s ago: busy
+    assert client.get(f"/api/checkin/{code}").json()["state"] == "busy"
+
+    hub.health._rigs[RIG].last_driving = None
+    make_idle(hub)
+    anon = client.get(f"/api/checkin/{code}").json()
+    assert anon == {"rig_name": "Rig 1", "state": "idle", "laps": 0} and "Maya" not in json.dumps(anon)
+    wrong = client.get(f"/api/checkin/{code}", params={"secret": "nope"}).json()
+    assert wrong["state"] == "idle" and "driver" not in wrong
+    mine = client.get(f"/api/checkin/{code}", params={"secret": first["secret"]}).json()
+    assert mine["state"] == "yours"                         # Maya's own phone still sees her session
+
+
+async def test_an_idle_staff_session_stays_busy_and_cannot_be_taken_over(tmp_path):
+    hub, client, code = await checkin_client(tmp_path)
+    hub.drivers._clock = lambda: time.time() - 600          # a paid booking started 10 minutes ago
+    hub.drivers.assign(RIG, "Booked")
+    hub.drivers._clock = time.time
+    make_idle(hub, seconds=500)                             # nobody has driven for over 8 minutes
+    assert hub.checkin.idle_s(RIG, hub.drivers.get(RIG)) >= 120
+    anon = client.get(f"/api/checkin/{code}").json()
+    assert anon == {"rig_name": "Rig 1", "state": "busy", "laps": 0}
+    r = post(client, code, "Kofi")
+    assert r.status_code == 409 and "Booked" not in r.text
+    assert hub.drivers.get(RIG).name == "Booked"
+
+
+async def test_an_idle_checkin_session_is_taken_over_and_the_old_card_is_recorded(tmp_path):
+    hub = make_hub(tmp_path)
+    await feed(hub, [session(2025, UID), participants(2025, UID, b"Akshat")])
+    client = TestClient(create_app(hub, dashboard_dir=tmp_path / "none"))
+    code = client.get("/api/staff/checkin/codes").json()["rigs"][0]["code"]
+    hub.drivers._clock = lambda: time.time() - 600
+    first = post(client, code, "Maya").json()
+    hub.drivers._clock = time.time
+    await feed(hub, lap_packets(1, 89000, [LAP1], 10.0))
+    hub.health._rigs[RIG].last_driving = None
+    make_idle(hub)
+    assert client.get(f"/api/checkin/{code}").json()["state"] == "idle"
+
+    r = post(client, code, "Kofi")
+    assert r.status_code == 200 and hub.drivers.get(RIG).name == "Kofi"
+    (rec,) = [rec for s, rec in hub.checkin.secrets.items() if s == first["secret"]]
+    assert rec.ended_at is not None and "/card/" in rec.card_url
+    old = client.get(f"/api/checkin/{code}", params={"secret": first["secret"]}).json()
+    assert old["state"] == "ended" and old["card_url"] == rec.card_url
+    hub.laps.store.close()
+
+
 async def test_a_session_staff_just_started_is_not_taken_over(tmp_path):
     hub, client, code = await checkin_client(tmp_path)
     hub.drivers.assign(RIG, "Staff pick")                    # started moments ago, never driven

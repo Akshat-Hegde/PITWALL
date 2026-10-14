@@ -75,7 +75,11 @@ def checkin_router(hub: Hub) -> APIRouter:
             if not yours and rec.card_url:
                 out["card_url"] = rec.card_url
             return out
-        return {**base, "state": "busy" if drivers.get(rig.ip) else "free", "laps": 0}
+        current = drivers.get(rig.ip)
+        if current is None:
+            return {**base, "state": "free", "laps": 0}
+        # an idle check-in session can be taken over: show the name form (no driver name either way)
+        return {**base, "state": "idle" if svc.can_take_over(rig.ip, current) else "busy", "laps": 0}
 
     @router.post("/api/checkin/{code}")
     def check_in(code: str, request: Request, body: dict[str, Any] = Body(...)) -> dict[str, Any]:

@@ -51,8 +51,8 @@
 <main>
   <section id="view-free" hidden>
     <span class="tag"><span id="free-rig"></span></span>
-    <h1>Drive this rig</h1>
-    <p class="muted">Put your name on the leaderboard and get your own lap card when you finish.</p>
+    <h1 id="free-title">Drive this rig</h1>
+    <p class="muted" id="free-text">Put your name on the leaderboard and get your own lap card when you finish.</p>
     <form class="panel" id="form">
       <label for="name">What's your name?</label>
       <input id="name" maxlength="32" autocomplete="given-name" autocapitalize="words" placeholder="First name" required>
@@ -71,6 +71,7 @@
     <span class="tag"><span id="yours-rig"></span></span>
     <h1 id="yours-title"></h1>
     <p class="muted"><span class="live"></span>Your laps are counting. Have fun!</p>
+    <p class="msg" id="yours-note" role="status"></p>
     <div class="stats">
       <div class="stat"><small>Laps</small><b id="laps">0</b></div>
       <div class="stat"><small>Best lap</small><b id="best">--</b></div>
@@ -99,12 +100,13 @@
 
 <script>
 (() => {
-  const KEY = "pitwall-checkin";
+  const KEY = "simtelemetry-checkin";
   const $ = (id) => document.getElementById(id);
   const code = decodeURIComponent(location.pathname.split("/").filter(Boolean).pop() || "");
   const views = ["free", "busy", "yours", "ended", "error"];
   let secret = "";
   let timer = null;
+  let active = false;                                            // this phone has a session on the rig right now
 
   function load() { try { const v = JSON.parse(localStorage.getItem(KEY) || "null"); return v && v.code === code ? v.secret : ""; } catch { return ""; } }
   function save() { try { if (secret) localStorage.setItem(KEY, JSON.stringify({ code, secret })); else localStorage.removeItem(KEY); } catch { /* private mode */ } }
@@ -126,6 +128,8 @@
 
   function render(s) {
     for (const id of ["free-rig", "busy-rig", "yours-rig"]) $(id).textContent = s.rig_name;
+    active = s.state === "yours";
+    $("yours-note").textContent = "";
     if (s.state === "yours") {
       $("yours-title").textContent = "You're on " + s.rig_name + ". Drive!";
       $("laps").textContent = s.laps;
@@ -138,6 +142,10 @@
       show("ended");
       clearInterval(timer);
     } else {
+      const idle = s.state === "idle";                        // an idle check-in session: a new name takes over
+      $("free-title").textContent = idle ? "This rig looks free" : "Drive this rig";
+      $("free-text").textContent = idle ? "Nobody has driven for a while. Check in to take over."
+        : "Put your name on the leaderboard and get your own lap card when you finish.";
       show(s.state === "busy" ? "busy" : "free");
     }
   }
@@ -145,7 +153,14 @@
   async function poll() {
     try {
       render(await call("GET", "/api/checkin/" + encodeURIComponent(code) + (secret ? "?secret=" + encodeURIComponent(secret) : "")));
-    } catch (err) { if (err.status) fail(err.message); }   // network blips: keep the last screen
+    } catch (err) {
+      if (!err.status || err.status >= 500 || err.status === 429) return;   // blips: keep the last screen, keep polling
+      if (active) {                                  // code changed or check-in switched off mid-session
+        $("yours-note").textContent = err.message + " Your laps still count. If I'm done doesn't work, ask staff to end your session.";
+        return;
+      }
+      fail(err.message);
+    }
   }
   function start() { clearInterval(timer); poll(); timer = setInterval(poll, 3000); }
 

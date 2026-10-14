@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-CHECKIN_TAKEOVER_IDLE_S = 120.0      # a session not DRIVING for this long can be replaced by a new check-in
+CHECKIN_TAKEOVER_IDLE_S = 120.0      # a check-in session not DRIVING this long can be replaced by a new check-in
 RATE_LIMIT = 10                      # check-in POSTs per client per minute
 RATE_WINDOW_S = 60.0
 ENDED_KEEP_S = 2 * 3600.0            # an ended session's card link stays available this long
@@ -130,8 +130,13 @@ class CheckinService:
         since = self._hub.health.seconds_since_driving(rig_id, self.clock())
         return age if since is None else min(since, age)
 
+    def started_by_checkin(self, rig_id: str, session: Assignment) -> bool:
+        return any(rec.rig_id == rig_id and rec.started_at == session.started_at
+                   for rec in list(self.secrets.values()))
+
     def can_take_over(self, rig_id: str, session: Assignment) -> bool:
-        return self.idle_s(rig_id, session) >= CHECKIN_TAKEOVER_IDLE_S
+        """Only a session a phone started can be taken over from a phone; staff (paid) sessions never are."""
+        return self.started_by_checkin(rig_id, session) and self.idle_s(rig_id, session) >= CHECKIN_TAKEOVER_IDLE_S
 
     def register(self, rig_id: str, session: Assignment) -> str:
         secret = secrets.token_urlsafe(16)
@@ -153,13 +158,13 @@ class CheckinService:
         return False
 
     def mark_ended(self, rig_id: str, started_at: int) -> None:
-        for rec in self.secrets.values():
+        for rec in list(self.secrets.values()):     # snapshots: register() may add a secret meanwhile
             if rec.rig_id == rig_id and rec.started_at == started_at and rec.ended_at is None:
                 rec.ended_at = self.wall()
 
     def card_made(self, rig_id: str, started_at: int, url: str | None) -> None:
         """Called by the hub whenever a session's card is made, however the session ended."""
-        for rec in self.secrets.values():
+        for rec in list(self.secrets.values()):
             if rec.rig_id == rig_id and rec.started_at == started_at:
                 rec.ended_at = self.wall()
                 rec.card_url = url
@@ -171,7 +176,7 @@ class CheckinService:
 
     def _prune(self) -> None:
         now = self.wall()
-        for secret in [s for s, rec in self.secrets.items()
+        for secret in [s for s, rec in list(self.secrets.items())
                        if now - rec.started_at / 1000 > MAX_AGE_S
                        or (rec.ended_at is not None and now - rec.ended_at > ENDED_KEEP_S)]:
-            del self.secrets[secret]
+            self.secrets.pop(secret, None)
