@@ -121,3 +121,107 @@ def test_staff_page_shows_the_automatic_end(tmp_path):
     client.put(f"/api/staff/rigs/{RIG}/driver", json={"name": "Sam"})
     r = client.delete(f"/api/staff/rigs/{RIG}/driver").json()
     assert r["card"] is None and r["card_note"] == NO_CARD_TEXT and r["auto_ended"] is None
+
+
+# --- review fixes: restart, one rig failing, double end ------------------------------------------
+
+def _old_timed_session(hub, rig=RIG, name="Alex"):
+    """A 10-minute session that started at 14:00; the wall clock says 15:00 (well over time, before closing)."""
+    session = hub.drivers.assign(rig, name, minutes=10)
+    start = dt.datetime(2026, 10, 15, 14, 0)
+    ms = round(start.timestamp() * 1000)
+    hub.drivers._current[rig] = type(session)(session.name, ms, None, ms + 10 * 60_000)
+    wall(hub, dt.datetime(2026, 10, 15, 15, 0))
+    return hub.drivers._current[rig]
+
+
+def test_hub_restart_does_not_cut_off_a_guest_over_time(tmp_path):
+    # Just after a restart the hub has heard nothing from the rig yet: idle counts from the hub's start,
+    # not from the session's start, so a guest still lapping isn't ended the moment the hub comes back.
+    hub = make_hub(tmp_path, owner={"open_hour": 0, "close_hour": 24})
+    _old_timed_session(hub)
+    assert hub.health.seconds_since_driving(RIG, time.monotonic()) is None
+    assert hub.auto_end_sessions() == [] and hub.drivers.get(RIG) is not None
+    hub.started_at -= AUTO_END_IDLE_S + 1             # 5 minutes after the restart and still nothing: idle
+    assert [n["reason"] for n in hub.auto_end_sessions()] == ["overrun"]
+
+
+def test_one_rig_failing_does_not_stop_the_others(tmp_path, monkeypatch):
+    hub = make_hub(tmp_path, owner={"open_hour": 0, "close_hour": 24})
+    other = "10.0.0.99"
+    _old_timed_session(hub, RIG, "Alex")
+    _old_timed_session(hub, other, "Sam")
+    hub.started_at -= AUTO_END_IDLE_S + 1
+
+    def broken_card(ip, session):
+        if ip == RIG:
+            raise RuntimeError("card renderer broke")
+        return None
+    monkeypatch.setattr(hub, "_make_card", broken_card)
+    notices = hub.auto_end_sessions()
+    assert sorted(n["driver"] for n in notices) == ["Alex", "Sam"]   # the failing card still ends Alex's session
+    assert hub.drivers.get(RIG) is None and hub.drivers.get(other) is None
+    assert hub.auto_ended[RIG]["card"] is None
+
+
+def test_a_rig_whose_check_fails_is_skipped_and_the_rest_still_end(tmp_path, monkeypatch):
+    hub = make_hub(tmp_path, owner={"open_hour": 0, "close_hour": 24})
+    other = "10.0.0.99"
+    _old_timed_session(hub, RIG, "Alex")
+    _old_timed_session(hub, other, "Sam")
+    hub.started_at -= AUTO_END_IDLE_S + 1
+    real = hub.auto_end_reason
+
+    def reason(ip, session, now):
+        if ip == RIG:
+            raise RuntimeError("boom")
+        return real(ip, session, now)
+    monkeypatch.setattr(hub, "auto_end_reason", reason)
+    assert [n["driver"] for n in hub.auto_end_sessions()] == ["Sam"]
+    assert hub.drivers.get(RIG) is not None             # tried again on the next check
+
+
+def test_ending_the_same_session_twice_makes_one_card(tmp_path, monkeypatch):
+    hub = make_hub(tmp_path)
+    made = []
+
+    def fake_card(ip, session):
+        made.append(session.name)
+        return {"token": "t", "url": "u", "driver": session.name}
+    monkeypatch.setattr(hub, "_make_card", fake_card)
+    session = hub.drivers.assign(RIG, "Alex")
+    first = hub.end_session(RIG, session)
+    again = hub.end_session(RIG, session)              # staff End arriving after the automatic end
+    assert first is again and made == ["Alex"]
+    assert hub.end_session(RIG) is None                 # nothing open: no error, no card
+    assert hub.session_card(RIG, session) is first      # the "next driver" path doesn't make a second one
+
+
+def test_staff_end_after_auto_end_gets_the_same_card(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from simtelemetry.api.app import create_app
+    from f1_helpers import STAFF, staff_ready
+    hub = make_hub(tmp_path)
+    staff_ready(hub)
+    hub.registry.see(RIG, time.monotonic(), "2025", None)
+    made = []
+
+    def fake_card(ip, session):
+        made.append(session.name)
+        return {"token": "tok", "url": "http://x/card/tok", "driver": session.name}
+    monkeypatch.setattr(hub, "_make_card", fake_card)
+    client = TestClient(create_app(hub, dashboard_dir=tmp_path / "none"), headers=STAFF)
+    session, start = started(hub)
+    real_get = hub.drivers.get
+    calls = {"n": 0}
+
+    def get_then_auto_end(ip):                          # the staff request reads the session, then auto-end wins
+        got = real_get(ip)
+        calls["n"] += 1
+        if calls["n"] == 1:
+            wall(hub, start + dt.timedelta(days=1))
+            hub.auto_end_sessions()
+        return got
+    monkeypatch.setattr(hub.drivers, "get", get_then_auto_end)
+    r = client.delete(f"/api/staff/rigs/{RIG}/driver").json()
+    assert made == ["Alex"] and r["card"]["token"] == "tok" and r["card_note"] is None

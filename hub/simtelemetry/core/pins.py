@@ -75,14 +75,16 @@ SHORT_LOCK_S = 60.0
 LOCKOUTS_FOR_LONG = 3            # this many lock-outs ...
 LOCKOUT_WINDOW_S = 3600.0        # ... within an hour lock the address out for LONG_LOCK_S
 LONG_LOCK_S = 15 * 60.0
+SLOW_WRONG_FOR_LONG = 20         # this many wrong PINs within an hour (slow guessing) also lock out for LONG_LOCK_S
 SHORT_LOCK_TEXT = "Too many wrong PINs. Wait a minute, then try again."
 LONG_LOCK_TEXT = "Too many wrong PINs from this device. Wait 15 minutes, then try again."
 
 
 class PinAttempts:
     """Wrong PINs per address, shared by the staff, owner and setup pages: 5 wrong in a minute lock the address out
-    for a minute; the third lock-out within an hour locks it out for 15 minutes, is logged and listed on the owner
-    page ("Someone tried wrong PINs 15 times at 21:40")."""
+    for a minute; the third lock-out within an hour, or 20 wrong PINs within an hour however slowly (guessing below the
+    one-minute limit), locks it out for 15 minutes, is logged and listed on the owner page ("Someone tried wrong
+    PINs 15 times at 21:40")."""
 
     def __init__(self, clock=time.monotonic, wall=time.time) -> None:
         self._clock = clock
@@ -105,6 +107,11 @@ class PinAttempts:
             del self._until[client]
             return None
 
+    def alert_list(self) -> list[dict]:
+        """The alerts, newest last (a copy: safe to read while another request adds one)."""
+        with self._lock:
+            return list(self.alerts)
+
     def failed(self, client: str) -> None:
         now = self._clock()
         with self._lock:
@@ -115,17 +122,19 @@ class PinAttempts:
             failures.append(now)
             while failures and now - failures[0] > FAILURE_WINDOW_S:
                 failures.popleft()
-            if len(failures) < MAX_FAILURES:
+            slow = len(wrong) >= SLOW_WRONG_FOR_LONG
+            if len(failures) < MAX_FAILURES and not slow:
                 return
             failures.clear()
             lockouts = self._lockouts.setdefault(client, deque())
             lockouts.append(now)
-            if len(lockouts) < LOCKOUTS_FOR_LONG:
+            if len(lockouts) < LOCKOUTS_FOR_LONG and not slow:
                 self._until[client] = (now + SHORT_LOCK_S, SHORT_LOCK_TEXT)
                 return
             lockouts.clear()
             self._until[client] = (now + LONG_LOCK_S, LONG_LOCK_TEXT)
             count = len(wrong)
+            wrong.clear()                # counted in this alert: the next one counts afresh
             wall = self._wall()
             text = f"Someone tried wrong PINs {count} times at {dt.datetime.fromtimestamp(wall):%H:%M}"
             self.alerts.append({"at": round(wall * 1000), "wrong": count, "text": text})

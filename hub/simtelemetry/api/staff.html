@@ -426,6 +426,7 @@
   // Messages per rig survive the 3-second redraw; drafts keep a half-typed name when the list is redrawn.
   const rigMsgs = {}, drafts = {};
   let sameName = null;    // {rig_id, body, text}: the "There's already an Alex today" question being asked
+  const seenSession = {};  // rig -> the session last drawn ("" for none): a change drops that rig's question and draft
   function rigSay(rigId, text, kind) {
     rigMsgs[rigId] = text ? { text, kind } : null;
     const el = document.querySelector(`.rig[data-rig="${CSS.escape(rigId)}"] .rig__msg`);
@@ -498,6 +499,14 @@
     const msg = el.querySelector(".rig__msg");
     if (rigMsgs[rig.rig_id]) say(msg, rigMsgs[rig.rig_id].text, rigMsgs[rig.rig_id].kind);
     const s = rig.session;
+    const sessionKey = s ? String(s.started_at) : "";
+    if (rig.rig_id in seenSession && seenSession[rig.rig_id] !== sessionKey) {
+      // A session started (a phone check-in) or ended underneath: a half-typed name or a pending
+      // "Same person?" question was for the old state, so drop it rather than start over the new driver.
+      delete drafts[rig.rig_id];
+      if (sameName && sameName.rig_id === rig.rig_id) sameName = null;
+    }
+    seenSession[rig.rig_id] = sessionKey;
     const done = (b) => { if (b && b.blur) b.blur(); };    // a pressed button must not stop the next redraw
     const checkin = el.querySelector(".rig__checkin");
     checkin.hidden = !(state.features && state.features.self_checkin);

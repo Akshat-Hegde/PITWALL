@@ -157,3 +157,41 @@ def test_staff_and_owner_pages_ask_before_destructive_actions_and_speak_plainly(
                  (api / "checkin_print.html").read_text(encoding="utf-8")):
         assert "The hub answered" not in page and "Failed to fetch" not in page and "[features]" not in page
     assert "pin_alerts" in owner
+
+
+def test_slow_guessing_locks_the_address_for_15_minutes(caplog):
+    # One wrong PIN every 2 minutes never trips the one-minute limit, but 20 within an hour do.
+    now = {"t": 0.0}
+    wall = dt.datetime(2026, 10, 15, 22, 5).timestamp()
+    attempts = PinAttempts(clock=lambda: now["t"], wall=lambda: wall)
+    with caplog.at_level("WARNING"):
+        for i in range(20):
+            assert attempts.locked("10.0.0.5") is None, i
+            attempts.failed("10.0.0.5")
+            now["t"] += 120
+    assert attempts.locked("10.0.0.5") == LONG_LOCK_TEXT
+    (alert,) = attempts.alert_list()
+    assert alert["wrong"] == 20 and alert["text"] == "Someone tried wrong PINs 20 times at 22:05"
+    assert "locked out for 15 minutes" in caplog.text
+    now["t"] += 15 * 60
+    assert attempts.locked("10.0.0.5") is None
+    attempts.failed("10.0.0.5")                     # counted afresh after the alert: not locked again at once
+    assert attempts.locked("10.0.0.5") is None
+
+
+def test_alert_list_is_a_copy():
+    attempts = PinAttempts()
+    attempts.alerts.append({"at": 0, "wrong": 15, "text": "x"})
+    copy = attempts.alert_list()
+    attempts.alerts.append({"at": 1, "wrong": 15, "text": "y"})
+    assert [a["text"] for a in copy] == ["x"]
+
+
+def test_pages_drop_stale_questions_and_never_offer_a_closing_time_the_hub_refuses():
+    from pathlib import Path
+    api = Path(__file__).parents[1] / "simtelemetry" / "api"
+    staff = (api / "staff.html").read_text(encoding="utf-8")
+    setup = (api / "setup.html").read_text(encoding="utf-8")
+    assert "seenSession[rig.rig_id] !== sessionKey" in staff and "delete drafts[rig.rig_id];" in staff
+    assert "Math.min(6, open - 1)" in setup                                    # next-day close stops before opening
+    assert "(24 hours) isn't supported yet" in setup

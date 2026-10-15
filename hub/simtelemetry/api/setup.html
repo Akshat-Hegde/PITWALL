@@ -135,6 +135,7 @@
       </div>
       <div class="muted" id="hours-note"></div>
       <div class="muted">Sessions still open at closing time end automatically, and their cards are made.</div>
+      <div class="muted">Open all day and night (24 hours) isn't supported yet: close at 06:00 the next day at the latest.</div>
     </section>
 
     <section class="panel">
@@ -215,13 +216,15 @@
     $("close").addEventListener("change", () => closeOptions());
     closeOptions();
   }
-  // Closing: any hour after opening up to midnight, or 01:00-06:00 the next day (a cafe open past midnight).
+  // Closing: any hour after opening up to midnight, or 01:00-06:00 the next day (a cafe open past midnight),
+  // but never at or after the opening hour (the server refuses that).
   function closeOptions(want) {
     const sel = $("close"), open = Number($("open").value);
     const keep = want != null ? (Number(want) === 0 ? 24 : Number(want)) : Number(sel.value || 22);
     sel.textContent = "";
     for (let h = open + 1; h <= 24; h++) sel.add(new Option(h === 24 ? "00:00 (midnight)" : hh(h), h));
-    for (let h = 1; h <= Math.min(6, open); h++) sel.add(new Option(hh(h) + " (next day)", h));
+    // Next-day closing stops before the opening hour (open 03:00 can close at 01:00 or 02:00 next day, not 03:00).
+    for (let h = 1; h <= Math.min(6, open - 1); h++) sel.add(new Option(hh(h) + " (next day)", h));
     if ([...sel.options].some((o) => Number(o.value) === keep)) sel.value = keep;
     $("hours-note").textContent = Number(sel.value) <= open
       ? `Closes at ${hh(Number(sel.value))} (next day). Laps until then count for the day the cafe opened.` : "";

@@ -132,7 +132,7 @@ class DriverRegistry:
         if rig_id not in self._current:
             return False
         self._store.end_driver_session(rig_id, self._now_ms())
-        del self._current[rig_id]
+        self._current.pop(rig_id, None)                 # never a KeyError if it was ended meanwhile
         return True
 
     def move(self, old_rig_id: str, new_rig_id: str) -> bool:

@@ -52,7 +52,7 @@ def owner_router(hub: Hub) -> APIRouter:
     def report(days: int = 30) -> dict[str, Any]:
         _sync_hours()
         return {"cafe": config.cafe.name, **analytics.report(days),
-                "pin_alerts": [a["text"] for a in hub.pin_attempts.alerts]}
+                "pin_alerts": [a["text"] for a in hub.pin_attempts.alert_list()]}
 
     @router.get("/api/owner/export.csv", dependencies=[Depends(check)])
     def export(kind: str = "daily", days: int = 30) -> Response:

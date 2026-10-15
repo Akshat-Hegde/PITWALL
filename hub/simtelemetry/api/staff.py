@@ -207,8 +207,9 @@ def staff_router(hub: Hub) -> APIRouter:
     @router.delete("/api/staff/rigs/{rig_id}/driver", dependencies=[Depends(guard)])
     def end(rig_id: str) -> dict[str, Any]:
         rig = find_rig(rig_id)
-        had_session = drivers.get(rig.ip) is not None
-        card = hub.end_session(rig.ip)
+        session = drivers.get(rig.ip)
+        had_session = session is not None
+        card = hub.end_session(rig.ip, session) if had_session else None   # the same card if auto-end won
         hub.auto_ended.pop(rig.ip, None)
         note = NO_CARD_TEXT if had_session and card is None and hub.config.features.sharing else None
         return {**rig_row(rig, time.monotonic()), "card": _card_link(card), "card_note": note}

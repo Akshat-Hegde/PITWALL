@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 import logging
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -89,6 +90,10 @@ class Hub:
         self.wrong_senders: dict[str, tuple[float, str | None]] = {}
         # The last session on each rig that ended automatically (shown on the staff page until the next one starts).
         self.auto_ended: dict[str, dict[str, Any]] = {}
+        # Ending a session (staff End, auto-end, check-in takeover, the next driver) is one at a time, and each
+        # session's card is made once: rig -> (session start, card) for the last session carded on that rig.
+        self._end_lock = threading.RLock()
+        self._carded: dict[str, tuple[int, dict[str, Any] | None]] = {}
         from .core.pins import PinAttempts
         self.pin_attempts = PinAttempts()          # wrong PINs on the staff, owner and setup pages
         self._wrong_log_window: tuple[float, int] | None = None     # (window start, lines logged in it)
@@ -234,13 +239,18 @@ class Hub:
         self.auto_ended.pop(ip, None)
         self.announce_driver(ip)
 
-    def end_session(self, ip: str) -> dict[str, Any] | None:
-        """End the staff session on a rig; returns the story card (None without a counted lap or sharing off)."""
-        session = self.drivers.get(ip)
-        if session is None:
-            return None
-        self.drivers.end(ip)
-        return self.session_card(ip, session)
+    def end_session(self, ip: str, session: Any = None) -> dict[str, Any] | None:
+        """End the staff session on a rig (or, given `session`, that session if it is still open); returns the
+        story card (None without a counted lap or sharing off). Safe to call twice for the same session (staff End
+        racing the automatic end): the second call ends nothing and gets the same card, never a second one."""
+        with self._end_lock:
+            current = self.drivers.get(ip)
+            target = session if session is not None else current
+            if target is None:
+                return None
+            if current is target:
+                self.drivers.end(ip)
+            return self.session_card(ip, target)
 
     # --- automatic end (closing time, overrun) ------------------------------------------------
 
@@ -254,8 +264,11 @@ class Hub:
             return "closing"
         if session.ends_at is not None and now.timestamp() * 1000 >= session.ends_at:
             age = max(0.0, now.timestamp() - session.started_at / 1000)
-            since = self.health.seconds_since_driving(ip, time.monotonic())
-            if (age if since is None else min(since, age)) >= AUTO_END_IDLE_S:
+            mono = time.monotonic()
+            since = self.health.seconds_since_driving(ip, mono)
+            if since is None:       # nothing from the rig since the hub started: count from the start, not from
+                since = max(0.0, mono - self.started_at)    # the session's start (a restart must not end a lapping guest)
+            if min(since, age) >= AUTO_END_IDLE_S:
                 return "overrun"
         return None
 
@@ -268,19 +281,37 @@ class Hub:
         done = []
         with self.checkin.lock:          # not while a phone is checking in on the same rig
             for ip, session in self.drivers.sessions().items():
-                reason = self.auto_end_reason(ip, session, now)
-                if reason is None or self.drivers.get(ip) is not session:
+                try:             # one rig failing (its card, say) must not stop the others ending
+                    notice = self._auto_end_one(ip, session, now)
+                except Exception:
+                    log.exception("Automatic session end failed on %s", ip)
                     continue
-                card = self.end_session(ip)
-                notice = {"rig_id": ip, "rig_name": self.rig_label(ip), "driver": session.name, "reason": reason,
-                          "text": AUTO_END_TEXT[reason], "at": round(now.timestamp() * 1000),
-                          "card": ({"token": card["token"], "url": card["url"], "driver": card["driver"]}
-                                   if card else None),
-                          "card_note": None if card or not self.config.features.sharing else NO_CARD_TEXT}
-                self.auto_ended[ip] = notice
-                log.info("%s: %s's session %s", notice["rig_name"], session.name, notice["text"].lower())
-                done.append(notice)
+                if notice is not None:
+                    done.append(notice)
         return done
+
+    def _auto_end_one(self, ip: str, session: Any, now: dt.datetime) -> dict[str, Any] | None:
+        reason = self.auto_end_reason(ip, session, now)
+        if reason is None:
+            return None
+        with self._end_lock:
+            if self.drivers.get(ip) is not session:      # staff ended or replaced it meanwhile
+                return None
+            try:
+                card = self.end_session(ip, session)
+            except Exception:
+                if self.drivers.get(ip) is session:
+                    raise                                 # not ended: try again on the next check
+                log.exception("%s's session ended automatically, but its card failed", session.name)
+                card = None
+        notice = {"rig_id": ip, "rig_name": self.rig_label(ip), "driver": session.name, "reason": reason,
+                  "text": AUTO_END_TEXT[reason], "at": round(now.timestamp() * 1000),
+                  "card": ({"token": card["token"], "url": card["url"], "driver": card["driver"]}
+                           if card else None),
+                  "card_note": None if card or not self.config.features.sharing else NO_CARD_TEXT}
+        self.auto_ended[ip] = notice
+        log.info("%s: %s's session %s", notice["rig_name"], session.name, notice["text"].lower())
+        return notice
 
     async def tick_auto_end(self, every: float = AUTO_END_EVERY_S) -> None:
         """Check at once (sessions left open from a previous day), then every `every` seconds."""
@@ -293,6 +324,15 @@ class Hub:
 
     def session_card(self, ip: str, session: Any) -> dict[str, Any] | None:
         """Story card for a session that has just ended (ended by staff, or replaced by the next driver)."""
+        with self._end_lock:
+            made = self._carded.get(ip)
+            if made is not None and made[0] == session.started_at:
+                return made[1]                            # already made for this session: never a second card
+            card = self._make_card(ip, session)
+            self._carded[ip] = (session.started_at, card)
+            return card
+
+    def _make_card(self, ip: str, session: Any) -> dict[str, Any] | None:
         from .core.cards import build_card
         if not self.config.features.sharing:
             return None
