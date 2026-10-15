@@ -1,7 +1,10 @@
 <#
 .SYNOPSIS
   Opens the hub's backups or logs folder in Explorer (the "Open backups folder" / "Open logs folder" Start-menu
-  shortcuts). Runs as the signed-in user, hidden, and only reads.
+  shortcuts). Runs hidden and only reads. "Open logs folder" runs as the signed-in user; "Open backups folder" runs
+  elevated (Windows asks for administrator permission), because the default backups folder is closed to ordinary
+  users: the zips hold guests' phone numbers and the Wi-Fi password. Explorer itself opens as the signed-in user, so
+  Windows may say "You don't currently have permission to access this folder": an administrator clicks Continue.
 
 .DESCRIPTION
   The backup folder is chosen on the owner page, so the hub program is asked where it is ("<exe> folder backups":

@@ -103,7 +103,7 @@ Name: "{autoprograms}\{#AppName} Setup"; Filename: "http://localhost:{#HttpPort}
 ; in one line what it does, and stays open so the result can be read.
 Name: "{autoprograms}\{#AppName} Show setup code"; Filename: "{cmd}"; Parameters: "/k ""echo This shows the one-time code for the setup page. Once setup is done, use your owner PIN instead. & echo. & ""{app}\{#ExeName}.exe"" setup-code"""; WorkingDir: "{app}"; IconFilename: "{app}\{#ExeName}.ico"; Components: hub; AfterInstall: RunAsAdministrator('{autoprograms}\{#AppName} Show setup code.lnk')
 Name: "{autoprograms}\{#AppName} Reset owner PIN"; Filename: "{cmd}"; Parameters: "/k ""echo Forgot the owner PIN? This opens the setup page again so you can choose a new owner PIN. Laps, rigs and settings are kept. & echo To cancel, close this window. & pause & ""{app}\{#ExeName}.exe"" setup-code --reset"""; WorkingDir: "{app}"; IconFilename: "{app}\{#ExeName}.ico"; Components: hub; AfterInstall: RunAsAdministrator('{autoprograms}\{#AppName} Reset owner PIN.lnk')
-Name: "{autoprograms}\{#AppName} Open backups folder"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""{app}\tools\open-folder.ps1"" -Which backups -Exe ""{app}\{#ExeName}.exe"""; WorkingDir: "{app}\tools"; IconFilename: "{sys}\shell32.dll"; IconIndex: 3; Flags: runminimized; Components: hub
+Name: "{autoprograms}\{#AppName} Open backups folder"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""{app}\tools\open-folder.ps1"" -Which backups -Exe ""{app}\{#ExeName}.exe"""; WorkingDir: "{app}\tools"; IconFilename: "{sys}\shell32.dll"; IconIndex: 3; Flags: runminimized; Components: hub; AfterInstall: RunAsAdministrator('{autoprograms}\{#AppName} Open backups folder.lnk')
 Name: "{autoprograms}\{#AppName} Open logs folder"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""{app}\tools\open-folder.ps1"" -Which logs -Exe ""{app}\{#ExeName}.exe"""; WorkingDir: "{app}\tools"; IconFilename: "{sys}\shell32.dll"; IconIndex: 3; Flags: runminimized; Components: hub
 Name: "{autoprograms}\Uninstall {#AppName}"; Filename: "{uninstallexe}"
 
@@ -577,12 +577,17 @@ end;
 
 // Who may do what (well-known SIDs, so it works in every Windows language; nobody but SYSTEM and Administrators
 // may write anywhere):
-//   <ProgramData>\<name>, config, backups: SYSTEM and Administrators full control, Users read.
+//   <ProgramData>\<name>, config: SYSTEM and Administrators full control, Users read.
 //   data (laps.db with guests' phone numbers, settings.json, setup-code.txt): SYSTEM and Administrators only.
 //   data\logs: also Users read (the "Open logs folder" shortcut; Windows lets anyone pass through data to it).
+//   backups (the hub's default folder, next to data; the zips hold guests' phone numbers and the Wi-Fi password):
+//   SYSTEM and Administrators only, so the "Open backups folder" shortcut runs elevated. A folder the owner chose
+//   on the owner page (a USB stick) or hub.toml's [backup] directory keeps its own permissions.
 // Inheritance from ProgramData is cut (it lets every user create files); everything below is reset to inherit from
 // these folders. The hub runs as SYSTEM and the admin shortcuts run elevated, so they can still write everything.
 procedure SetDataPermissions;
+var
+  BackupDir: String;
 begin
   IcaclsFailed := False;
   ForceDirectories(HomeDir);
@@ -599,6 +604,17 @@ begin
   Icacls('"' + DataDir + '" /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F *S-1-5-32-544:(OI)(CI)F /Q');
   Icacls('"' + DataDir + '\*" /reset /T /C /Q');
   Icacls('"' + DataDir + '\logs" /grant *S-1-5-32-545:(OI)(CI)RX /Q');
+  BackupDir := AddBackslash(ExtractFileDir(RemoveBackslashUnlessRoot(DataDir))) + 'backups';   // the hub's default
+  ForceDirectories(BackupDir);
+  if not SafeToLock(BackupDir) then
+  begin
+    Log('Backup folder ' + BackupDir + ' is a drive or a Windows folder: its permissions are left alone.');
+    IcaclsFailed := True;
+    Exit;
+  end;
+  Icacls('"' + BackupDir + '" /reset /Q');                  // no leftover explicit entries
+  Icacls('"' + BackupDir + '" /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F *S-1-5-32-544:(OI)(CI)F /Q');
+  Icacls('"' + BackupDir + '\*" /reset /T /C /Q');
 end;
 
 procedure RunAsAdministrator(LinkPath: String);

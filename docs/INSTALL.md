@@ -110,7 +110,7 @@ Use this only on a PC that stays in the cafe. If the PC's BIOS has "Restore on A
 | Pitwall Staff / Owner / Setup | Open those pages in the browser. |
 | Pitwall Show setup code | Shows the one-time setup code (until setup is done). Asks for administrator rights. |
 | Pitwall Reset owner PIN | Forgot the owner PIN? Makes a new setup code so you can choose a new owner PIN on the setup page. Laps, rigs and settings are kept. Asks for administrator rights; close the window to cancel. |
-| Pitwall Open backups folder | Opens the folder the backups go to. |
+| Pitwall Open backups folder | Opens the folder the backups go to. Asks for administrator rights (the backups hold guests' phone numbers and the Wi-Fi password). |
 | Pitwall Open logs folder | Opens the logs, for sending to support. |
 
 ## Backups
@@ -121,7 +121,7 @@ Every night (04:00) the hub saves a zip with the laps, settings, rig names, chec
 
 When a backup fails, the owner page says why in plain words (for example "The USB stick isn't plugged in"). When the last good backup is more than 2 days old, the owner page and the staff Health tab say "Last backup: 5 days ago. Check the backup folder or USB stick."
 
-Backups contain the guest Wi-Fi password, and backups made before version 0.5.0 also contain the owner and staff PINs as plain text, so keep the backup stick safe.
+Backups contain guests' phone numbers and the guest Wi-Fi password, and backups made before version 0.5.0 also contain the owner and staff PINs as plain text. So the standard backups folder (`C:\ProgramData\Pitwall\backups`) is closed to ordinary Windows users: opening it with **Pitwall Open backups folder** asks for administrator permission (if Explorer then says "You don't currently have permission to access this folder", click **Continue**). Backups on a USB stick follow the USB stick's own permissions, so anyone who has the stick can read them: keep the stick safe.
 
 ## Restoring a backup
 
@@ -160,11 +160,11 @@ Settings, Apps, Pitwall, Uninstall. It removes the program, the firewall rules a
 | Program | `C:\Program Files\Pitwall` |
 | Cafe data (laps, settings, logos) | `C:\ProgramData\Pitwall\data` |
 | Logs | `C:\ProgramData\Pitwall\data\logs` (Start menu: Pitwall Open logs folder) |
-| Backups | The folder chosen on the owner page; otherwise `C:\ProgramData\Pitwall\backups` |
+| Backups | The folder chosen on the owner page; otherwise `C:\ProgramData\Pitwall\backups` (Start menu: Pitwall Open backups folder, asks for administrator permission) |
 | Technical settings (ports and such; not needed for normal use) | `C:\ProgramData\Pitwall\config\hub.toml` |
 | Start-up task | Task Scheduler, "Pitwall Hub" |
 
-The cafe data folder holds guests' phone numbers and the PINs, so only Windows administrators (and the hub itself) can open it. You don't need to: use the Start-menu shortcuts **Pitwall Open logs folder** and **Pitwall Open backups folder**, and the owner page. Any Windows user can open the logs and backups folders that way, but can't change them.
+The cafe data folder holds guests' phone numbers and the PINs, and the backups hold the phone numbers and the Wi-Fi password, so only Windows administrators (and the hub itself) can open those two folders. You don't need to open the data folder: use the owner page and the Start-menu shortcuts. **Pitwall Open logs folder** works for any Windows user (they can read the logs but can't change them). **Pitwall Open backups folder** asks for administrator permission. A backup folder you chose yourself (a USB stick) keeps that drive's own permissions.
 
 Everything an owner changes is on the setup, owner and staff pages. `hub.toml` holds technical settings only (ports, recording, feature switches). If it ever has a mistake, the hub still starts with the standard settings and the staff and setup pages say which line is wrong.
 

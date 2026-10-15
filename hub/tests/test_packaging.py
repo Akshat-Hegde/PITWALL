@@ -146,6 +146,12 @@ def test_admin_shortcuts_run_elevated_with_an_explanation():
     for which in ("backups", "logs"):
         (line,) = _lines("Icons", f"Open {which} folder")
         assert "open-folder.ps1" in line and f"-Which {which}" in line
+    # The backups folder is closed to ordinary users (guest phone numbers, the Wi-Fi password): its shortcut runs
+    # elevated. The logs folder is open to them, so its shortcut doesn't ask.
+    (backups,) = _lines("Icons", "Open backups folder")
+    assert "RunAsAdministrator('{autoprograms}\\{#AppName} Open backups folder.lnk')" in backups
+    (logs,) = _lines("Icons", "Open logs folder")
+    assert "RunAsAdministrator" not in logs
 
 
 def test_waiting_for_the_hub_and_the_finish_page():
@@ -170,6 +176,12 @@ def test_data_folder_permissions_use_language_neutral_sids():
     assert "(OI)(CI)M" not in iss and "users-modify" not in iss                   # no Users write anywhere
     assert "IcaclsFailed := True" in iss and "IsHub and IcaclsFailed" in iss      # a failure is shown at the end
     assert "if not SafeToLock(DataDir)" in perms                                  # never a drive or Windows folder
+    # The default backups folder (next to data, like core config.default_backups_dir): SYSTEM + Administrators only
+    assert "BackupDir := AddBackslash(ExtractFileDir(RemoveBackslashUnlessRoot(DataDir))) + 'backups'" in perms
+    backups = perms.split("BackupDir + '\" /inheritance:r", 1)[1].split("\n", 1)[0]
+    assert "*S-1-5-18:(OI)(CI)F *S-1-5-32-544:(OI)(CI)F /Q" in backups and "545" not in backups
+    assert "if not SafeToLock(BackupDir)" in perms
+    assert perms.index("ForceDirectories(BackupDir)") < perms.index("BackupDir + '\" /inheritance:r")
 
 
 def test_data_folder_comes_from_the_hub_program():
