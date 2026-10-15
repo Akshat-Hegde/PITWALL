@@ -6,7 +6,6 @@ address lock that address out for a minute.
 
 from __future__ import annotations
 
-import hmac
 import time
 from collections import defaultdict, deque
 from collections.abc import Callable
@@ -21,6 +20,7 @@ from ..core.feed import FeedBuilder, lan_address
 from ..core.tv import TvError
 from ..core.wifi import wifi_share
 from ..core.health import RigState
+from ..core.pins import verify_pin
 from .pages import render_page
 
 if TYPE_CHECKING:
@@ -54,7 +54,7 @@ class PinGuard:
         if len(failures) >= MAX_FAILURES:
             raise HTTPException(429, "Too many wrong PINs. Wait a minute, then try again.")
         given = request.headers.get(self.header, "")
-        if not hmac.compare_digest(given.encode(), pin.encode()):
+        if not verify_pin(given, pin):
             if given:
                 failures.append(now)
             raise HTTPException(401, "Wrong PIN." if given else "Enter the staff PIN.")

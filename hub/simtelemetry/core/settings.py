@@ -11,9 +11,10 @@ import os
 import re
 from pathlib import Path
 
-from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
+from pydantic import BaseModel, Field, ValidationError, ValidationInfo, field_validator, model_validator
 
 from ..config import AppConfig
+from .pins import hash_pin, is_hashed
 
 log = logging.getLogger(__name__)
 _HEX = re.compile(r"^#[0-9A-Fa-f]{6}$")
@@ -25,7 +26,7 @@ class CafeSettings(BaseModel):
     tagline: str = Field("", max_length=60)
     accent: str = "#E10600"
     logo: str | None = None
-    owner_pin: str = Field(min_length=4, max_length=8)
+    owner_pin: str                  # stored as a salted hash (core/pins.py); plain digits are hashed on the way in
     staff_pin: str = ""
     open_hour: int = Field(10, ge=0, le=23)
     close_hour: int = Field(22, ge=1, le=24)
@@ -48,10 +49,12 @@ class CafeSettings(BaseModel):
 
     @field_validator("owner_pin", "staff_pin")
     @classmethod
-    def _digits(cls, value: str) -> str:
-        if not _PIN.match(value):
+    def _digits(cls, value: str, info: ValidationInfo) -> str:
+        if is_hashed(value):
+            return value
+        if not _PIN.match(value) or (info.field_name == "owner_pin" and not value):
             raise ValueError("PINs are 4 to 8 digits")
-        return value
+        return hash_pin(value)
 
     @model_validator(mode="after")
     def _wifi(self) -> "CafeSettings":
@@ -74,17 +77,43 @@ class CafeSettings(BaseModel):
         return self
 
 
+class SettingsDamaged(Exception):
+    """settings.json exists but can't be read or doesn't make sense."""
+
+
 class SettingsStore:
     def __init__(self, data_dir: Path) -> None:
         self.path = data_dir / "settings.json"
         self.branding_dir = data_dir / "branding"
 
-    def load(self) -> CafeSettings | None:
+    def read(self) -> CafeSettings | None:
+        """The saved settings, None when there are none yet. Raises SettingsDamaged when the file can't be used.
+
+        PINs saved in plain text by older versions are hashed and the file is rewritten at once.
+        """
         try:
-            return CafeSettings.model_validate_json(self.path.read_text(encoding="utf-8"))
+            text = self.path.read_text(encoding="utf-8")
         except FileNotFoundError:
             return None
-        except (OSError, ValidationError, ValueError) as exc:
+        except OSError as exc:
+            raise SettingsDamaged(str(exc)) from exc
+        try:
+            raw = json.loads(text)
+            s = CafeSettings.model_validate(raw)
+        except (ValidationError, ValueError, TypeError) as exc:
+            raise SettingsDamaged(str(exc)) from exc
+        if any(isinstance(raw.get(k), str) and raw[k] and not is_hashed(raw[k]) for k in ("owner_pin", "staff_pin")):
+            try:
+                self.save(s)
+                log.info("PINs in %s are now stored hashed", self.path)
+            except OSError as exc:
+                log.warning("Could not rewrite %s with hashed PINs (%s)", self.path, exc)
+        return s
+
+    def load(self) -> CafeSettings | None:
+        try:
+            return self.read()
+        except SettingsDamaged as exc:
             log.warning("Ignoring unreadable %s (%s); using hub.toml values", self.path, exc)
             return None
 

@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from simtelemetry.api.app import create_app
 from simtelemetry.core.setup_code import SetupCode
+from simtelemetry.core.pins import verify_pin
 
 from test_drivers import make_hub
 
@@ -31,7 +32,7 @@ def test_first_run_needs_the_setup_code_then_the_pin(tmp_path):
     assert client.post("/api/setup", json=GOOD, headers={"X-Setup-Code": "AAAA-AAAA"}).status_code == 401
     r = client.post("/api/setup", json=GOOD, headers=code)
     assert r.status_code == 200
-    assert hub.config.cafe.name == "Lap Lab" and hub.config.owner.pin == "2468"
+    assert hub.config.cafe.name == "Lap Lab" and verify_pin("2468", hub.config.owner.pin)
     assert SetupCode(tmp_path).current() is None                     # used up
     assert client.post("/api/setup", json={**GOOD, "name": "Other"}, headers=code).status_code == 401
     ok = client.post("/api/setup", json={**GOOD, "name": "Lap Lab 2"}, headers={"X-Owner-Pin": "2468"})

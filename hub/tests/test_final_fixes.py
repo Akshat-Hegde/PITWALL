@@ -11,6 +11,7 @@ from simtelemetry.config import AppConfig, load_config
 from simtelemetry.core.settings import SettingsStore
 from simtelemetry.core.setup_code import SetupCode
 from simtelemetry.hub import catch_up_due
+from simtelemetry.core.pins import verify_pin
 
 from test_drivers import make_hub
 from test_setup_api import GOOD, _client
@@ -29,9 +30,9 @@ def test_resave_with_blank_pins_keeps_both(tmp_path):
                     headers={"X-Owner-Pin": "2468"})
     assert r.status_code == 200
     assert hub.config.cafe.name == "Renamed"
-    assert hub.config.owner.pin == "2468" and hub.config.staff.pin == "1357"
+    assert verify_pin("2468", hub.config.owner.pin) and verify_pin("1357", hub.config.staff.pin)
     saved = SettingsStore(tmp_path).load()
-    assert saved.owner_pin == "2468" and saved.staff_pin == "1357"
+    assert verify_pin("2468", saved.owner_pin) and verify_pin("1357", saved.staff_pin)
     assert client.get("/api/staff/rigs").status_code == 401           # /staff is still locked
 
 
@@ -40,7 +41,7 @@ def test_remove_staff_pin_is_explicit(tmp_path):
     client.post("/api/setup", json={**GOOD, "staff_pin": "1357"}, headers=code)
     r = client.post("/api/setup", json={**GOOD, "owner_pin": "", "staff_pin": "", "remove_staff_pin": True},
                     headers={"X-Owner-Pin": "2468"})
-    assert r.status_code == 200 and hub.config.staff.pin == "" and hub.config.owner.pin == "2468"
+    assert r.status_code == 200 and hub.config.staff.pin == "" and verify_pin("2468", hub.config.owner.pin)
     assert client.get("/api/staff/rigs").status_code == 200           # /staff follows: open now
 
 
@@ -51,7 +52,7 @@ def test_new_pins_replace_old_ones_and_owner_pin_is_required_before_setup(tmp_pa
     client.post("/api/setup", json=GOOD, headers=code)
     r = client.post("/api/setup", json={**GOOD, "owner_pin": "9999", "staff_pin": "4321"},
                     headers={"X-Owner-Pin": "2468"})
-    assert r.status_code == 200 and hub.config.owner.pin == "9999" and hub.config.staff.pin == "4321"
+    assert r.status_code == 200 and verify_pin("9999", hub.config.owner.pin) and verify_pin("4321", hub.config.staff.pin)
 
 
 # --- finding 5: setup-code --reset --------------------------------------------------------------------------
@@ -65,13 +66,13 @@ def test_setup_code_reset_reopens_setup_without_restart(tmp_path, capsys):
     new_code = SetupCode(tmp_path).current()
     assert new_code and new_code in out and "/setup" in out
     saved = SettingsStore(tmp_path).load()
-    assert saved.setup_done is False and saved.name == "Lap Lab" and saved.staff_pin == "1357"   # the rest is kept
+    assert saved.setup_done is False and saved.name == "Lap Lab" and verify_pin("1357", saved.staff_pin)   # the rest is kept
     state = client.get("/api/setup").json()                           # same running hub: no restart
     assert state["setup_done"] is False and state["needs_code"] is True
     assert client.post("/api/setup", json={**GOOD, "owner_pin": "8642"},
                        headers={"X-Owner-Pin": "2468"}).status_code == 401      # the old PIN no longer opens it
     r = client.post("/api/setup", json={**GOOD, "owner_pin": "8642"}, headers={"X-Setup-Code": new_code})
-    assert r.status_code == 200 and hub.config.owner.pin == "8642"
+    assert r.status_code == 200 and verify_pin("8642", hub.config.owner.pin)
     assert SetupCode(tmp_path).current() is None
     assert client.post("/api/setup", json={**GOOD, "owner_pin": ""}, headers={"X-Owner-Pin": "8642"}).status_code == 200
 
