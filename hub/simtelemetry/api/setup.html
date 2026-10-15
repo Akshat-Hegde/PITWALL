@@ -173,6 +173,8 @@
         Names show on the TV (up to 16 characters).</p>
       <p class="muted">If a rig PC gets a new address it shows up as a new rig. On the new one choose
         "Same rig as…" and its old entry: the name, colour, number and check-in sticker move over.</p>
+      <p id="rig-locked" class="muted" hidden>Rig addresses and changes need the owner PIN.
+        <button class="btn" type="button" id="rig-unlock">Show addresses and edit rigs</button></p>
       <ul class="list" id="rigs"></ul>
       <div class="msg" id="rig-msg" role="status"></div>
     </section>
@@ -190,8 +192,11 @@
   const SWATCHES = ["#E10600", "#FF2A6D", "#2D7FF9", "#14B8A6", "#F59E0B", "#8B5CF6"];
   let state = null;
   let ownerPin = "";
+  let authed = false;      // the hub accepted our PIN (or setup code): reads may send it too
 
   function say(el, text, kind) { el.textContent = text; el.className = "msg" + (kind ? " " + kind : ""); }
+
+  function readHeaders() { return authed ? authHeaders() : {}; }   // never poll with a PIN that may be wrong
 
   function authHeaders() {
     const h = {};
@@ -230,6 +235,7 @@
 
   function fill(s) {
     state = s;
+    authed = !!s.authed;
     $("product").textContent = s.product;
     document.title = "Setup " + s.product;
     $("code-panel").hidden = !s.needs_code;
@@ -287,11 +293,13 @@
     const el = document.activeElement;
     return !!el && $("rigs").contains(el) && (el.tagName === "INPUT" || el.tagName === "SELECT");
   }
+  const rigKeyOf = (r) => r.rig_id || r.number;     // without the owner PIN rows carry no address
   function renderRigs(rigs, force) {
-    const key = JSON.stringify(rigs.map((r) => [r.rig_id, r.name, r.colour]));
+    $("rig-locked").hidden = authed;
+    const key = JSON.stringify([authed, rigs.map((r) => [rigKeyOf(r), r.name, r.colour])]);
     if (!force && key === rigKey) {
       for (const r of rigs) {                       // same rigs: only refresh what they're doing
-        const li = $("rigs").querySelector(`li[data-rig="${CSS.escape(r.rig_id)}"]`);
+        const li = $("rigs").querySelector(`li[data-rig="${CSS.escape(rigKeyOf(r))}"]`);
         if (!li) continue;
         li.querySelector(".state").textContent = r.state_text;
         li.querySelector(".moving").hidden = !r.moving;
@@ -300,7 +308,13 @@
     }
     if (!force && rigEditing()) return;           // don't pull the list away from someone typing
     rigKey = key;
+    const chosen = {};                              // keep a "Same rig as…" choice across refreshes
+    for (const sel of $("rigs").querySelectorAll("select[data-same]")) if (sel.value) chosen[sel.dataset.same] = sel.value;
     $("rigs").replaceChildren(...rigs.map((r) => rigItem(r, rigs)));
+    for (const sel of $("rigs").querySelectorAll("select[data-same]")) {
+      const want = chosen[sel.dataset.same];
+      if (want && [...sel.options].some((o) => o.value === want)) sel.value = want;
+    }
     if (!rigs.length) {
       const li = document.createElement("li"); li.className = "muted"; li.textContent = "No rigs have sent data yet.";
       $("rigs").appendChild(li);
@@ -314,9 +328,19 @@
   }
   function rigItem(r, rigs) {
     const li = document.createElement("li");
-    li.className = "rig"; li.dataset.rig = r.rig_id;
+    li.className = "rig"; li.dataset.rig = rigKeyOf(r);
     const dot = document.createElement("span"); dot.className = "dot"; dot.style.background = r.colour;
     const grow = document.createElement("div"); grow.className = "grow";
+    if (!r.rig_id) {                                // read-only until the owner PIN is entered
+      const title = document.createElement("strong"); title.textContent = r.name;
+      const info = document.createElement("div"); info.className = "muted";
+      const state = document.createElement("span"); state.className = "state"; state.textContent = r.state_text;
+      const moving = document.createElement("strong"); moving.className = "moving"; moving.textContent = " Moving now"; moving.hidden = !r.moving;
+      info.append(`${r.number} · `, state, moving);
+      grow.append(title, info);
+      li.append(dot, grow);
+      return li;
+    }
     const nameRow = document.createElement("div"); nameRow.className = "rigrow";
     const name = document.createElement("input");
     name.maxLength = 16; name.value = r.name; name.setAttribute("aria-label", "Name of " + r.name);
@@ -332,6 +356,7 @@
     if (others.length) {
       const same = document.createElement("select");
       same.setAttribute("aria-label", "Same rig as");
+      same.dataset.same = r.rig_id;
       same.add(new Option("Same rig as…", ""));
       for (const o of others) same.add(new Option(`${o.name} (${o.address})`, o.rig_id));
       const move = button("Move here", "", () => {
@@ -359,16 +384,43 @@
   }
   async function pollRigs() {
     try {
-      const r = await fetch("/api/setup/rigs");
-      if (r.ok) { const d = await r.json(); if (state) state.rigs = d.rigs; renderRigs(d.rigs, false); }
+      const r = await fetch("/api/setup/rigs", { headers: readHeaders() });
+      if (r.ok) {
+        const d = await r.json();
+        if (authed && !d.authed) { authed = false; ownerPin = ""; }   // the PIN was changed meanwhile
+        if (state) state.rigs = d.rigs;
+        renderRigs(d.rigs, false);
+      }
     } catch { /* the hub is restarting: try again shortly */ }
     setTimeout(pollRigs, 3000);
   }
 
   async function load() {
-    const r = await fetch("/api/setup");
+    const r = await fetch("/api/setup", { headers: readHeaders() });
     fill(await r.json());
   }
+
+  $("rig-unlock").addEventListener("click", async () => {
+    if (state && state.needs_code) {
+      if (!$("code").value) { say($("rig-msg"), "Enter the setup code above first.", "error"); return; }
+    } else {
+      const pin = prompt("Enter the owner PIN");
+      if (!pin) return;
+      ownerPin = pin;
+    }
+    authed = true;
+    const r = await fetch("/api/setup/rigs", { headers: authHeaders() });
+    const d = r.ok ? await r.json() : null;
+    authed = !!(d && d.authed);
+    if (!authed) {
+      ownerPin = "";
+      say($("rig-msg"), state && state.needs_code ? "That setup code didn't work." : "That PIN didn't work.", "error");
+      return;
+    }
+    state.rigs = d.rigs;
+    renderRigs(d.rigs, true);
+    say($("rig-msg"), "", "");
+  });
 
   // Sends the request; once setup is done a 401 means the owner PIN is needed: ask and retry.
   async function call(url, init) {
@@ -380,8 +432,11 @@
         ownerPin = pin;
         continue;
       }
+      if (r.ok) authed = true;
+      else if (r.status === 401) ownerPin = "";
       return r;
     }
+    ownerPin = "";
   }
 
   async function detail(r) {

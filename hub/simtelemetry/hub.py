@@ -25,7 +25,8 @@ log = logging.getLogger(__name__)
 QUEUE_MAX = 20_000  # ~10 rigs x 60 Hz x 6 packets for >5 s of backlog
 DROP_QUEUE_FULL = "queue_full"
 WRONG_SENDER_SHOW_S = 60.0   # a non-rig sending wrong-format packets is listed on staff Health this long
-WRONG_SENDERS_MAX = 64
+WRONG_SENDERS_MAX = 64      # addresses tracked at once; more (a flood of garbage) are ignored
+WRONG_SENDER_LOGS_PER_MIN = 10   # "wrong format" log lines for new senders per minute (a flood gets none)
 
 
 def next_backup_at(now: dt.datetime, hour: int) -> dt.datetime:
@@ -81,6 +82,7 @@ class Hub:
         self.wall_clock = dt.datetime.now                       # opening hours (tests replace it)
         # Addresses sending packets the hub can't read that never sent a valid one: ip -> (last seen, format).
         self.wrong_senders: dict[str, tuple[float, str | None]] = {}
+        self._wrong_log_window: tuple[float, int] | None = None     # (window start, lines logged in it)
         self._queue: asyncio.Queue[tuple[Checked, bytes, str, float]] = asyncio.Queue(QUEUE_MAX)
 
     # --- receive path (sync, called from datagram_received) -------------------------
@@ -94,9 +96,9 @@ class Hub:
             # Only a valid packet makes a rig: wrong-format and garbage senders are listed on staff Health instead.
             if self.registry.get(source_ip) is not None:
                 self.registry.note_format(source_ip, checked.data_format)
-            else:
-                self.note_wrong_sender(source_ip, checked.data_format, now)
-            self.health.on_drop(source_ip, checked.reason or "rejected", now)
+                self.health.on_drop(source_ip, checked.reason or "rejected", now)
+            elif self.note_wrong_sender(source_ip, checked.data_format, now):
+                self.health.on_drop(source_ip, checked.reason or "rejected", now)   # bounded like wrong_senders
             return
         self.registry.see(source_ip, now, checked.data_format, checked.session_id)
         self.wrong_senders.pop(source_ip, None)
@@ -105,13 +107,26 @@ class Hub:
         except asyncio.QueueFull:
             self.health.on_drop(source_ip, DROP_QUEUE_FULL, now)
 
-    def note_wrong_sender(self, ip: str, data_format: str | None, now: float) -> None:
+    def note_wrong_sender(self, ip: str, data_format: str | None, now: float) -> bool:
+        """Track an address that sends packets the hub can't read and is not a rig. False when it is ignored
+        (WRONG_SENDERS_MAX current senders already): then it gets no health record and no log line either."""
         if ip not in self.wrong_senders:
             if len(self.wrong_senders) >= WRONG_SENDERS_MAX:
-                del self.wrong_senders[min(self.wrong_senders, key=lambda k: self.wrong_senders[k][0])]
-            log.warning("A PC at %s is sending telemetry in a format the hub can't read (format %s)",
-                        ip, data_format or "?")
+                for old in [k for k, (at, _) in list(self.wrong_senders.items()) if now - at > WRONG_SENDER_SHOW_S]:
+                    del self.wrong_senders[old]
+                    if self.registry.get(old) is None:
+                        self.health.forget(old)
+                if len(self.wrong_senders) >= WRONG_SENDERS_MAX:
+                    return False    # a flood of senders: the list is full of current ones, ignore new ones
+            start, count = self._wrong_log_window or (now, 0)
+            if now - start >= 60.0:
+                start, count = now, 0
+            self._wrong_log_window = (start, count + 1)
+            if count < WRONG_SENDER_LOGS_PER_MIN:
+                log.warning("A PC at %s is sending telemetry in a format the hub can't read (format %s)",
+                            ip, data_format or "?")
         self.wrong_senders[ip] = (now, data_format)
+        return True
 
     # --- background tasks ------------------------------------------------------------
 
@@ -481,7 +496,9 @@ class Hub:
             raise RigError("That rig isn't there any more. Reload the page.")
         if self.drivers.get(ip) is not None:
             raise RigError(f"{rig.name} has a session running. End it on the staff page first.")
-        if self.health.state(ip, time.monotonic()) is not RigState.NO_DATA:
+        now = time.monotonic()
+        # A rig sending only wrong-format packets can't come back from them (only a valid packet makes a rig).
+        if self.health.state(ip, now) is not RigState.NO_DATA and not self.health.wrong_format(ip, now):
             raise RigError(f"{rig.name} is sending data right now, so it would come straight back. "
                            f"Close the game on that rig first.")
         self.registry.forget(ip)

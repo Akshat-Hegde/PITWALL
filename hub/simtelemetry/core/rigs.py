@@ -16,6 +16,9 @@ from __future__ import annotations
 import ipaddress
 import json
 import logging
+import os
+import re
+import tempfile
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
@@ -26,6 +29,7 @@ from ..config import AppConfig
 log = logging.getLogger(__name__)
 
 RIG_NAME_MAX = 16   # what the TV fits
+_RIG_N = re.compile(r"rig\s*0*(\d+)", re.IGNORECASE)
 
 
 class RigError(ValueError):
@@ -81,9 +85,13 @@ class RigRegistry:
                    custom_name=self._names.get(ip))
 
     def _next_auto_name(self) -> str:
-        taken = {r.auto_name for r in self._rigs.values()} | {r.name for r in self._config.rigs if r.name}
+        """The lowest "Rig N" not used by any rig's number or name (a rig renamed "Rig 7" takes 7 too)."""
+        names = [r.auto_name for r in self._rigs.values()]
+        names += [r.custom_name for r in self._rigs.values() if r.custom_name]
+        names += [r.name for r in self._config.rigs if r.name]
+        taken = {int(m.group(1)) for name in names if (m := _RIG_N.fullmatch(name.strip()))}
         n = 1
-        while f"Rig {n}" in taken:
+        while n in taken:
             n += 1
         return f"Rig {n}"
 
@@ -106,17 +114,30 @@ class RigRegistry:
     def save(self) -> None:
         if not self._state_file:
             return
-        data = {"auto_names": {ip: rig.auto_name for ip, rig in self._rigs.items()},
-                "names": {ip: rig.custom_name for ip, rig in self._rigs.items() if rig.custom_name},
-                "colours": {ip: c for ip, c in self._colours.items() if ip in self._rigs},
-                "forgotten": sorted(self._forgotten)}
+        rigs = list(self._rigs.items())          # snapshots: never iterate a dict another caller may change
+        colours = dict(self._colours)
+        data = {"auto_names": {ip: rig.auto_name for ip, rig in rigs},
+                "names": {ip: rig.custom_name for ip, rig in rigs if rig.custom_name},
+                "colours": {ip: c for ip, c in colours.items() if ip in dict(rigs)},
+                "forgotten": sorted(list(self._forgotten))}
+        tmp = None
         try:
             self._state_file.parent.mkdir(parents=True, exist_ok=True)
-            tmp = self._state_file.with_suffix(".tmp")
-            tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
-            tmp.replace(self._state_file)
+            # A unique temp file next to rigs.json, so two saves never write the same temp file.
+            fd, tmp = tempfile.mkstemp(prefix=self._state_file.name + ".", suffix=".tmp",
+                                       dir=self._state_file.parent)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(json.dumps(data, indent=2))
+            os.replace(tmp, self._state_file)
+            tmp = None
         except OSError:
             log.exception("Could not save %s", self._state_file)
+        finally:
+            if tmp is not None:
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
 
     def see(self, ip: str, now: float, data_format: str | None, session_id: str | None) -> Rig:
         """A valid packet from `ip`: registers the rig on its first one."""
@@ -155,7 +176,7 @@ class RigRegistry:
         return self._rigs.get(ip)
 
     def all(self) -> list[Rig]:
-        return sorted(self._rigs.values(), key=lambda r: (r.name, r.ip))
+        return sorted(list(self._rigs.values()), key=lambda r: (r.name, r.ip))
 
     # --- edits from the setup page -----------------------------------------------------------
 

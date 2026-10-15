@@ -96,6 +96,9 @@ class HealthMonitor:
     def get(self, ip: str) -> RigHealth | None:
         return self._rigs.get(ip)
 
+    def forget(self, ip: str) -> None:
+        self._rigs.pop(ip, None)
+
 
 # --- silent rigs ---------------------------------------------------------------------------
 

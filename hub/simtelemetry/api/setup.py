@@ -62,8 +62,27 @@ def setup_router(hub: Hub) -> APIRouter:
     def page() -> HTMLResponse:
         return render_page(SETUP_PAGE)
 
+    def authed(request: Request, code: str | None) -> bool:
+        """Whether a read comes from the owner (or, before setup, from whoever has the setup code). Only a
+        request that sends a PIN or code is checked, so wrong ones still count towards the lock-out."""
+        s = current()
+        if s is not None and s.setup_done:
+            if not request.headers.get(OWNER_PIN_HEADER):
+                return False
+        elif not code:
+            return False
+        try:
+            guard(request, code)
+        except HTTPException:
+            return False
+        return True
+
     @router.get("/api/setup")
-    def state() -> dict[str, Any]:
+    async def get_state(request: Request, x_setup_code: str | None = Header(None)) -> dict[str, Any]:
+        """Rig and wrong-sender addresses only for the owner (or the setup code before setup)."""
+        return state(authed(request, x_setup_code))
+
+    def state(full: bool) -> dict[str, Any]:
         s = current()
         c = hub.config
         return {
@@ -76,56 +95,73 @@ def setup_router(hub: Hub) -> APIRouter:
             "accent": c.cafe.branding.get("--brand-accent", "#E10600"),
             "open_hour": c.owner.open_hour, "close_hour": c.owner.close_hour,
             "hub_address": hub.hub_address(), "http_port": c.network.http_port, "udp_port": c.network.udp_port,
-            "rigs": rig_rows(),
+            "authed": full,                         # rig addresses and editing need the owner PIN
+            "rigs": rig_rows(full),
             "warnings": [{"code": w["code"], "message": w["message"]}
-                         for w in hub.admin_warnings() + hub.wrong_sender_warnings()],
+                         for w in hub.admin_warnings()] + wrong_senders(full),
         }
 
-    def rig_rows() -> list[dict[str, Any]]:
+    def wrong_senders(full: bool) -> list[dict[str, Any]]:
+        warnings = hub.wrong_sender_warnings()
+        if full:
+            return [{"code": w["code"], "message": w["message"]} for w in warnings]
+        return [{"code": "wrong_format_sender",
+                 "message": "A PC is sending telemetry in the wrong format: set UDP Format to 2025."}] if warnings else []
+
+    def rig_rows(full: bool = True) -> list[dict[str, Any]]:
         now = time.monotonic()
-        return [{"rig_id": r.ip, "name": r.name, "number": r.auto_name, "custom_name": r.custom_name,
-                 "colour": rig_colour(r), "address": r.ip, "state_text": hub.state_text(r.ip, now),
-                 "moving": hub.rig_moving(r.ip, now), "has_session": hub.drivers.get(r.ip) is not None}
-                for r in hub.registry.all()]
+        rows = []
+        for r in hub.registry.all():
+            row = {"rig_id": None, "name": r.name, "number": r.auto_name, "colour": rig_colour(r),
+                   "state_text": hub.state_text(r.ip, now), "moving": hub.rig_moving(r.ip, now)}
+            if full:
+                row.update({"rig_id": r.ip, "address": r.ip, "custom_name": r.custom_name,
+                            "has_session": hub.drivers.get(r.ip) is not None})
+            rows.append(row)
+        return rows
 
     def rig_edit(fn, *args) -> dict[str, Any]:
         try:
             fn(*args)
         except RigError as exc:
             raise HTTPException(400, str(exc)) from None
-        return {"rigs": rig_rows()}
+        return {"authed": True, "rigs": rig_rows()}
+
+    # The rig endpoints are async so they run on the event loop, like the packet receive path that also
+    # changes the rig registry: no edit runs while a packet is half-way through.
 
     @router.get("/api/setup/rigs")
-    def rigs() -> dict[str, Any]:
+    async def rigs(request: Request, x_setup_code: str | None = Header(None)) -> dict[str, Any]:
         """The rig list with "moving now", polled by the setup page to tell which rig is which."""
-        return {"rigs": rig_rows()}
+        full = authed(request, x_setup_code)
+        return {"authed": full, "rigs": rig_rows(full)}
 
     @router.put("/api/setup/rigs/{rig_id}")
-    def rename_rig(request: Request, rig_id: str, body: dict[str, Any] = Body(...),
+    async def rename_rig(request: Request, rig_id: str, body: dict[str, Any] = Body(...),
                    x_setup_code: str | None = Header(None)) -> dict[str, Any]:
         """{"name": "..."}: up to 16 characters, shown on the TV; empty goes back to the rig's number."""
         guard(request, x_setup_code)
         return rig_edit(hub.rename_rig, rig_id, body.get("name"))
 
     @router.delete("/api/setup/rigs/{rig_id}")
-    def forget_rig(request: Request, rig_id: str, x_setup_code: str | None = Header(None)) -> dict[str, Any]:
+    async def forget_rig(request: Request, rig_id: str, x_setup_code: str | None = Header(None)) -> dict[str, Any]:
         """Forget a rig that no longer exists (and its check-in code)."""
         guard(request, x_setup_code)
         return rig_edit(hub.forget_rig, rig_id)
 
     @router.post("/api/setup/rigs/{rig_id}/same-as")
-    def same_rig_as(request: Request, rig_id: str, body: dict[str, Any] = Body(...),
+    async def same_rig_as(request: Request, rig_id: str, body: dict[str, Any] = Body(...),
                     x_setup_code: str | None = Header(None)) -> dict[str, Any]:
         """{"old": rig_id}: this rig is the PC that used to be `old` (it got a new address)."""
         guard(request, x_setup_code)
         return rig_edit(hub.merge_rig, str(body.get("old") or ""), rig_id)
 
     @router.post("/api/setup/address/ok")
-    def address_ok(request: Request, x_setup_code: str | None = Header(None)) -> dict[str, Any]:
+    async def address_ok(request: Request, x_setup_code: str | None = Header(None)) -> dict[str, Any]:
         """"OK, done" on the address-change warning."""
         guard(request, x_setup_code)
         hub.address_watch.acknowledge()
-        return state()
+        return state(True)
 
     @router.post("/api/setup")
     def save(request: Request, body: dict[str, Any], x_setup_code: str | None = Header(None)) -> dict[str, Any]:
@@ -158,7 +194,7 @@ def setup_router(hub: Hub) -> APIRouter:
         apply_settings(hub.config, s)
         hub.startup_warnings = [w for w in hub.startup_warnings if w["code"] != "settings_damaged"]   # dealt with
         setup_code.clear()                     # used up: from now on the owner PIN guards /setup
-        return state()
+        return state(True)
 
     @router.post("/api/setup/logo")
     async def logo(request: Request, file: UploadFile, x_setup_code: str | None = Header(None)) -> dict[str, Any]:

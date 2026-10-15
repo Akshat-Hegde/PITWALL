@@ -121,7 +121,7 @@ def staff_router(hub: Hub) -> APIRouter:
                 "target": {"address": hub.hub_address(), "port": hub.config.network.udp_port}}
 
     @router.post("/api/staff/address/ok", dependencies=[Depends(guard)])
-    def address_ok() -> dict[str, Any]:
+    async def address_ok() -> dict[str, Any]:
         """"OK, done" on the address-change warning: every rig and the stickers now use the new address."""
         return {"address": hub.address_watch.acknowledge()}
 

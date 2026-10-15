@@ -63,8 +63,17 @@ class PacketGate:
     logged at DEBUG; per-rig counts are kept by the health monitor.
     """
 
-    def __init__(self) -> None:
+    SEEN_MAX = 4096           # distinct rejections remembered (garbage senders vary every packet)
+    WARNINGS_PER_SOURCE = 5   # WARNING lines per source; the rest are DEBUG
+    NEW_SOURCES_PER_MIN = 10  # new sources that get WARNING lines per minute (a flood of addresses gets DEBUG)
+
+    def __init__(self, clock=None) -> None:
+        import time
+        self._clock = clock or time.monotonic
         self._seen: set[tuple] = set()
+        self._warned: dict[str, int] = {}
+        self._window_start: float | None = None
+        self._window_count = 0
 
     def check(self, data: bytes | bytearray | memoryview, source: str) -> Accepted | Rejected:
         result = validate(data)
@@ -72,10 +81,29 @@ class PacketGate:
             self._log(result, source)
         return result
 
+    def _warn_level(self, source: str) -> int:
+        count = self._warned.get(source)
+        if count is None:
+            now = self._clock()
+            if self._window_start is None or now - self._window_start >= 60.0:
+                self._window_start, self._window_count = now, 0
+            if self._window_count >= self.NEW_SOURCES_PER_MIN:
+                return logging.DEBUG
+            self._window_count += 1
+            if len(self._warned) >= 256:
+                self._warned.clear()
+            count = 0
+        if count >= self.WARNINGS_PER_SOURCE:
+            return logging.DEBUG
+        self._warned[source] = count + 1
+        return logging.WARNING
+
     def _log(self, r: Rejected, source: str) -> None:
         h = r.header
         key = (source, r.reason, h.packet_format if h else None, h.packet_id if h else None, r.length)
-        level = logging.DEBUG if key in self._seen else logging.WARNING
+        level = logging.DEBUG if key in self._seen else self._warn_level(source)
+        if len(self._seen) >= self.SEEN_MAX:
+            self._seen.clear()
         self._seen.add(key)
         if r.reason is Rejection.SIZE_MISMATCH:
             assert h is not None

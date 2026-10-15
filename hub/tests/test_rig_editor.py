@@ -280,10 +280,10 @@ async def test_same_rig_as_is_refused_when_the_old_rig_still_sends_or_both_have_
 
 
 async def test_identify_marks_the_rig_whose_car_is_moving(tmp_path):
-    hub, client, _ = set_up(tmp_path)
+    hub, client, owner = set_up(tmp_path)
     await feed_from(hub, driving_rig(OLD) + driving_rig(NEW))
     silence(hub, NEW)
-    rigs = {r["rig_id"]: r for r in client.get("/api/setup/rigs").json()["rigs"]}
+    rigs = {r["rig_id"]: r for r in client.get("/api/setup/rigs", headers=owner).json()["rigs"]}
     assert rigs[OLD]["moving"] is True and rigs[NEW]["moving"] is False
     assert rigs[OLD]["state_text"] == "On track" and rigs[NEW]["state_text"] == "No data"
 
@@ -343,3 +343,118 @@ async def test_silent_rig_checklist_on_staff_health_only_during_opening_hours(tm
     assert no_data() == ["On Rig 1 check: UDP Telemetry On · UDP IP Address = 192.168.1.10 · Port 20777 · "
                          "Format 2025, then drive out of the garage."] or \
         no_data()[0].startswith("On Rig 1 check: UDP Telemetry On · UDP IP Address = ")
+
+
+# --- review fixes ---------------------------------------------------------------------------------
+
+def wrong_format(packet):
+    wrong = bytearray(packet)
+    struct.pack_into("<H", wrong, 0, 2023)
+    return bytes(wrong)
+
+
+async def test_setup_reads_show_addresses_only_to_the_owner(tmp_path):
+    hub, client, owner = set_up(tmp_path)
+    await feed_from(hub, driving_rig(OLD) + [("192.168.1.77", wrong_format(motion(2025, 0x11, 0, 0)))])
+    for url in ("/api/setup", "/api/setup/rigs"):
+        anon = client.get(url)
+        assert OLD not in anon.text and "192.168.1.77" not in anon.text
+        (row,) = anon.json()["rigs"]
+        assert (row["rig_id"], row["name"], row["number"], row["state_text"]) == (None, "Rig 1", "Rig 1", "On track")
+        assert "address" not in row
+        wrong = client.get(url, headers={"X-Owner-Pin": "0000"})          # a wrong PIN shows no more
+        assert OLD not in wrong.text
+        full = client.get(url, headers=owner)
+        assert OLD in full.text and full.json()["rigs"][0]["address"] == OLD
+    anon = client.get("/api/setup").json()
+    assert anon["authed"] is False and client.get("/api/setup", headers=owner).json()["authed"] is True
+    assert [w["message"] for w in anon["warnings"]] == [
+        "A PC is sending telemetry in the wrong format: set UDP Format to 2025."]
+    assert "192.168.1.77" in client.get("/api/setup", headers=owner).text
+
+
+async def test_setup_reads_before_setup_need_the_setup_code(tmp_path):
+    code = SetupCode(tmp_path).new()
+    hub = make_hub(tmp_path)
+    client = TestClient(create_app(hub, dashboard_dir=tmp_path / "none"))
+    await feed_from(hub, driving_rig(OLD))
+    assert OLD not in client.get("/api/setup/rigs").text
+    assert OLD in client.get("/api/setup/rigs", headers={"X-Setup-Code": code}).text
+
+
+async def test_forget_a_rig_that_sends_only_the_wrong_format(tmp_path):
+    hub, client, owner = set_up(tmp_path)
+    await feed_from(hub, driving_rig(OLD))
+    h = hub.health.get(OLD)
+    h.last_seen = h.last_accepted = h.last_driving = time.monotonic() - 6     # its good packets are old
+    hub.on_datagram(wrong_format(motion(2025, 0x11, 0, 0)), OLD, 0.0)
+    r = client.delete(f"/api/setup/rigs/{OLD}", headers=owner)
+    assert r.status_code == 200 and r.json()["rigs"] == []
+    hub.on_datagram(wrong_format(motion(2025, 0x11, 0, 0)), OLD, 0.0)        # it stays forgotten
+    assert hub.registry.get(OLD) is None
+
+
+def test_garbage_senders_beyond_the_cap_get_no_health_record_or_log(tmp_path, caplog):
+    import logging
+    from simtelemetry import hub as hub_mod
+    hub = make_hub(tmp_path)
+    with caplog.at_level(logging.WARNING):
+        for i in range(hub_mod.WRONG_SENDERS_MAX + 50):
+            hub.on_datagram(b"garbage", f"10.9.{i // 250}.{i % 250 + 1}", 0.0)
+    assert len(hub.wrong_senders) == hub_mod.WRONG_SENDERS_MAX
+    assert hub.health.get("10.9.0.1") is not None
+    assert hub.health.get(f"10.9.0.{hub_mod.WRONG_SENDERS_MAX + 10}") is None
+    hub_lines = [r for r in caplog.records if r.name == "simtelemetry.hub"]
+    gate_lines = [r for r in caplog.records if r.name.endswith("validate")]
+    assert len(hub_lines) == hub_mod.WRONG_SENDER_LOGS_PER_MIN
+    assert len(gate_lines) <= 10
+    # Once the old senders stop, a new one takes a free place.
+    later = time.monotonic() + 120
+    hub.note_wrong_sender("10.8.0.1", None, later)
+    assert "10.8.0.1" in hub.wrong_senders and hub.health.get("10.9.0.1") is None
+
+
+def test_registry_save_survives_concurrent_saves(tmp_path):
+    import threading
+    hub = make_hub(tmp_path)
+    for i in range(20):
+        hub.registry.see(f"10.0.0.{i + 1}", 1.0, "2025", None)
+    errors = []
+
+    def saver():
+        try:
+            for _ in range(30):
+                hub.registry.save()
+        except Exception as exc:     # pragma: no cover - the failure being tested
+            errors.append(exc)
+
+    threads = [threading.Thread(target=saver) for _ in range(4)]
+    for t in threads:
+        t.start()
+    for _ in range(30):
+        hub.registry.see(f"10.0.1.{len(hub.registry.all())}", 1.0, "2025", None)
+    for t in threads:
+        t.join()
+    assert errors == []
+    assert len(json.loads((tmp_path / "rigs.json").read_text())["auto_names"]) >= 20
+    assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_auto_names_skip_numbers_used_by_custom_names(tmp_path):
+    hub = make_hub(tmp_path)
+    hub.registry.see(OLD, 1.0, "2025", None)
+    hub.registry.rename(OLD, "Rig 2")
+    hub.registry.see(NEW, 1.0, "2025", None)
+    assert hub.registry.get(NEW).auto_name == "Rig 3"
+    hub.registry.rename(NEW, "rig 4")
+    hub.registry.see("192.168.1.33", 1.0, "2025", None)
+    assert hub.registry.get("192.168.1.33").auto_name == "Rig 5"
+
+
+def test_pages_show_the_address_warning_once_and_keep_the_same_rig_choice():
+    from pathlib import Path
+    api = Path(__file__).resolve().parents[1] / "simtelemetry" / "api"
+    staff = (api / "staff.html").read_text(encoding="utf-8")
+    assert 'h.warnings.filter((w) => w !== moved)' in staff          # banner OR list, not both
+    setup = (api / "setup.html").read_text(encoding="utf-8")
+    assert "select[data-same]" in setup and "same.dataset.same = r.rig_id" in setup

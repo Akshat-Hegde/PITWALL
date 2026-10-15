@@ -816,12 +816,13 @@
     $("address-text").textContent = moved ? moved.message : "";
     const list = $("health-warnings");
     list.textContent = "";
-    for (const w of h.warnings) {
+    const others = h.warnings.filter((w) => w !== moved);   // the address change is in the banner, not twice
+    for (const w of others) {
       const li = document.createElement("li");
       li.textContent = w.message;
       list.appendChild(li);
     }
-    if (!h.warnings.length) {
+    if (!others.length && !moved) {
       const li = document.createElement("li");
       li.className = "faint";
       li.textContent = "All good.";
