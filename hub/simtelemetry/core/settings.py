@@ -23,6 +23,13 @@ log = logging.getLogger(__name__)
 _HEX = re.compile(r"^#[0-9A-Fa-f]{6}$")
 _PIN = re.compile(r"^(\d{4,8})?$")
 
+# Which version's /setup the owner last saved. Files from 0.4 and before don't have it (read as 0). Every save
+# writes it, but only a save of the setup page raises it to SETTINGS_VERSION: re-hashing old PINs, the owner page's
+# backup folder or `setup-code --reset` keep the old number, so the upgrade reminder stays until the owner has
+# looked at the setup page.
+#   1 = 0.5.0: sessions end automatically at closing time (the owner should check the opening hours).
+SETTINGS_VERSION = 1
+
 
 class CafeSettings(BaseModel):
     name: str = Field(min_length=1, max_length=40)
@@ -39,6 +46,11 @@ class CafeSettings(BaseModel):
     wifi_security: str = "WPA"
     backup_dir: str = Field("", max_length=260)     # chosen on the owner page; "" = hub.toml's folder or the default
     # (260 so older files stay readable; the owner page allows 200, core/backup.FOLDER_MAX)
+    settings_version: int = Field(0, ge=0)    # see SETTINGS_VERSION; missing in files from 0.4 and before
+
+    def from_older_version(self) -> bool:
+        """Set up with an older version and the setup page not saved since the upgrade."""
+        return self.setup_done and self.settings_version < SETTINGS_VERSION
 
     @field_validator("accent")
     @classmethod

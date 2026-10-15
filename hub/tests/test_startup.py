@@ -571,3 +571,71 @@ def test_udp_retry_logs_the_traceback_once(tmp_path, caplog):
     assert len(errors) == 1 and errors[0].exc_info is not None
     assert len([r for r in caplog.records if "Still can't open the telemetry port" in r.getMessage()]) == 2
     assert hub.udp_busy is None
+
+
+# --- upgrade from 0.4: sessions now end at closing time, so the owner is asked to check the opening hours --------
+
+OLD_04_SETTINGS = {"name": "Lap Lab", "tagline": "", "accent": "#E10600", "logo": None, "owner_pin": "2468",
+                   "staff_pin": "", "open_hour": 10, "close_hour": 24, "setup_done": True,
+                   "wifi_ssid": "", "wifi_password": "", "wifi_security": "WPA"}     # as 0.4.0 saved it
+HOURS_TEXT = ("Check your opening hours on the setup page — if you close after midnight, choose the next-day time.")
+
+
+def test_settings_from_0_4_are_marked_and_keep_the_mark_through_rewrites(tmp_path):
+    from simtelemetry.core.settings import SETTINGS_VERSION
+    (tmp_path / "settings.json").write_text(json.dumps(OLD_04_SETTINGS), encoding="utf-8")
+    s = SettingsStore(tmp_path).read()                       # rewrites the file with hashed PINs...
+    assert s.settings_version == 0 and s.from_older_version()
+    raw = json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))
+    assert raw["settings_version"] == 0                      # ...without dropping the reminder
+    fresh = CafeSettings(name="Lap Lab", owner_pin="2468", setup_done=True, settings_version=SETTINGS_VERSION)
+    assert not fresh.from_older_version()
+    assert not CafeSettings(name="Lap Lab", owner_pin="2468").from_older_version()   # not set up yet: nothing to check
+
+
+def test_upgraded_settings_warn_staff_and_setup_until_the_setup_page_is_saved(tmp_path):
+    from simtelemetry.core.settings import SETTINGS_VERSION, apply_settings
+    (tmp_path / "settings.json").write_text(json.dumps(OLD_04_SETTINGS), encoding="utf-8")
+    hub = make_hub(tmp_path)
+    apply_settings(hub.config, SettingsStore(tmp_path).read())
+    hub.settings_from_older_version = True                  # what `run` sets from the file
+    client = TestClient(create_app(hub, dashboard_dir=tmp_path / "none"))
+    owner = {"X-Owner-Pin": "2468"}
+    (warning,) = [w for w in client.get("/api/setup", headers=owner).json()["warnings"] if w["code"] == "check_hours"]
+    assert warning["message"] == "Sessions now end automatically at closing time (midnight). " + HOURS_TEXT
+    staff = client.get("/api/staff/health", headers={"X-Staff-Pin": "2468"}).json()   # owner PIN: no staff PIN yet
+    assert "check_hours" in [w["code"] for w in staff["warnings"]]
+    assert "check_hours" not in json.dumps(client.get("/api/setup").json())          # not for just anyone
+
+    body = {"name": "Lap Lab", "staff_pin": "1357", "open_hour": 10, "close_hour": 22}
+    r = client.post("/api/setup", json=body, headers=owner)
+    assert r.status_code == 200 and "check_hours" not in [w["code"] for w in r.json()["warnings"]]
+    assert SettingsStore(tmp_path).read().settings_version == SETTINGS_VERSION
+    assert not SettingsStore(tmp_path).read().from_older_version()
+
+
+def test_hours_warning_names_the_closing_time():
+    from simtelemetry.config import AppConfig
+    config = AppConfig()
+    config.owner.open_hour, config.owner.close_hour = 10, 22
+    from simtelemetry.hub import Hub
+    fake = type("H", (), {"config": config, "settings_from_older_version": True})()
+    text = Hub.hours_check_warning(fake)
+    assert text == "Sessions now end automatically at closing time (22:00). " + HOURS_TEXT
+    config.owner.close_hour = 2
+    assert "(02:00 (next day))" in Hub.hours_check_warning(fake)
+    config.features.auto_end_sessions = False
+    assert Hub.hours_check_warning(fake) is None              # sessions don't end by themselves: nothing to check
+    fake.settings_from_older_version = False
+    config.features.auto_end_sessions = True
+    assert Hub.hours_check_warning(fake) is None
+
+
+def test_run_with_0_4_settings_shows_the_hours_check(tmp_path):
+    data = tmp_path / "data"
+    data.mkdir()
+    (data / "settings.json").write_text(json.dumps(OLD_04_SETTINGS), encoding="utf-8")
+    code, got = run_hub_briefly(["run", "--data-dir", str(data), *ports()], ["/api/setup"],
+                                headers={"X-Owner-Pin": "2468"})
+    assert code == 0
+    assert "check_hours" in [w["code"] for w in got["/api/setup"]["warnings"]]

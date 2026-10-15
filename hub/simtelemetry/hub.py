@@ -79,6 +79,9 @@ class Hub:
         self.port_shadows: list[str] = []
         # Problems found at start-up (hub.toml, settings.json, laps.db): staff and setup pages only, never the TV.
         self.startup_warnings: list[dict[str, Any]] = []
+        # Set up with 0.4 or before and the setup page not saved since: sessions now end at closing time, so the
+        # staff and setup pages remind the owner to check the opening hours until the setup page is saved.
+        self.settings_from_older_version = False
         self.udp_busy: str | None = None    # set while another program holds the telemetry port (retried)
         self._session_top_kph: dict[str, int] = {}             # top speed per rig in the staff session
         self.demo = None                                        # DemoDirector in `run --demo`
@@ -576,9 +579,23 @@ class Hub:
     def add_startup_warning(self, code: str, message: str) -> None:
         self.startup_warnings.append({"code": code, "rig_id": None, "message": message})
 
+    def hours_check_warning(self) -> str | None:
+        """After an upgrade from 0.4: sessions now end at closing time, so check the opening hours (until the
+        setup page is saved)."""
+        if not self.settings_from_older_version or not self.config.features.auto_end_sessions:
+            return None
+        from .core.hours import hour_label
+        owner = self.config.owner
+        closing = "midnight" if owner.close_hour == 24 else hour_label(owner.close_hour, owner.open_hour)
+        return (f"Sessions now end automatically at closing time ({closing}). Check your opening hours on the setup "
+                "page — if you close after midnight, choose the next-day time.")
+
     def admin_warnings(self) -> list[dict[str, Any]]:
         """Start-up, port and address problems for the staff Health tab and /setup. Never sent to the TV."""
         warnings = list(self.startup_warnings)
+        hours = self.hours_check_warning()
+        if hours:
+            warnings.append({"code": "check_hours", "rig_id": None, "message": hours})
         if self.udp_busy:
             warnings.append({"code": "udp_port_busy", "rig_id": None, "message": self.udp_busy})
         try:

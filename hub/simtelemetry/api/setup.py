@@ -20,7 +20,7 @@ from .. import brand
 from ..core.feed import rig_colour
 from ..core.pins import is_hashed
 from ..core.rigs import RigError
-from ..core.settings import CafeSettings, SettingsStore, apply_settings
+from ..core.settings import SETTINGS_VERSION, CafeSettings, SettingsStore, apply_settings
 from ..core.setup_code import SetupCode, SetupLocked
 from .owner import OWNER_PIN_HEADER
 from .pages import render_page
@@ -211,13 +211,15 @@ def setup_router(hub: Hub) -> APIRouter:
             body["wifi_password"] = old.wifi_password       # blank keeps the Wi-Fi password, like the PINs
         try:
             s = CafeSettings(**{**body, "logo": old.logo if old else hub.config.cafe.logo, "setup_done": True,
-                                "backup_dir": old.backup_dir if old else ""})   # chosen on the owner page
+                                "backup_dir": old.backup_dir if old else "",     # chosen on the owner page
+                                "settings_version": SETTINGS_VERSION})   # the owner has seen this version's page
         except ValidationError as exc:
             raise HTTPException(400, _plain_errors(exc)) from None
         store.save(s)
         apply_settings(hub.config, s)
         hub.apply_hours()
         hub.startup_warnings = [w for w in hub.startup_warnings if w["code"] != "settings_damaged"]   # dealt with
+        hub.settings_from_older_version = False         # the opening hours have been looked at
         setup_code.clear()                     # used up: from now on the owner PIN guards /setup
         return state(True)
 

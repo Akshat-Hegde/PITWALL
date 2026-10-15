@@ -715,6 +715,7 @@ def run_command(args: argparse.Namespace, config: AppConfig, problems: list[Conf
 def _run_command(args: argparse.Namespace, config: AppConfig, problems: list[ConfigProblem],
                  http_sock: socket.socket | None) -> int:
     warnings: list[tuple[str, str]] = [("config", p.message) for p in problems]
+    from_older_version = False
     if getattr(args, "demo", False):
         from .tools.seed_demo import DemoTargetError
         try:
@@ -729,6 +730,11 @@ def _run_command(args: argparse.Namespace, config: AppConfig, problems: list[Con
         if damaged:
             warnings.append(("settings_damaged", damaged))
         setup_done = apply_saved_settings(config, args)
+        saved = SettingsStore(config.data_dir).load()
+        from_older_version = saved is not None and saved.from_older_version()
+        if from_older_version:
+            log.warning("Set up with an older version: the staff and setup pages ask the owner to check the "
+                        "opening hours (sessions now end at closing time) until the setup page is saved")
         if args.command == "run" and not setup_done:
             # The code itself never goes in the log: data\logs is readable by every Windows user on the PC. Only a
             # hub started by hand in a terminal (from source) shows it, on that terminal.
@@ -768,6 +774,7 @@ def _run_command(args: argparse.Namespace, config: AppConfig, problems: list[Con
               config_path=args.config or paths.config_path())
     for code, message in warnings:
         hub.add_startup_warning(code, message)
+    hub.settings_from_older_version = from_older_version
 
     selection = SourceSelection()
     if args.command == "replay":
