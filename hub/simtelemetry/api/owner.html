@@ -82,6 +82,9 @@
   form.pin { max-width: 360px; background: var(--surface-1); padding: 16px; margin: 24px auto; }
   form.pin input { width: 100%; padding: 10px; font: inherit; color: var(--text-primary); background: var(--surface-2); border: 1px solid var(--line); margin: 8px 0; }
   .empty { color: var(--text-muted); padding: 24px 0; text-align: center; }
+  form.folder { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; }
+  form.folder label { flex-basis: 100%; color: var(--text-secondary); font-size: 0.85rem; }
+  form.folder input { flex: 1 1 220px; min-width: 0; padding: 8px 10px; font: inherit; color: var(--text-primary); background: var(--surface-2); border: 1px solid var(--line); }
   .alert { margin: 0 0 12px; padding: 10px 14px; background: rgba(242, 194, 48, 0.12); border-left: 3px solid #f2c230; color: var(--text-primary); }
   @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
 </style>
@@ -102,6 +105,7 @@
 
   <div id="report" hidden>
     <div id="pin-alerts"></div>
+    <p class="alert" id="backup-alert" hidden></p>
     <div class="filters" role="group" aria-label="Period">
       <div class="seg" id="range">
         <button type="button" data-days="7" aria-pressed="false">7 days</button>
@@ -153,7 +157,14 @@
     <section class="card" id="backup-card">
       <h2>Backups</h2>
       <p class="sub" id="backup-last">Checking...</p>
-      <p class="sub">Folder: <span id="backup-dir"></span></p>
+      <p class="sub error" id="backup-error" hidden></p>
+      <p class="sub">Backups go to: <span id="backup-dir"></span></p>
+      <form class="folder" id="backup-folder-form">
+        <label for="backup-folder">Backup folder. A USB stick is best, so a backup survives if this PC breaks.
+          Type the folder, for example <b>E:\Backups</b>, or leave it empty for the standard folder.</label>
+        <input id="backup-folder" type="text" autocomplete="off" spellcheck="false" maxlength="260">
+        <button class="btn" type="submit">Use this folder</button>
+      </form>
       <button class="btn" type="button" id="backup-now">Back up now</button>
       <span class="msg" id="backup-msg" role="status"></span>
     </section>
@@ -184,7 +195,7 @@
   const BROKEN = "Something went wrong on the hub. Try again; if it keeps happening, restart the hub PC.";
   async function api(path, init) {
     let res;
-    try { res = await fetch(path, { ...(init || {}), headers: { "X-Owner-Pin": pin() } }); }
+    try { res = await fetch(path, { ...(init || {}), headers: { ...((init && init.headers) || {}), "X-Owner-Pin": pin() } }); }
     catch { throw new Error(OFFLINE); }
     const body = await res.json().catch(() => null);
     if (res.status === 401 || res.status === 429) { showPin(body && body.detail); throw new Error("locked"); }
@@ -400,10 +411,27 @@
 
   function showBackup(b) {
     $("backup-dir").textContent = b.directory;
-    if (!b.last) { $("backup-last").textContent = "No backup yet"; return; }
-    const when = new Date(b.last.at).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-    $("backup-last").textContent = `Last backup: ${when} \u00b7 ${(b.last.bytes / 1048576).toFixed(1)} MB`;
+    if (document.activeElement !== $("backup-folder")) $("backup-folder").value = b.chosen || "";
+    $("backup-folder").placeholder = b.default_directory || "";
+    $("backup-alert").hidden = !b.warning;
+    $("backup-alert").textContent = b.warning || "";
+    $("backup-error").hidden = !b.last_error;
+    $("backup-error").textContent = b.last_error ? `The last backup didn't work: ${b.last_error}` : "";
+    const at = b.last_ok_at || (b.last && b.last.at);
+    if (!at) { $("backup-last").textContent = "No backup yet"; return; }
+    const when = new Date(at).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    const size = b.last ? ` \u00b7 ${(b.last.bytes / 1048576).toFixed(1)} MB` : "";
+    $("backup-last").textContent = `Last backup: ${when}${size}`;
   }
+  $("backup-folder-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    $("backup-msg").textContent = "Checking the folder...";
+    try {
+      showBackup(await api("/api/owner/backup/folder", { method: "POST", headers: { "Content-Type": "application/json" },
+                                                        body: JSON.stringify({ folder: $("backup-folder").value }) }));
+      $("backup-msg").textContent = "Saved. Backups go to this folder from now on.";
+    } catch (err) { $("backup-msg").textContent = err.message === "locked" ? "" : err.message; }
+  });
   async function loadBackup() {
     try { showBackup(await api("/api/owner/backup")); } catch { $("backup-last").textContent = "Backup status unavailable"; }
   }

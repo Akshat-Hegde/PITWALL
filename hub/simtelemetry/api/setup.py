@@ -206,7 +206,8 @@ def setup_router(hub: Hub) -> APIRouter:
         elif old is not None and not body.get("wifi_password") and body.get("wifi_security", "WPA") == "WPA":
             body["wifi_password"] = old.wifi_password       # blank keeps the Wi-Fi password, like the PINs
         try:
-            s = CafeSettings(**{**body, "logo": old.logo if old else hub.config.cafe.logo, "setup_done": True})
+            s = CafeSettings(**{**body, "logo": old.logo if old else hub.config.cafe.logo, "setup_done": True,
+                                "backup_dir": old.backup_dir if old else ""})   # chosen on the owner page
         except ValidationError as exc:
             raise HTTPException(400, _plain_errors(exc)) from None
         store.save(s)

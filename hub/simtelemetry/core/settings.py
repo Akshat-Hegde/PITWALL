@@ -37,6 +37,7 @@ class CafeSettings(BaseModel):
     wifi_ssid: str = ""             # at most 32 BYTES of UTF-8 (checked below)
     wifi_password: str = Field("", max_length=63)
     wifi_security: str = "WPA"
+    backup_dir: str = Field("", max_length=260)     # chosen on the owner page; "" = hub.toml's folder or the default
 
     @field_validator("accent")
     @classmethod
@@ -158,12 +159,15 @@ def apply_settings(config: AppConfig, s: CafeSettings) -> None:
     config.owner.open_hour, config.owner.close_hour = s.open_hour, s.close_hour
     config.cafe.wifi_ssid, config.cafe.wifi_password = s.wifi_ssid, s.wifi_password
     config.cafe.wifi_security = s.wifi_security
+    config.set_owner_backup_dir(Path(s.backup_dir) if s.backup_dir else None)
 
 
-def recover_damaged_settings(store: SettingsStore, backups_dir: Path, now: dt.datetime) -> str | None:
+def recover_damaged_settings(store: SettingsStore, backups_dir: Path, now: dt.datetime,
+                             more_dirs: tuple[Path, ...] = ()) -> str | None:
     """At start-up: when settings.json is damaged, put it aside as settings.json.broken-<time> and restore the
-    newest good copy from the backup zips. Returns a plain-English warning for the staff and setup pages,
-    or None when the file was fine (or absent)."""
+    newest good copy from the backup zips (in `backups_dir` and `more_dirs`: the folder the owner chose is kept in
+    the damaged file, so the last folder a backup went to is tried too). Returns a plain-English warning for the
+    staff and setup pages, or None when the file was fine (or absent)."""
     try:
         store.read()
         return None
@@ -184,7 +188,13 @@ def recover_damaged_settings(store: SettingsStore, backups_dir: Path, now: dt.da
         return ("The cafe settings file can't be read and couldn't be moved aside. Restart the PC; "
                 "if this message stays, contact support.")
     from .backup import PATTERN
-    zips = sorted(backups_dir.glob(PATTERN), reverse=True) if backups_dir.is_dir() else []
+    zips = []
+    for folder in dict.fromkeys((backups_dir, *more_dirs)):
+        try:
+            zips += folder.glob(PATTERN) if folder.is_dir() else []
+        except OSError as exc:
+            log.warning("Could not look for backups in %s (%s)", folder, exc)
+    zips.sort(key=lambda z: z.name, reverse=True)
     for z in zips:
         try:
             with zipfile.ZipFile(z) as archive:

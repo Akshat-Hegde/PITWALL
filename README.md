@@ -277,11 +277,19 @@ hub). `[features] owner = false` turns the page off.
 ## Backups and restore
 
 Every night at `[backup] hour` (default 04:00) the hub saves `pitwall-YYYYMMDD-HHMM.zip` with the lap database
-(copied safely while the hub runs), the owner's settings, the uploaded logo and `hub.toml`, and keeps the last
-`keep` (14). The one-time setup code is never included. By default the zips go to a `backups` folder next to the
-data folder; point `[backup] directory` at a USB stick or a synced folder so a dead PC does not take them along.
-The owner page shows the last backup and has a **Back up now** button; `Pitwall.exe backup` does the same from a
-command prompt. `[backup] enabled = false` switches the nightly job off.
+(copied safely while the hub runs), the owner's settings, the rig names, the check-in codes, the uploaded logos
+and `hub.toml`, and keeps the last `keep` (14). The one-time setup code is never included.
+
+**Where backups go:** the owner chooses the folder on the owner page (Backups card), for example a USB stick such
+as `E:\Backups`; the hub checks it can write there and keeps the choice in `settings.json`. Without a choice the
+zips go to `[backup] directory`, or a `backups` folder next to the data folder. A backup on a USB stick survives
+a dead PC.
+
+The owner page shows the folder, the last backup and a **Back up now** button; `Pitwall.exe backup` does the same
+from a command prompt. When a backup fails the owner page says why in plain words ("The USB stick isn't plugged in
+(drive E: not found).", "The backup drive is full.", ...). When the last good backup is more than 2 days old, the
+owner page and the staff Health tab show "Last backup: 5 days ago. Check the backup folder or USB stick."
+(`[features] backup_warning = true`; never on the TV). `[backup] enabled = false` switches the nightly job off.
 
 To restore, stop the hub, then run `Pitwall.exe restore <zip>` (refused while the hub is running) and start the hub again.
 

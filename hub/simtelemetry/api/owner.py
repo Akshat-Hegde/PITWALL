@@ -5,20 +5,23 @@ The page shows business figures, so it stays locked until a PIN is set in the co
 
 from __future__ import annotations
 
-import sqlite3
+import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
 
 from ..core.analytics import Analytics
-from ..core.backup import last_backup
+from ..core.backup import BackupFailed, check_folder, last_backup
+from ..core.settings import SettingsDamaged, SettingsStore
 from .pages import render_page
 from .staff import PinGuard
 
 if TYPE_CHECKING:
     from ..hub import Hub
+
+log = logging.getLogger(__name__)
 
 OWNER_PIN_HEADER = "X-Owner-Pin"
 OWNER_PAGE = Path(__file__).with_name("owner.html")
@@ -63,8 +66,18 @@ def owner_router(hub: Hub) -> APIRouter:
         return Response(analytics.csv(kind, max(1, min(366, days))), media_type="text/csv",
                         headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
+    settings_store = SettingsStore(config.data_dir)
+
     def backup_status() -> dict[str, Any]:
-        return {"last": last_backup(config.backups_dir), "directory": str(config.backups_dir)}
+        folder = config.backups_dir
+        try:
+            last = last_backup(folder)
+        except OSError:                       # a USB stick that went away while looking
+            last = None
+        chosen = config.owner_backup_dir
+        return {"last": last, "directory": str(folder), "chosen": str(chosen) if chosen else "",
+                "default_directory": str(config.default_backups_dir), **hub.backup_status.to_json(),
+                "warning": hub.backup_warning()}
 
     @router.get("/api/owner/backup", dependencies=[Depends(check)])
     def backup_get() -> dict[str, Any]:
@@ -74,8 +87,27 @@ def owner_router(hub: Hub) -> APIRouter:
     def backup_now() -> dict[str, Any]:
         try:
             hub.run_backup()
-        except (OSError, sqlite3.Error) as exc:
-            raise HTTPException(500, f"The backup failed: {exc}") from None
+        except BackupFailed as exc:          # plain English; the raw error is in the log
+            raise HTTPException(503, exc.text) from None
+        return backup_status()
+
+    @router.post("/api/owner/backup/folder", dependencies=[Depends(check)])
+    def backup_folder(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+        r"""{"folder": "E:\Backups"}: where backups go from now on (checked by writing a small file there);
+        empty goes back to the default folder. Kept in settings.json."""
+        try:
+            folder = check_folder(body.get("folder"))
+        except BackupFailed as exc:
+            raise HTTPException(400, exc.text) from None
+        try:
+            current = settings_store.read()
+        except SettingsDamaged:
+            current = None
+        if current is None:
+            raise HTTPException(409, "Finish setup first: open the setup page on the hub PC.")
+        settings_store.save(current.model_copy(update={"backup_dir": str(folder) if folder else ""}))
+        config.set_owner_backup_dir(folder)
+        log.info("Backup folder is now %s", config.backups_dir)
         return backup_status()
 
     return router

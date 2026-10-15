@@ -89,6 +89,14 @@ class Hub:
         from .core.phone_test import PHONE_TEST_FILE, PhoneTest
         self.phone_test = PhoneTest(config.data_dir / PHONE_TEST_FILE if persist else None)   # /hello visits
         self._own_addresses: tuple[float, set[str]] | None = None     # (looked up at, addresses), see own_addresses
+        from .core.backup import STATUS_FILE, BackupStatus, first_use_time, last_backup
+        try:
+            found = last_backup(config.backups_dir)
+        except OSError:                                # a USB stick that is slow or gone: decided later
+            found = None
+        self.backup_status = BackupStatus(config.data_dir / STATUS_FILE if persist else None,
+                                          first_use=first_use_time(config.data_dir, time.time()) if persist else None,
+                                          seed_last_ok=found["at"] / 1000 if found else None)
         self.silent_watch = SilentRigWatch()
         self.wall_clock = dt.datetime.now                       # opening hours (tests replace it)
         # Addresses sending packets the hub can't read that never sent a valid one: ip -> (last seen, format).
@@ -493,12 +501,29 @@ class Hub:
                 log.exception("Challenge winner check failed")
 
     def run_backup(self, now: dt.datetime | None = None):
-        """One backup now plus pruning; returns the zip path. Blocking: call from a thread."""
-        from .core.backup import make_backup, prune
+        """One backup now plus pruning; returns the zip path. Blocking: call from a thread. Raises BackupFailed
+        with a plain sentence for the owner; the raw error goes to the log."""
+        from .core.backup import BackupFailed, make_backup, plain_backup_error, prune
         cfg = self.config
-        out = make_backup(cfg.data_dir, self.config_path, cfg.backups_dir, now or dt.datetime.now())
-        prune(cfg.backups_dir, cfg.backup.keep)
+        folder = cfg.backups_dir
+        try:
+            out = make_backup(cfg.data_dir, self.config_path, folder, now or dt.datetime.now())
+            prune(folder, cfg.backup.keep)
+        except Exception as exc:
+            text = plain_backup_error(exc, folder)
+            log.exception("Backup to %s failed (%s)", folder, text)
+            self.backup_status.failed(text)
+            raise BackupFailed(text) from exc
+        self.backup_status.ok(folder)
         return out
+
+    def backup_warning(self) -> str | None:
+        """"Last backup: 5 days ago. Check the backup folder or USB stick." (owner page and staff Health only)."""
+        if not (self.config.features.backup_warning and self.config.backup.enabled):
+            return None
+        if self.drivers.store.path is None:          # replays and tests in memory: nothing to back up
+            return None
+        return self.backup_status.warning()
 
     async def backup_loop(self) -> None:
         """Back up every night at [backup] hour, plus one shortly after start if the last is over a day old
@@ -519,9 +544,12 @@ class Hub:
             await self._backup_once("Backup")
 
     async def _backup_once(self, label: str) -> None:
+        from .core.backup import BackupFailed
         try:
             out = await asyncio.to_thread(self.run_backup)
             log.info("%s saved: %s", label, out)
+        except BackupFailed as exc:                  # already logged with the raw error
+            log.warning("%s failed: %s (will try again tomorrow)", label, exc.text)
         except Exception:
             log.exception("%s failed (will try again tomorrow)", label)
 

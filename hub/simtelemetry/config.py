@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, get_args, get_origin
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, ValidationInfo, field_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, ValidationError, ValidationInfo, field_validator
 
 from . import paths
 
@@ -156,6 +156,7 @@ class FeaturesConfig(_Section):
     race_podium: bool = True      # race podium + race cards when a race ends (needs sharing)
     self_checkin: bool = True     # guests put their own name on a rig from their phone (QR sticker per rig)
     auto_end_sessions: bool = True  # end sessions at closing time, and timed sessions once over time and idle
+    backup_warning: bool = True   # owner page and staff Health warn when the last backup is over 2 days old
 
 
 class CheckinConfig(_Section):
@@ -213,6 +214,8 @@ class AppConfig(_Section):
     backup: BackupConfig = Field(default_factory=BackupConfig)
     rigs: list[RigConfig] = Field(default_factory=list)
     track_names: dict[int, str] = Field(default_factory=dict)  # trackId -> display name override
+    # The backup folder the owner chose on the owner page (settings.json); [backup] directory is the fallback.
+    _owner_backup_dir: Path | None = PrivateAttr(default=None)
 
     def rig_by_ip(self, ip: str) -> RigConfig | None:
         return next((r for r in self.rigs if r.ip == ip), None)
@@ -231,7 +234,19 @@ class AppConfig(_Section):
 
     @property
     def backups_dir(self) -> Path:
+        return self._owner_backup_dir or self.backup.directory or self.data_dir.parent / "backups"
+
+    @property
+    def default_backups_dir(self) -> Path:
+        """The folder used when the owner hasn't chosen one: hub.toml's [backup] directory, else ../backups."""
         return self.backup.directory or self.data_dir.parent / "backups"
+
+    @property
+    def owner_backup_dir(self) -> Path | None:
+        return self._owner_backup_dir
+
+    def set_owner_backup_dir(self, folder: Path | None) -> None:
+        self._owner_backup_dir = folder
 
 
 def load_config(path: Path | None = None) -> AppConfig:

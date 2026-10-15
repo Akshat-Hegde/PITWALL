@@ -122,6 +122,9 @@ def staff_router(hub: Hub) -> APIRouter:
         snapshot = hub.health_snapshot()
         warnings = (hub.admin_warnings() + list(status_builder.status(now)["warnings"])
                     + hub.wrong_sender_warnings(now) + hub.silent_rig_warnings(now))
+        backup = hub.backup_warning()
+        if backup:
+            warnings.append({"code": "backup_old", "rig_id": None, "message": backup})
         return {"warnings": warnings, "rigs": snapshot["rigs"], "uptime_s": snapshot["uptime_s"],
                 "recorder": snapshot.get("recorder"),
                 "target": {"address": hub.hub_address(), "port": hub.config.network.udp_port},

@@ -467,14 +467,21 @@ def setup_code_command(args: argparse.Namespace, config: AppConfig) -> int:
 
 
 def backup_command(args: argparse.Namespace, config: AppConfig) -> int:
-    """`backup`: one backup now; prints the zip path."""
-    from .core.backup import make_backup, prune
+    """`backup`: one backup now, in the folder chosen on the owner page (else hub.toml's); prints the zip path."""
+    from .core.backup import make_backup, plain_backup_error, prune, record_backup
+    saved = SettingsStore(config.data_dir).load()
+    if saved is not None and saved.backup_dir:
+        config.set_owner_backup_dir(Path(saved.backup_dir))
+    folder = config.backups_dir
     try:
-        out = make_backup(config.data_dir, args.config or paths.config_path(), config.backups_dir, dt.datetime.now())
-        prune(config.backups_dir, config.backup.keep)
+        out = make_backup(config.data_dir, args.config or paths.config_path(), folder, dt.datetime.now())
+        prune(folder, config.backup.keep)
     except (OSError, sqlite3.Error) as exc:
-        print(f"ERROR: backup failed: {exc}", file=sys.stderr)
+        text = plain_backup_error(exc, folder)
+        print(f"ERROR: {text} ({exc})", file=sys.stderr)
+        record_backup(config.data_dir, folder, text)
         return 2
+    record_backup(config.data_dir, folder)
     print(out)
     return 0
 
@@ -647,7 +654,9 @@ def _run_command(args: argparse.Namespace, config: AppConfig, problems: list[Con
             print(f"\nERROR: {exc}\n", file=sys.stderr)
             return 2
     if not getattr(args, "demo", False):
-        damaged = recover_damaged_settings(SettingsStore(config.data_dir), config.backups_dir, dt.datetime.now())
+        from .core.backup import last_backup_folder
+        damaged = recover_damaged_settings(SettingsStore(config.data_dir), config.backups_dir, dt.datetime.now(),
+                                           more_dirs=last_backup_folder(config.data_dir))
         if damaged:
             warnings.append(("settings_damaged", damaged))
         setup_done = apply_saved_settings(config, args)

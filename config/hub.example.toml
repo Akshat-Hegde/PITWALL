@@ -53,6 +53,7 @@ steering_wheel_rotation_deg = 360       # lock-to-lock rotation of the TV's whee
 # self_checkin = true                  # guests scan a QR sticker on the rig and type their own name
 # auto_end_sessions = true             # end every session at closing time, and a timed session once its
                                        # time is up and the car hasn't moved for 5 minutes (cards still made)
+# backup_warning = true                # owner page and staff Health warn when the last backup is over 2 days old
 
 [checkin]
 # blocked_words = ["somename"]         # extra words the self check-in name filter rejects (whole words)
@@ -83,9 +84,10 @@ flip_x = false                         # find the right values with the dashboar
 flip_z = false                         # (docs/TEST_PLAN.md), then set them here
 rotate_deg = 0
 
-[backup]                               # nightly zip of laps, settings, branding and this file
+[backup]                               # nightly zip of laps, settings, check-in codes, logos and this file
 enabled = true
-# directory = "E:/pitwall-backups"     # default: a "backups" folder next to the data folder; a USB stick or synced folder is safer
+# The owner chooses the backup folder (a USB stick is best) on the owner page; this is only the fallback.
+# directory = "E:/pitwall-backups"     # default: a "backups" folder next to the data folder
 hour = 4                               # local hour of the nightly backup
 keep = 14                              # how many backups to keep
 

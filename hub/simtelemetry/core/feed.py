@@ -335,7 +335,7 @@ class FeedBuilder:
                     "udp_port": self.hub.config.network.udp_port, "lan_address": self.hub.hub_address(),
                     "steering_rotation_deg": self.hub.config.dashboard.steering_wheel_rotation_deg,
                     # Hub-side switches the TV has no use for stay out of the feed.
-                    "features": self.hub.config.features.model_dump(exclude={"auto_end_sessions"}),
+                    "features": self.hub.config.features.model_dump(exclude={"auto_end_sessions", "backup_warning"}),
                     "moments": {"battle_margin_ms": self.hub.config.moments.battle_margin_ms},
                     "sounds": self.hub.config.sounds.model_dump()},
             "cafe": self.cafe(),
