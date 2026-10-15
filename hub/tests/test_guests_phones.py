@@ -279,6 +279,30 @@ def test_staff_start_holds_the_end_lock(tmp_path, monkeypatch):
     assert seen == {"auto_end_could_run": False}
 
 
+def test_staff_start_holds_the_checkin_lock(tmp_path, monkeypatch):
+    """A phone checking in on the same free rig can't assign it while staff start a session there."""
+    import threading
+    hub = staff_ready(make_hub(tmp_path))
+    hub.registry.see(RIG, 0.0, None, None)
+    client = _app(hub, tmp_path, headers=STAFF)
+    real = hub.drivers.assign
+    seen = {}
+
+    def assign(*a, **k):
+        free = []
+        probe = threading.Thread(target=lambda: free.append(hub.checkin.lock.acquire(blocking=False)))
+        probe.start()
+        probe.join()
+        seen["checkin_could_run"] = free[0]
+        if free[0]:
+            hub.checkin.lock.release()
+        return real(*a, **k)
+    monkeypatch.setattr(hub.drivers, "assign", assign)
+    r = client.put(f"/api/staff/rigs/{RIG}/driver", json={"name": "Alex"})
+    assert r.status_code == 200, r.text
+    assert seen == {"checkin_could_run": False}
+
+
 # --- Task 5 review fixes: combining marks can't smuggle a joiner into a Latin word ----------------------------
 
 def test_marks_around_a_joiner_do_not_hide_a_blocked_word():

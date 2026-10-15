@@ -171,7 +171,9 @@ def staff_router(hub: Hub) -> APIRouter:
     def start(rig_id: str, body: dict[str, Any] = Body(...)) -> dict[str, Any]:
         """Start a session: {"name"} for a walk-in or {"driver_id"} for a profile, optional "minutes"."""
         rig = find_rig(rig_id)
-        with hub._end_lock:     # one at a time with the automatic end: it must never end this new session
+        # One at a time with a phone checking in on the same free rig (both would assign it) and with the automatic
+        # end (it must never end this new session). Same lock order as auto-end and check-in: check-in lock first.
+        with hub.checkin.lock, hub._end_lock:
             previous = drivers.get(rig.ip)  # replaced by the new session once that is valid
             try:
                 if body.get("queue_id") is not None:
