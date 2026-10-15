@@ -17,13 +17,14 @@ from __future__ import annotations
 
 import re
 import time
+import unicodedata
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .store import LapStore
 
-NAME_MAX = 32
+NAME_MAX = 16                      # what the TV fits (staff start, check-in, queue, profiles)
 BOOKING_MAX_MIN = 12 * 60
 EXTEND_PROMPT_MS = 5 * 60_000      # staff page offers to extend from 5 minutes left
 _PHONE = re.compile(r"^\+?[0-9]{6,15}$")
@@ -46,7 +47,10 @@ class Assignment:
 
 
 def clean_name(value: Any) -> str:
-    name = " ".join(str(value or "").split())  # trim, collapse whitespace, no newlines/tabs
+    # Invisible format characters (zero-width spaces and joiners, right-to-left overrides; Unicode category Cf)
+    # would make two names look the same or flip the TV text: drop them.
+    text = "".join(c for c in str(value or "") if unicodedata.category(c) != "Cf")
+    name = " ".join(text.split())  # trim, collapse whitespace, no newlines/tabs
     if not name:
         raise DriverError("Enter the driver's name.")
     if len(name) > NAME_MAX:

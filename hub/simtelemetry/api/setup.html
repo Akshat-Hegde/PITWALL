@@ -69,6 +69,13 @@
   .logo-row img { max-width: 120px; max-height: 64px; background: var(--panel-2); }
   .rigbox { margin-top: 8px; padding: 10px 12px; background: var(--panel-2); border-left: 3px solid var(--accent); }
   .warn { color: var(--warn); font-size: 0.9rem; margin-top: 8px; }
+  .phonetest { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+  .phonetest p { margin: 0 0 8px; }
+  .phonetest__qr { width: 160px; max-width: 100%; background: #fff; }
+  .phonetest__qr:empty { display: none; }
+  .phonetest__qr svg { display: block; width: 100%; height: auto; }
+  .phonetest__status { font-weight: 700; }
+  .phonetest__status.ok { color: var(--ok); }
   ul.list { list-style: none; margin: 8px 0 0; padding: 0; }
   ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   ul.list li.warn-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
@@ -161,6 +168,20 @@
           <input id="wifi-password" type="password" maxlength="63" autocomplete="new-password"></div>
       </div>
       <div class="muted">Shown as a QR code on the TV. Use a guest network.</div>
+    </section>
+
+    <section class="panel" id="phone-panel">
+      <div class="title">Test from your phone</div>
+      <p class="muted" id="phone-advice"></p>
+      <div class="phonetest">
+        <div class="phonetest__qr" id="phone-qr" aria-label="QR code: phone test page"></div>
+        <div>
+          <p>Join the guest Wi-Fi on a phone, then scan this code with its camera.</p>
+          <p class="phonetest__status" id="phone-status" role="status"></p>
+          <p class="warn" id="phone-problem" hidden></p>
+          <p class="muted" id="phone-fail"></p>
+        </div>
+      </div>
     </section>
 
     <section class="panel">
@@ -279,6 +300,29 @@
     $("udp-port").textContent = s.udp_port;
     renderRigs(s.rigs, true);
     showLogo();
+    renderPhoneTest(s.phone_test);
+  }
+
+  // "Test from your phone" (the /hello page): the QR, and whether a phone has reached the hub yet.
+  function renderPhoneTest(p) {
+    if (!p) return;
+    $("phone-advice").textContent = p.advice;
+    $("phone-fail").textContent = p.fail_advice;
+    $("phone-qr").innerHTML = p.svg || "";      // made by the hub (segno), not user text
+    $("phone-problem").hidden = !p.problem;
+    $("phone-problem").textContent = p.problem || "";
+    showPhoneStatus(p);
+  }
+  function showPhoneStatus(p) {
+    $("phone-status").textContent = p.text;
+    $("phone-status").className = "phonetest__status" + (p.reached ? " ok" : "");
+  }
+  async function pollPhoneTest() {
+    try {
+      const r = await fetch("/api/phone-test");
+      if (r.ok) showPhoneStatus(await r.json());
+    } catch { /* the hub is restarting: try again shortly */ }
+    setTimeout(pollPhoneTest, 5000);
   }
 
   function renderWarnings(warnings) {
@@ -501,7 +545,7 @@
 
   hours();
   swatches();
-  load().then(() => setTimeout(pollRigs, 3000));
+  load().then(() => { setTimeout(pollRigs, 3000); setTimeout(pollPhoneTest, 5000); });
 })();
 </script>
 </body>

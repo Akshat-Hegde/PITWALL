@@ -20,6 +20,7 @@ from ..core.tv import TvError
 from ..core.wifi import wifi_share
 from ..hub import NO_CARD_TEXT
 from ..core.health import RigState
+from ..core.phone_test import usable_address
 from ..core.pins import PinAttempts, verify_pin
 from .pages import render_page
 
@@ -123,7 +124,8 @@ def staff_router(hub: Hub) -> APIRouter:
                     + hub.wrong_sender_warnings(now) + hub.silent_rig_warnings(now))
         return {"warnings": warnings, "rigs": snapshot["rigs"], "uptime_s": snapshot["uptime_s"],
                 "recorder": snapshot.get("recorder"),
-                "target": {"address": hub.hub_address(), "port": hub.config.network.udp_port}}
+                "target": {"address": hub.hub_address(), "port": hub.config.network.udp_port},
+                "phone_test": hub.phone_test.status(hub.hub_address(), hub.config.network.http_port, _qr_svg)}
 
     @router.post("/api/staff/address/ok", dependencies=[Depends(guard)])
     async def address_ok() -> dict[str, Any]:
@@ -234,8 +236,10 @@ def staff_router(hub: Hub) -> APIRouter:
         rigs = [{**row, "svg": _qr_svg(row["url"])}
                 for row in (code_row(r, codes[r.ip]) for r in hub.registry.all() if r.ip in codes)]
         share = wifi_share(hub.config)
+        address = hub.hub_address()
         return {"enabled": hub.config.features.self_checkin, "rigs": rigs,
-                "wifi": {"ssid": share["ssid"], "svg": _qr_svg(share["qr"])} if share else None}
+                "wifi": {"ssid": share["ssid"], "svg": _qr_svg(share["qr"])} if share else None,
+                "address_warning": None if usable_address(address) else sticker_address_warning(address)}
 
     @router.post("/api/staff/checkin/codes/{rig_id}/regenerate", dependencies=[Depends(guard)])
     def checkin_regenerate(rig_id: str) -> dict[str, Any]:
@@ -367,6 +371,11 @@ def staff_router(hub: Hub) -> APIRouter:
         return {"shown": True, "entries": len(moment["entries"])}
 
     return router
+
+
+def sticker_address_warning(address: str | None) -> str:
+    shown = address if address and address.strip() else "localhost"
+    return f"Phones can't reach '{shown}'. Connect this PC to the cafe network, then reprint."
 
 
 def _qr_svg(text: str) -> str:

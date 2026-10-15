@@ -234,13 +234,26 @@
         Your Telemetry may stay Restricted.</p>
       <p class="muted">This includes a rig on this PC: use the address above, not 127.0.0.1.</p>
     </section>
+    <section class="panel">
+      <div class="title">Test from your phone</div>
+      <p class="muted" id="phone-advice"></p>
+      <div class="qr-row">
+        <div class="qr-svg" id="phone-qr" role="img" aria-label="QR code: phone test page"></div>
+        <div style="flex:1;min-width:12em">
+          <p>Join the guest Wi-Fi on a phone, then scan this code with its camera.</p>
+          <p id="phone-status" style="font-weight:700"></p>
+          <p class="msg error" id="phone-problem" hidden></p>
+          <p class="muted" id="phone-fail"></p>
+        </div>
+      </div>
+    </section>
   </section>
 
   <section id="tab-queue" role="tabpanel" hidden>
     <form class="panel" id="queue-form">
       <div class="title">Add to the queue</div>
       <label for="queue-name">Name</label>
-      <input id="queue-name" maxlength="32" autocomplete="off" placeholder="Walk-in name">
+      <input id="queue-name" maxlength="16" autocomplete="off" placeholder="Walk-in name">
       <div class="actions"><button class="btn primary" type="submit">Add</button></div>
       <p class="faint">Drivers with a profile: add them from the Drivers tab.</p>
       <p class="msg" id="queue-msg" role="status"></p>
@@ -261,7 +274,7 @@
     <form class="panel" id="create-form">
       <div class="title">New driver profile</div>
       <div class="grid2">
-        <div><label for="new-name">Name</label><input id="new-name" maxlength="32" autocomplete="off"></div>
+        <div><label for="new-name">Name</label><input id="new-name" maxlength="16" autocomplete="off"></div>
         <div><label for="new-phone">Phone</label><input id="new-phone" inputmode="tel" autocomplete="off"></div>
       </div>
       <label class="check"><input type="checkbox" id="new-consent">
@@ -352,7 +365,7 @@
         <div class="chips rig__queue"></div>
       </div>
       <div class="grid2">
-        <div><label>Walk-in name</label><input class="rig__name-input" maxlength="32" autocomplete="off"></div>
+        <div><label>Walk-in name</label><input class="rig__name-input" maxlength="16" autocomplete="off"></div>
         <div><label>Session time</label>
           <select class="rig__minutes">
             <option value="">No timer</option>
@@ -825,7 +838,7 @@
           <ul class="list members"></ul>
           <form class="actions find"><input maxlength="32" placeholder="Find a driver: name or phone" style="flex:1" autocomplete="off"><button class="btn small" type="submit">Search</button></form>
           <ul class="list found"></ul>
-          <form class="actions quick"><input maxlength="32" placeholder="Walk-in? Quick profile: name only" style="flex:1" autocomplete="off"><button class="btn small" type="submit">Add walk-in</button></form>
+          <form class="actions quick"><input maxlength="16" placeholder="Walk-in? Quick profile: name only" style="flex:1" autocomplete="off"><button class="btn small" type="submit">Add walk-in</button></form>
           <div class="actions"><label class="btn small" style="margin:0">Team logo<input type="file" accept="image/png,image/jpeg,image/webp" hidden></label>
           <button class="btn danger small" type="button" data-remove>Remove team</button></div>`;
         div.querySelector(".title").textContent = `${t.rank}. ${t.name}`;
@@ -977,6 +990,17 @@
     }
     $("health-ip").textContent = h.target.address || "this PC's network address (not found: check the network cable or Wi-Fi)";
     $("health-port").textContent = String(h.target.port);
+    const p = h.phone_test;                     // "Test from your phone" (/hello)
+    if (p) {
+      $("phone-advice").textContent = p.advice;
+      $("phone-fail").textContent = p.fail_advice;
+      $("phone-qr").innerHTML = p.svg || "";    // an SVG the hub made (segno)
+      $("phone-qr").hidden = !p.svg;
+      $("phone-problem").hidden = !p.problem;
+      $("phone-problem").textContent = p.problem || "";
+      $("phone-status").textContent = p.text;
+      $("phone-status").style.color = p.reached ? "var(--ok)" : "";
+    }
   }
   $("address-ok").addEventListener("click", async () => {
     try { await api("POST", "/api/staff/address/ok"); $("address-banner").hidden = true; loadHealth(); }

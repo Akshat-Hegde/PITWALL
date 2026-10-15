@@ -84,6 +84,8 @@ class Hub:
         from .core.address import ADDRESS_FILE, AddressWatch
         persist = store is not None and store.path is not None
         self.address_watch = AddressWatch(config.data_dir / ADDRESS_FILE if persist else None, self.hub_address)
+        from .core.phone_test import PHONE_TEST_FILE, PhoneTest
+        self.phone_test = PhoneTest(config.data_dir / PHONE_TEST_FILE if persist else None)   # /hello visits
         self.silent_watch = SilentRigWatch()
         self.wall_clock = dt.datetime.now                       # opening hours (tests replace it)
         # Addresses sending packets the hub can't read that never sent a valid one: ip -> (last seen, format).
@@ -561,6 +563,11 @@ class Hub:
         """This PC's network address: what every rig's UDP IP Address must be set to."""
         from .core.feed import lan_address
         return lan_address(r.ip for r in self.registry.all())
+
+    def own_addresses(self) -> set[str]:
+        """Every address of this PC (a visit from one of them is not a phone)."""
+        from .core.feed import _private_addresses
+        return {a for a in (self.hub_address(), *_private_addresses()) if a}
 
     def wrong_sender_warnings(self, now: float | None = None) -> list[dict[str, Any]]:
         now = time.monotonic() if now is None else now

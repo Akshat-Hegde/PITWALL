@@ -14,6 +14,7 @@
   .toolbar a { color: #fff; font-weight: 700; text-decoration: none; }
   .toolbar button { padding: 9px 18px; border: 0; background: var(--accent); color: #fff; font: inherit; font-weight: 800; cursor: pointer; }
   .msg { padding: 16px; color: #b00; }
+  .addr-warn { margin: 12px auto; max-width: 190mm; padding: 12px 16px; background: #fff3cd; border-left: 6px solid #e0a800; color: #5a4300; font-weight: 700; }
   form#pin-form { max-width: 320px; margin: 24px auto; padding: 16px; background: #fff; }
   form#pin-form input { width: 100%; padding: 10px; font: inherit; margin: 8px 0; }
   form#pin-form button { padding: 9px 18px; border: 0; background: var(--accent); color: #fff; font: inherit; font-weight: 800; }
@@ -31,7 +32,7 @@
   .wifi b { display: block; font-size: 9.5pt; color: var(--ink); }
   @media print {
     body { background: #fff; }
-    .toolbar, .msg, #pin-form { display: none !important; }
+    .toolbar, .msg, .addr-warn, #pin-form { display: none !important; }
     .sheet { margin: 0; width: auto; }
     .sticker { border: 0.3mm dashed #aaa; }
   }
@@ -46,6 +47,7 @@
   <button type="submit">Show stickers</button>
 </form>
 <p class="msg" id="msg" role="alert"></p>
+<p class="addr-warn" id="addr-warn" role="alert" hidden></p>
 <div class="sheet" id="sheet"></div>
 
 <script>
@@ -89,6 +91,9 @@
     }
     if (!res.ok) { $("msg").textContent = (data && data.detail) || "Something went wrong on the hub. Reload this page; if it keeps happening, restart the hub PC."; return; }
     $("pin-form").hidden = true;
+    // The stickers point at this PC's address: without a real one (only "localhost") no phone can open them.
+    $("addr-warn").hidden = !data.address_warning;
+    $("addr-warn").textContent = data.address_warning || "";
     if (!data.enabled) $("msg").textContent = "Self check-in is switched off, so these stickers will show a notice. Turn it on in the settings.";
     if (!data.rigs.length) $("msg").textContent = "No rigs yet. Each rig appears as soon as its game sends telemetry.";
     const sheet = $("sheet"); sheet.textContent = "";

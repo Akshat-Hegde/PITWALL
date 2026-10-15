@@ -3,12 +3,15 @@ import { formatLapTime } from "../format";
 import type { AnyStoryCard } from "../schema";
 import { drawCard, raceCardText } from "./drawCard";
 import { demoCard, demoRaceCard } from "./demo";
+import { cardFileName, isThisIOS } from "./save";
 
 /** /card/<token>: the customer's session or race card. Draws the 1080 x 1920 image (an Instagram story's size);
- *  save it, then post it from the gallery. No Web Share of files: the LAN page is plain HTTP. */
+ *  save it, then post it from the gallery. No Web Share of files: the LAN page is plain HTTP. On iPhone and iPad
+ *  Safari ignores the download, so the image is shown full-screen to press and hold ("Save to Photos"). */
 export function CardPage({ token }: { token: string }) {
   const [card, setCard] = useState<AnyStoryCard | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);   // iOS: the card image to press and hold
   const canvas = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -18,7 +21,7 @@ export function CardPage({ token }: { token: string }) {
     }
     fetch(`/api/cards/${encodeURIComponent(token)}`)
       .then(async (r) => {
-        if (!r.ok) throw new Error((await r.json().catch(() => null))?.detail ?? `The hub answered ${r.status}.`);
+        if (!r.ok) throw new Error((await r.json().catch(() => null))?.detail ?? "This card couldn't be loaded. Check your phone is on the cafe's Wi-Fi, then try again.");
         return r.json() as Promise<AnyStoryCard>;
       })
       .then(setCard)
@@ -48,11 +51,22 @@ export function CardPage({ token }: { token: string }) {
   }, [card]);
 
   const save = () => {
-    canvas.current?.toBlob((blob) => {
+    const c = canvas.current;
+    if (!c) return;
+    if (isThisIOS()) {
+      try {
+        const url = c.toDataURL("image/png");
+        if (url && url.startsWith("data:image/png")) setPreview(url);
+      } catch {
+        /* the canvas can't be read: nothing to show */
+      }
+      return;
+    }
+    c.toBlob((blob) => {
       if (!blob) return;
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = `${card?.kind === "race" ? "race" : "lap"}-card-${(card?.driver ?? "driver").replace(/[^\w-]+/g, "_")}.png`;
+      a.download = cardFileName(card?.kind, card?.driver);
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     }, "image/png");
@@ -87,6 +101,13 @@ export function CardPage({ token }: { token: string }) {
           <p className="cardpage__note t3">
             Save the image to post it anywhere. The link works for phones on {card.cafe.name}'s Wi-Fi.
           </p>
+        </div>
+      )}
+      {preview && (
+        <div className="cardpage__preview" role="dialog" aria-modal="true" aria-label="Save your card">
+          <img className="cardpage__preview-img" src={preview} alt={card ? `${card.driver}'s card` : "Your card"} />
+          <p className="cardpage__preview-help">Press and hold the picture, then tap Save to Photos</p>
+          <button type="button" className="cardpage__btn" onClick={() => setPreview(null)}>Done</button>
         </div>
       )}
     </main>

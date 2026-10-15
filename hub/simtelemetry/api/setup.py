@@ -23,7 +23,7 @@ from ..core.settings import CafeSettings, SettingsStore, apply_settings
 from ..core.setup_code import SetupCode, SetupLocked
 from .owner import OWNER_PIN_HEADER
 from .pages import render_page
-from .staff import PinGuard
+from .staff import PinGuard, _qr_svg
 
 if TYPE_CHECKING:
     from ..hub import Hub
@@ -112,6 +112,8 @@ def setup_router(hub: Hub) -> APIRouter:
             "accent": c.cafe.branding.get("--brand-accent", "#E10600"),
             "open_hour": c.owner.open_hour, "close_hour": c.owner.close_hour,
             "hub_address": hub.hub_address(), "http_port": c.network.http_port, "udp_port": c.network.udp_port,
+            # "Test from your phone": the /hello QR and whether a phone has reached the hub (U4)
+            "phone_test": hub.phone_test.status(hub.hub_address(), c.network.http_port, _qr_svg),
             "authed": full,                         # rig addresses and editing need the owner PIN
             "rigs": rig_rows(full),
             "warnings": [{"code": w["code"], "message": w["message"]}

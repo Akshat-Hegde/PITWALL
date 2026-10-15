@@ -55,7 +55,7 @@ def test_fallback_order():
 
 @pytest.mark.parametrize("name, minutes, message", [
     ("", None, "Enter the driver's name."),
-    ("x" * 33, None, "at most 32"),
+    ("x" * 17, None, "at most 16"),
     ("Maya", "abc", "number of minutes"),
     ("Maya", 0.5, "1 to 720 minutes"),
 ])
