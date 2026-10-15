@@ -54,4 +54,4 @@ Never run the installer on the development PC: it registers a boot task and fire
 
 Things worth watching:
 - The task XML is written as plain text with a UTF-8 header. If `schtasks /Create` fails the install log shows it, and step 6 fails.
-- The setup code on the last page must match the line `Setup code:` in the install log.
+- The setup code must never be in a log: the install log only says `Setup code made`, and `hub.log` only says "Setup isn't finished. Use the Start-menu shortcut 'Pitwall Show setup code' to see the code." The code on the last page must match what **Pitwall Show setup code** shows.

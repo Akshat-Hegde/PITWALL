@@ -1,6 +1,7 @@
 """/setup: first-run setup and branding. Before setup: the one-time setup code. After: the owner PIN.
 
-The setup code is never returned by any endpoint; it lives in the console/log, the installer and `setup-code`.
+The setup code is never returned by any endpoint; it lives in the installer's last page and `setup-code`
+(the "<name> Show setup code" Start-menu shortcut). The hub's log never holds it.
 """
 
 from __future__ import annotations
@@ -71,8 +72,8 @@ def setup_router(hub: Hub) -> APIRouter:
         except SetupLocked as exc:
             raise HTTPException(429, str(exc)) from None
         if not ok:
-            raise HTTPException(401, "Enter the setup code from the installer's last page "
-                                     "(also in the hub's log, or run: <exe> setup-code).")
+            raise HTTPException(401, "Enter the setup code from the installer's last page. Use the Start-menu "
+                                     f"shortcut '{brand.PRODUCT_NAME} Show setup code' on the hub PC.")
 
     @router.get("/setup")
     def page() -> HTMLResponse:

@@ -643,7 +643,7 @@ begin
     if LoadStringFromFile(DataDir + '\setup-code.txt', Code) then
     begin
       SetupCodeText := Trim(String(Code));
-      Log('Setup code: ' + SetupCodeText);
+      Log('Setup code made: it is on the last page and never in this log.');
     end
     else
       Log('Could not read setup-code.txt');

@@ -247,6 +247,11 @@ def test_run_with_damaged_settings_warns_on_setup_page(tmp_path):
     state = got["/api/setup"]
     assert state["needs_code"] is True and state["authed"] is True
     assert [w["code"] for w in state["warnings"]] == ["settings_damaged"]
+    # Setup isn't finished: the log points to the shortcut but never holds the code (data\logs is open to users)
+    log_text = (data / "logs" / "hub.log").read_text(encoding="utf-8")
+    assert "Setup isn't finished. Open http://" in log_text
+    assert "Use the Start-menu shortcut 'Pitwall Show setup code' to see the code." in log_text
+    assert setup["X-Setup-Code"] not in log_text
 
 
 # --- laps.db ------------------------------------------------------------------------------------------------

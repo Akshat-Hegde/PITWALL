@@ -728,9 +728,14 @@ def _run_command(args: argparse.Namespace, config: AppConfig, problems: list[Con
             warnings.append(("settings_damaged", damaged))
         setup_done = apply_saved_settings(config, args)
         if args.command == "run" and not setup_done:
-            # Console and logs/hub.log only; never the TV or the API.
-            log.warning("First-run setup: open http://%s:%d/setup and enter setup code %s",
-                        lan_address(), config.network.http_port, SetupCode(config.data_dir).ensure())
+            # The code itself never goes in the log: data\logs is readable by every Windows user on the PC. Only a
+            # hub started by hand in a terminal (from source) shows it, on that terminal.
+            code = SetupCode(config.data_dir).ensure()
+            log.warning("Setup isn't finished. Open http://%s:%d/setup. Use the Start-menu shortcut "
+                        "'%s Show setup code' to see the code.", lan_address(), config.network.http_port,
+                        brand.PRODUCT_NAME)
+            if sys.stdout is not None and sys.stdout.isatty():
+                print(f"Setup code: {code}", flush=True)
     registry = RigRegistry(config, config.data_dir / "rigs.json")
     recorder = None
     if should_record(args, config):

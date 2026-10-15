@@ -229,7 +229,7 @@ see [docs/INSTALL.md](docs/INSTALL.md)) and set the BIOS to power on after AC lo
 
 The owner sets the cafe up in a browser at `http://<hub PC>:8000/setup`: name, tagline, logo, accent colour, opening hours, owner PIN and staff PIN. The choices are saved in `data/settings.json` and override `config/hub.toml` (a `--owner-pin` flag still wins).
 
-Before setup is done, `/setup` needs the one-time setup code. The installer makes it and shows it on its last page; a hub started from source makes one on first start. While setup is not done the hub logs it at every start (console and `data/logs/hub.log`, never the TV). On the hub PC, `python -m simtelemetry setup-code` prints it (`--new` makes a fresh one). Ten wrong codes lock the page for a minute. After setup the code is deleted and `/setup` asks for the owner PIN.
+Before setup is done, `/setup` needs the one-time setup code. The installer makes it and shows it on its last page; a hub started from source makes one on first start. The code is never written to the log (`data/logs` is readable by every Windows user on the PC): while setup is not done the hub logs "Setup isn't finished. Use the Start-menu shortcut 'Pitwall Show setup code' to see the code." at every start, and only a hub started by hand in a terminal prints the code on that terminal. On the hub PC, the **Pitwall Show setup code** shortcut (or `python -m simtelemetry setup-code` from source) prints it (`--new` makes a fresh one). Ten wrong codes lock the page for a minute. After setup the code is deleted and `/setup` asks for the owner PIN.
 
 ## Staff page and driver profiles
 
