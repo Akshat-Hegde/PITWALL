@@ -31,7 +31,7 @@ SIZE_MISMATCH_WARN_S = 10.0  # keep the warning up this long after the last size
 
 # Rig colours by rig number, chosen to stay clear of the sector colours (purple/green/yellow).
 PALETTE = ("#36C5F0", "#FF8A3D", "#F15BB5", "#5B8CFF", "#2EC4B6",
-           "#FF6B6B", "#C0C9D2", "#FFB3C6", "#8D99AE", "#D4A373", "#F4A261", "#90E0EF")
+           "#FF6B6B", "#C0C9D2", "#FFB3C6", "#8D99AE", "#D4A373", "#FFFFFF", "#9C6644")
 
 _NULL_SESSION: dict[str, Any] = {"session_id": None, "track_key": None, "track_name": None,
                                  "track_length_m": None, "session_type": None, "weather": None,

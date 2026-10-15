@@ -74,7 +74,7 @@ const BOOKED_MIN = [20, 7, 15, 20, 45, 30, 20, 15, 30, 20, 25, 40]; // rig 2 is 
 const RIG_DRIVERS = ["Apex_Hunter", "LateBraker77", "Sofia_K", "TurboTom", "Mika H", "DRS_Daisy", "Kerb Crusher",
   "Rae", "Big Ben", "Quali Queen", "Nina V", "Pitlane Pete"];
 const RIG_COLOURS = ["#36C5F0", "#FF8A3D", "#F15BB5", "#5B8CFF", "#2EC4B6", "#FF6B6B", "#C0C9D2", "#FFB3C6",
-  "#8D99AE", "#D4A373", "#F4A261", "#90E0EF"];
+  "#8D99AE", "#D4A373", "#FFFFFF", "#9C6644"];
 const RIG_PACES = [0.995, 0.982, 0.99, 0.986, 0.978, 0.992, 0.975, 0.984, 0.98, 0.988, 0.983, 0.991];
 
 const TRACK_KEY = "F1:900";
