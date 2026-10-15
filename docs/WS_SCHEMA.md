@@ -61,7 +61,7 @@ Compatibility rules:
 | `frame` | Every tick (15 Hz) | All rigs' live data + comparison (3.2) |
 | `rig_info` | A rig appears, or its name/colour/format changes | `{ "rig": RigInfo }` |
 | `status` | Once per second, and immediately on change | `{ "status": HubStatus }` |
-| `session_changed` | A rig starts a new game session (e.g. new track, restart) | `{ "rig_id", "session": SessionInfo }` |
+| `session_changed` | A rig starts a different game session (a new session UID, e.g. new track, restart). A gap in packets is not a change: while a rig has no data its frame's `session` is null, but no `session_changed` is sent, so the TV keeps its trails and laps | `{ "rig_id", "session": SessionInfo }` |
 | `track_outline` | An outline becomes available (generated or loaded) | `{ "outline": TrackOutline }` |
 | `lap_completed` | A rig finishes a lap | `{ "lap": LapRecord }` |
 | `head_to_head` *(added in v1, optional)* | The closest pair on the shown track changes | `{ "head_to_head": HeadToHead \| null }` |
@@ -181,7 +181,7 @@ Conventions: times are integer **milliseconds**; distances **metres**; speed **k
 | Field | Type | Notes |
 |---|---|---|
 | `rig_id` | string | |
-| `state` | string | `"driving"`, `"in_menu_paused"` (packets arriving, car not on track), `"no_data"`. |
+| `state` | string | `"driving"`, `"in_menu_paused"` (packets arriving, car not on track; also while the game is paused or spectating), `"no_data"`. |
 | `last_seen_ms` | int \| null | Milliseconds since the last packet from this rig. |
 | `driver` | string \| null | The driver's name: set by staff on the hub's `/staff` page, else the player name from the game; `null` if neither is known. |
 | `session` | SessionInfo | |

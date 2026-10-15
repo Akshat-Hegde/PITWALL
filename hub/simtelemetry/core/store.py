@@ -276,6 +276,12 @@ class LapStore:
             self._db.execute("UPDATE driver_sessions SET ended_at = ? WHERE rig_id = ? AND ended_at IS NULL",
                              (ended_at, rig_id))
 
+    def move_driver_session(self, old_rig_id: str, new_rig_id: str) -> None:
+        """The open session on a rig that got a new address moves with it (setup page: "same rig as…")."""
+        with self._lock, self._db:
+            self._db.execute("UPDATE driver_sessions SET rig_id = ? WHERE rig_id = ? AND ended_at IS NULL",
+                             (new_rig_id, old_rig_id))
+
     def current_driver_sessions(self) -> dict[str, Assignment]:
         from .drivers import Assignment
         with self._lock:

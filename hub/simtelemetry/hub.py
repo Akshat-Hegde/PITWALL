@@ -12,18 +12,20 @@ from typing import Any
 from . import brand, paths
 from .config import AppConfig
 from .core.adapter import Checked, GameAdapter
-from .core.health import HealthMonitor, RigState
+from .core.health import HealthMonitor, RigState, SilentRigWatch
 from .core.drivers import DriverRegistry
 from .core.laps import LapBook, LapContext, driver_key
 from .core.store import LapStore
 from .core.races import RaceBook
-from .core.rigs import Rig, RigRegistry
+from .core.rigs import Rig, RigError, RigRegistry
 from .tools.recorder import Recorder
 
 log = logging.getLogger(__name__)
 
 QUEUE_MAX = 20_000  # ~10 rigs x 60 Hz x 6 packets for >5 s of backlog
 DROP_QUEUE_FULL = "queue_full"
+WRONG_SENDER_SHOW_S = 60.0   # a non-rig sending wrong-format packets is listed on staff Health this long
+WRONG_SENDERS_MAX = 64
 
 
 def next_backup_at(now: dt.datetime, hour: int) -> dt.datetime:
@@ -72,6 +74,13 @@ class Hub:
         self._session_top_kph: dict[str, int] = {}             # top speed per rig in the staff session
         self.demo = None                                        # DemoDirector in `run --demo`
         self.started_at = time.monotonic()
+        from .core.address import ADDRESS_FILE, AddressWatch
+        persist = store is not None and store.path is not None
+        self.address_watch = AddressWatch(config.data_dir / ADDRESS_FILE if persist else None, self.hub_address)
+        self.silent_watch = SilentRigWatch()
+        self.wall_clock = dt.datetime.now                       # opening hours (tests replace it)
+        # Addresses sending packets the hub can't read that never sent a valid one: ip -> (last seen, format).
+        self.wrong_senders: dict[str, tuple[float, str | None]] = {}
         self._queue: asyncio.Queue[tuple[Checked, bytes, str, float]] = asyncio.Queue(QUEUE_MAX)
 
     # --- receive path (sync, called from datagram_received) -------------------------
@@ -81,14 +90,28 @@ class Hub:
             self.recorder.write(wall_time, source_ip, data)
         now = time.monotonic()
         checked = self.adapter.check(data, source_ip)
-        self.registry.see(source_ip, now, checked.data_format, checked.session_id)
         if not checked.ok:
+            # Only a valid packet makes a rig: wrong-format and garbage senders are listed on staff Health instead.
+            if self.registry.get(source_ip) is not None:
+                self.registry.note_format(source_ip, checked.data_format)
+            else:
+                self.note_wrong_sender(source_ip, checked.data_format, now)
             self.health.on_drop(source_ip, checked.reason or "rejected", now)
             return
+        self.registry.see(source_ip, now, checked.data_format, checked.session_id)
+        self.wrong_senders.pop(source_ip, None)
         try:
             self._queue.put_nowait((checked, data, source_ip, now))
         except asyncio.QueueFull:
             self.health.on_drop(source_ip, DROP_QUEUE_FULL, now)
+
+    def note_wrong_sender(self, ip: str, data_format: str | None, now: float) -> None:
+        if ip not in self.wrong_senders:
+            if len(self.wrong_senders) >= WRONG_SENDERS_MAX:
+                del self.wrong_senders[min(self.wrong_senders, key=lambda k: self.wrong_senders[k][0])]
+            log.warning("A PC at %s is sending telemetry in a format the hub can't read (format %s)",
+                        ip, data_format or "?")
+        self.wrong_senders[ip] = (now, data_format)
 
     # --- background tasks ------------------------------------------------------------
 
@@ -171,8 +194,6 @@ class Hub:
 
     def end_session(self, ip: str) -> dict[str, Any] | None:
         """End the staff session on a rig; returns the story card (None without a counted lap or sharing off)."""
-        from .core.cards import build_card
-        from .core.feed import lan_address
         session = self.drivers.get(ip)
         if session is None:
             return None
@@ -182,7 +203,6 @@ class Hub:
     def session_card(self, ip: str, session: Any) -> dict[str, Any] | None:
         """Story card for a session that has just ended (ended by staff, or replaced by the next driver)."""
         from .core.cards import build_card
-        from .core.feed import lan_address
         if not self.config.features.sharing:
             return None
         ended_at = round(time.time() * 1000)
@@ -195,7 +215,7 @@ class Hub:
         if card is None:
             return None
         self.drivers.save_card(ip, session.driver_id, card)
-        url = f"http://{lan_address() or 'localhost'}:{self.config.network.http_port}/card/{card['token']}"
+        url = f"http://{self.hub_address() or 'localhost'}:{self.config.network.http_port}/card/{card['token']}"
         self.laps.publish_moment("card", rig_id=ip, driver=card["driver"], token=card["token"], url=url,
                                  best_ms=card["best_ms"], track_name=card["track_name"])
         self.checkin.card_made(ip, session.started_at, url)   # the guest's phone can fetch it later
@@ -233,13 +253,12 @@ class Hub:
     def finish_race(self, race: Any) -> dict[str, Any]:
         """Race cards for every rig that finished, plus the podium moment when 2 or more cafe drivers raced."""
         from .core.cards import build_race_card
-        from .core.feed import lan_address
         from .core.wifi import wifi_share
         features = self.config.features
         race.track_name = race.track_name or self.race_track_name(race)
         if not (features.sharing and features.race_podium):
             return {"cards": [], "moment": None}
-        base = f"http://{lan_address() or 'localhost'}:{self.config.network.http_port}/card/"
+        base = f"http://{self.hub_address() or 'localhost'}:{self.config.network.http_port}/card/"
         cards = []
         for rig, result in race.results:
             card = build_race_card(self, rig, result, race)
@@ -394,11 +413,103 @@ class Hub:
         self.startup_warnings.append({"code": code, "rig_id": None, "message": message})
 
     def admin_warnings(self) -> list[dict[str, Any]]:
-        """Start-up and port problems for the staff Health tab and /setup. Never sent to the TV."""
+        """Start-up, port and address problems for the staff Health tab and /setup. Never sent to the TV."""
         warnings = list(self.startup_warnings)
         if self.udp_busy:
             warnings.append({"code": "udp_port_busy", "rig_id": None, "message": self.udp_busy})
+        try:
+            changed = self.address_watch.warning()
+        except Exception:  # a warning must never break the page that shows it
+            log.exception("Could not check the hub's address")
+            changed = None
+        if changed is not None:
+            warnings.append(changed)
         return warnings
+
+    def hub_address(self) -> str | None:
+        """This PC's network address: what every rig's UDP IP Address must be set to."""
+        from .core.feed import lan_address
+        return lan_address(r.ip for r in self.registry.all())
+
+    def wrong_sender_warnings(self, now: float | None = None) -> list[dict[str, Any]]:
+        now = time.monotonic() if now is None else now
+        return [{"code": "wrong_format_sender", "rig_id": None,
+                 "message": f"A PC at {ip} is sending telemetry in the wrong format: set UDP Format to 2025."}
+                for ip, (at, _) in sorted(self.wrong_senders.items()) if now - at <= WRONG_SENDER_SHOW_S]
+
+    def no_data_checklist(self, rig: Rig) -> str:
+        address = self.hub_address() or "this PC's network address"
+        return (f"On {rig.name} check: UDP Telemetry On · UDP IP Address = {address} · "
+                f"Port {self.config.network.udp_port} · Format 2025, then drive out of the garage.")
+
+    def silent_rig_warnings(self, now: float | None = None) -> list[dict[str, Any]]:
+        """Rigs silent for over 10 minutes, during opening hours only and at most once per rig per day."""
+        now = time.monotonic() if now is None else now
+        wall = self.wall_clock()
+        owner = self.config.owner
+        out = []
+        for rig in self.registry.all():
+            h = self.health.get(rig.ip)
+            last = h.last_seen if h is not None and h.last_seen is not None else self.started_at
+            silent = now - last if self.health.state(rig.ip, now) is RigState.NO_DATA else None
+            if self.silent_watch.check(rig.ip, silent, wall, owner.open_hour, owner.close_hour):
+                out.append({"code": "no_data", "rig_id": rig.ip, "message": self.no_data_checklist(rig)})
+        return out
+
+    def state_text(self, ip: str, now: float) -> str:
+        """A rig's state for staff and the owner, in plain words."""
+        state = self.health.state(ip, now)
+        if state is RigState.DRIVING:
+            return "On track"
+        if state is RigState.NO_DATA:
+            return "No data"
+        return "Wrong game settings" if self.health.wrong_format(ip, now) else "In menu"
+
+    def rig_moving(self, ip: str, now: float) -> bool:
+        """Its car is moving right now (the setup page's "which rig is which")."""
+        s = self.adapter.live_summary(ip)
+        return self.health.state(ip, now) is RigState.DRIVING and s is not None and (s.speed_kph or 0) >= 5
+
+    # --- rig edits (setup page) ---------------------------------------------------------
+
+    def rename_rig(self, ip: str, name: Any) -> Rig:
+        return self.registry.rename(ip, name)
+
+    def forget_rig(self, ip: str) -> None:
+        rig = self.registry.get(ip)
+        if rig is None:
+            raise RigError("That rig isn't there any more. Reload the page.")
+        if self.drivers.get(ip) is not None:
+            raise RigError(f"{rig.name} has a session running. End it on the staff page first.")
+        if self.health.state(ip, time.monotonic()) is not RigState.NO_DATA:
+            raise RigError(f"{rig.name} is sending data right now, so it would come straight back. "
+                           f"Close the game on that rig first.")
+        self.registry.forget(ip)
+        self.checkin.forget(ip)
+        if self.tv.pinned_rig == ip:
+            self.tv.set(pinned_rig=None)
+
+    def merge_rig(self, old_ip: str, new_ip: str) -> Rig:
+        """`new_ip` is the rig PC that used to be `old_ip`: name, colour, number, check-in code, its session and
+        the TV focus move to the new address, and the old entry is forgotten."""
+        from .core.drivers import DriverError
+        old, new = self.registry.get(old_ip), self.registry.get(new_ip)
+        if old is None or new is None:
+            raise RigError("That rig isn't there any more. Reload the page.")
+        if old is new:
+            raise RigError("Choose a different rig.")
+        if self.health.state(old_ip, time.monotonic()) is not RigState.NO_DATA:
+            raise RigError(f"{old.name} is still sending data, so it is a different PC.")
+        try:
+            self.drivers.move(old_ip, new_ip)
+        except DriverError as exc:
+            raise RigError(str(exc)) from None
+        self.checkin.move(old_ip, new_ip)
+        if old_ip in self._session_top_kph:
+            self._session_top_kph[new_ip] = self._session_top_kph.pop(old_ip)
+        if self.tv.pinned_rig == old_ip:
+            self.tv.set(pinned_rig=new_ip)
+        return self.registry.merge(old_ip, new_ip)
 
     def _active_formats(self, now: float) -> dict[str, str]:
         return {
@@ -421,6 +532,7 @@ class Hub:
                 "config_name": rig.config_name,
                 "colour": rig.colour,
                 "state": self.health.state(rig.ip, now).value,
+                "state_text": self.state_text(rig.ip, now),
                 "data_format": rig.data_format,
                 "format_supported": rig.data_format is None or self.adapter.is_supported_format(rig.data_format),
                 "session_id": rig.session_id,

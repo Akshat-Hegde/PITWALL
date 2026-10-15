@@ -101,6 +101,22 @@ class CheckinService:
         self._save()
         return code
 
+    def forget(self, rig_id: str) -> None:
+        """The rig is gone: its code (and printed sticker) stops working."""
+        codes = self._load()
+        if codes.pop(rig_id, None) is not None:
+            self._save()
+
+    def move(self, old_rig_id: str, new_rig_id: str) -> None:
+        """The rig got a new address: its code (the sticker on it) and its check-in sessions move with it."""
+        codes = self._load()
+        if old_rig_id in codes:
+            codes[new_rig_id] = codes.pop(old_rig_id)
+            self._save()
+        for rec in list(self.secrets.values()):
+            if rec.rig_id == old_rig_id:
+                rec.rig_id = new_rig_id
+
     def rig_for(self, code: str) -> str | None:
         if not code.isascii() or len(code) > 64:
             return None

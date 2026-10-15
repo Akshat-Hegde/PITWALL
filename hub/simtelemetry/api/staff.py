@@ -16,7 +16,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
 from ..core.drivers import EXTEND_PROMPT_MS, DriverError
-from ..core.feed import FeedBuilder, lan_address
+from ..core.feed import FeedBuilder
 from ..core.tv import TvError
 from ..core.wifi import wifi_share
 from ..core.health import RigState
@@ -32,7 +32,6 @@ FAILURE_WINDOW_S = 60.0
 
 STAFF_PAGE = Path(__file__).with_name("staff.html")
 PRINT_PAGE = Path(__file__).with_name("checkin_print.html")
-STATE_TEXT = {RigState.DRIVING: "On track", RigState.IN_MENU: "In menu", RigState.NO_DATA: "No data"}
 
 
 class PinGuard:
@@ -79,7 +78,7 @@ def staff_router(hub: Hub) -> APIRouter:
             "rig_name": rig.name,
             "colour": _colour(rig),
             "state": state.value,
-            "state_text": STATE_TEXT[state],
+            "state_text": hub.state_text(rig.ip, now),
             "track_name": s.track if s and state is not RigState.NO_DATA else None,
             "game_driver": rig.driver_name,
             "session": assigned.to_json() if assigned else None,
@@ -115,15 +114,16 @@ def staff_router(hub: Hub) -> APIRouter:
         """Technical diagnostics for staff only (addresses, warnings, packet rates). The TV never shows these."""
         now = time.monotonic()
         snapshot = hub.health_snapshot()
-        warnings = hub.admin_warnings() + list(status_builder.status(now)["warnings"])
-        for rig in snapshot["rigs"]:
-            if rig["state"] == RigState.NO_DATA.value:
-                warnings.append({"code": "no_data", "rig_id": rig["ip"],
-                                 "message": f"Nothing from {rig['name']} ({rig['ip']}). In F1 25 turn UDP telemetry "
-                                            f"on and drive out in Time Trial."})
+        warnings = (hub.admin_warnings() + list(status_builder.status(now)["warnings"])
+                    + hub.wrong_sender_warnings(now) + hub.silent_rig_warnings(now))
         return {"warnings": warnings, "rigs": snapshot["rigs"], "uptime_s": snapshot["uptime_s"],
                 "recorder": snapshot.get("recorder"),
-                "target": {"address": lan_address(), "port": hub.config.network.udp_port}}
+                "target": {"address": hub.hub_address(), "port": hub.config.network.udp_port}}
+
+    @router.post("/api/staff/address/ok", dependencies=[Depends(guard)])
+    def address_ok() -> dict[str, Any]:
+        """"OK, done" on the address-change warning: every rig and the stickers now use the new address."""
+        return {"address": hub.address_watch.acknowledge()}
 
     @router.get("/api/staff/tv", dependencies=[Depends(guard)])
     def tv() -> dict[str, Any]:
@@ -191,7 +191,7 @@ def staff_router(hub: Hub) -> APIRouter:
     # --- self check-in codes -------------------------------------------------------------------
 
     def code_row(rig, code: str) -> dict[str, Any]:
-        address = lan_address() or "localhost"
+        address = hub.hub_address() or "localhost"
         return {"rig_id": rig.ip, "rig_name": rig.name, "code": code,
                 "url": f"http://{address}:{hub.config.network.http_port}/checkin/{code}"}
 

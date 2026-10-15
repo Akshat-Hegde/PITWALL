@@ -143,6 +143,11 @@
     <p class="msg error" id="pin-msg" role="alert"></p>
   </form>
   <p class="msg" id="top-msg" role="status"></p>
+  <section class="panel" id="address-banner" style="border-left-color: var(--warn)" hidden>
+    <div class="title">Network address changed</div>
+    <p id="address-text"></p>
+    <div class="actions"><button class="btn primary" type="button" id="address-ok">OK, done</button></div>
+  </section>
   <section class="panel" id="director" hidden>
     <div class="row"><span class="title">Demo director</span><span class="faint">Demo mode only · for filming</span></div>
     <p class="faint">Each button puts that moment on the TV now.</p>
@@ -200,12 +205,11 @@
     </section>
     <section class="panel">
       <div class="title">Game setup</div>
-      <p class="muted">In F1 25 on each rig: Settings, Telemetry Settings. UDP Telemetry On, Broadcast Mode Off,
-        UDP Format 2025 on every rig.</p>
-      <table><tbody>
-        <tr><td>UDP IP Address</td><td class="r" id="health-ip">-</td></tr>
-        <tr><td>UDP Port</td><td class="r" id="health-port">-</td></tr>
-      </tbody></table>
+      <p>On every rig, in F1 25: Game Options › Settings › UDP Telemetry Settings: UDP Telemetry On,
+        UDP Broadcast Mode Off, UDP IP Address = <strong id="health-ip">this PC's network address</strong>,
+        UDP Port <strong id="health-port">20777</strong>, UDP Send Rate 20Hz, UDP Format 2025.
+        Your Telemetry may stay Restricted.</p>
+      <p class="muted">This includes a rig on this PC: use the address above, not 127.0.0.1.</p>
     </section>
   </section>
 
@@ -807,6 +811,9 @@
     const count = $("health-count");
     count.hidden = h.warnings.length === 0;
     count.textContent = String(h.warnings.length);
+    const moved = h.warnings.find((w) => w.code === "address_changed");
+    $("address-banner").hidden = !moved;
+    $("address-text").textContent = moved ? moved.message : "";
     const list = $("health-warnings");
     list.textContent = "";
     for (const w of h.warnings) {
@@ -824,13 +831,18 @@
     body.textContent = "";
     for (const r of h.rigs) {
       const tr = document.createElement("tr");
-      tr.append(cell(r.name), cell(r.ip), cell(r.state.replace(/_/g, " ")), cell(String(r.packets_per_s), "r"),
+      tr.append(cell(r.name), cell(r.ip), cell(r.state_text), cell(String(r.packets_per_s), "r"),
                 cell(r.last_seen_s_ago == null ? "never" : `${Math.round(r.last_seen_s_ago)} s ago`, "r"));
       body.appendChild(tr);
     }
-    $("health-ip").textContent = h.target.address || "this PC's IP address";
+    $("health-ip").textContent = h.target.address || "this PC's network address (not found: check the network cable or Wi-Fi)";
     $("health-port").textContent = String(h.target.port);
   }
+  $("address-ok").addEventListener("click", async () => {
+    try { await api("POST", "/api/staff/address/ok"); $("address-banner").hidden = true; loadHealth(); }
+    catch (err) { fail($("top-msg"), err); }
+    $("address-ok").blur();
+  });
 
   // --- TV page -------------------------------------------------------------------------------
   let tv = null;

@@ -11,8 +11,10 @@ with its own seq counter and its own "what did this client already see" state.
 
 from __future__ import annotations
 
+import ipaddress
 import re
 import time
+from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
 from .. import __version__
@@ -38,18 +40,55 @@ _NULL_SESSION: dict[str, Any] = {"session_id": None, "track_key": None, "track_n
                                  "air_temp_c": None, "track_temp_c": None}
 
 
-def lan_address() -> str | None:
-    """This PC's address on the local network (the one games should send telemetry to)."""
+def lan_address(peers: Iterable[str] = ()) -> str | None:
+    """This PC's address on the local network (the one games should send telemetry to).
+
+    The address of the default route's interface; when that is missing or loopback (no default gateway), the
+    private IPv4 address on the same network as the rigs (`peers`: their source addresses), else the first one.
+    """
+    address = _default_route_address()
+    if address and not address.startswith(("127.", "0.")):
+        return address
+    local = _private_addresses()
+    for peer in peers:
+        try:
+            ip = ipaddress.IPv4Address(peer)
+        except ValueError:
+            continue
+        if ip.is_loopback:
+            continue
+        match = next((a for a in local if ip in ipaddress.IPv4Network(f"{a}/24", strict=False)), None)
+        if match:
+            return match
+    return local[0] if local else None
+
+
+def _default_route_address() -> str | None:
     import socket
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         sock.connect(("192.0.2.1", 9))  # no packet is sent; this only picks the outgoing interface
-        address = sock.getsockname()[0]
-        return None if address.startswith(("127.", "0.")) else address
+        return sock.getsockname()[0]
     except OSError:
         return None
     finally:
         sock.close()
+
+
+def _private_addresses() -> list[str]:
+    """This PC's private IPv4 addresses (not loopback or link-local), in the order Windows lists them."""
+    import socket
+    try:
+        infos = socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET)
+    except OSError:
+        return []
+    out: list[str] = []
+    for info in infos:
+        address = str(info[4][0])
+        ip = ipaddress.IPv4Address(address)
+        if ip.is_private and not ip.is_loopback and not ip.is_link_local and address not in out:
+            out.append(address)
+    return out
 
 
 def car_detail(s, driving: bool) -> dict[str, Any]:
@@ -245,18 +284,19 @@ class FeedBuilder:
         warnings: list[dict[str, Any]] = []
         if len(set(formats.values())) > 1:
             warnings.append({"code": "format_mismatch", "rig_id": None,
-                             "message": "Rigs send different UDP formats ("
-                                        + " and ".join(sorted(set(formats.values()))) + ")"})
+                             "message": "Rigs are set to different UDP Format settings ("
+                                        + " and ".join(sorted(set(formats.values())))
+                                        + "): set UDP Format to 2025 on every rig."})
         for rig in hub.registry.all():
             if rig.data_format and not hub.adapter.is_supported_format(rig.data_format) \
                     and hub.health.state(rig.ip, now) is not RigState.NO_DATA:
                 warnings.append({"code": "format_unsupported", "rig_id": rig.ip,
-                                 "message": f"{rig.name} sends UDP format {rig.data_format}, "
-                                            f"which the hub can't read"})
+                                 "message": f"{rig.name} is sending telemetry in the wrong format: "
+                                            f"set UDP Format to 2025."})
             if self._size_mismatch_recent(rig.ip, now):
                 warnings.append({"code": "size_mismatch", "rig_id": rig.ip,
-                                 "message": f"{rig.name} sends packets of unexpected size; "
-                                            f"check its UDP format setting"})
+                                 "message": f"{rig.name} is sending telemetry the hub can't read: "
+                                            f"set UDP Format to 2025."})
         for shadow in hub.port_shadows:
             warnings.append({"code": "port_shadowed", "rig_id": None, "message": shadow})
         recorder = None
@@ -292,7 +332,7 @@ class FeedBuilder:
         frame = self.frame_body(now)
         return {
             "hub": {"version": __version__, "games": [self.hub.adapter.game], "frame_hz": self.frame_hz,
-                    "udp_port": self.hub.config.network.udp_port, "lan_address": lan_address(),
+                    "udp_port": self.hub.config.network.udp_port, "lan_address": self.hub.hub_address(),
                     "steering_rotation_deg": self.hub.config.dashboard.steering_wheel_rotation_deg,
                     "features": self.hub.config.features.model_dump(),
                     "moments": {"battle_margin_ms": self.hub.config.moments.battle_margin_ms},

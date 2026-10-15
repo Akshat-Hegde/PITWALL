@@ -224,7 +224,7 @@ def test_palette_has_twelve_distinct_colours():
 
 async def test_status_warnings(tmp_path):
     hub = make_hub(tmp_path)
-    await feed(hub, driving_rig(RIG_A, fmt=2025) + driving_rig(RIG_B, fmt=2026))
+    await feed(hub, driving_rig(RIG_A, fmt=2025) + driving_rig(RIG_B, fmt=2026) + [(RIG_C, motion(2025, 0x11, 0, 0))])
     bad = bytearray(motion(2025, 0x11, 0, 0))[:-3]
     hub.on_datagram(bytes(bad), RIG_C, 0.0)       # wrong size
     unsupported = bytearray(motion(2025, 0x11, 0, 0))
@@ -235,13 +235,16 @@ async def test_status_warnings(tmp_path):
     assert status["formats"] == {RIG_A: "2025", RIG_B: "2026", RIG_C: "2024"}
     codes = [(w["code"], w["rig_id"]) for w in status["warnings"]]
     assert codes == [("format_mismatch", None), ("format_unsupported", RIG_C), ("size_mismatch", RIG_C)]
-    assert status["warnings"][0]["message"] == "Rigs send different UDP formats (2024 and 2025 and 2026)"
+    assert status["warnings"][0]["message"] == ("Rigs are set to different UDP Format settings (2024 and 2025 and 2026):"
+                                                " set UDP Format to 2025 on every rig.")
+    assert status["warnings"][1]["message"] == "Rig 3 is sending telemetry in the wrong format: set UDP Format to 2025."
     assert status["recorder"] is None
 
 
 def test_size_mismatch_warning_expires(tmp_path):
     hub = make_hub(tmp_path)
-    hub.on_datagram(bytes(motion(2025, 0x11, 0, 0))[:-3], RIG_A, 0.0)
+    hub.on_datagram(bytes(motion(2025, 0x11, 0, 0)), RIG_A, 0.0)          # a rig (a valid packet) ...
+    hub.on_datagram(bytes(motion(2025, 0x11, 0, 0))[:-3], RIG_A, 0.0)     # ... then a wrong size
     builder = FeedBuilder(hub)
     t = time.monotonic()
     assert [w["code"] for w in builder.status(t)["warnings"]] == ["size_mismatch"]

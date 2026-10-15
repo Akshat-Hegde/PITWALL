@@ -9,13 +9,16 @@ import hashlib
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, Header, HTTPException, Request, UploadFile
+import time
+
+from fastapi import APIRouter, Body, Header, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import ValidationError
 
 from .. import brand
-from ..core.feed import lan_address
+from ..core.feed import rig_colour
 from ..core.pins import is_hashed
+from ..core.rigs import RigError
 from ..core.settings import CafeSettings, SettingsStore, apply_settings
 from ..core.setup_code import SetupCode, SetupLocked
 from .owner import OWNER_PIN_HEADER
@@ -72,10 +75,57 @@ def setup_router(hub: Hub) -> APIRouter:
             "wifi_ssid": c.cafe.wifi_ssid, "wifi_security": c.cafe.wifi_security,   # never the password
             "accent": c.cafe.branding.get("--brand-accent", "#E10600"),
             "open_hour": c.owner.open_hour, "close_hour": c.owner.close_hour,
-            "hub_address": lan_address(), "http_port": c.network.http_port, "udp_port": c.network.udp_port,
-            "rigs": [{"rig_id": r.ip, "name": r.name} for r in hub.registry.all()],
-            "warnings": [{"code": w["code"], "message": w["message"]} for w in hub.admin_warnings()],
+            "hub_address": hub.hub_address(), "http_port": c.network.http_port, "udp_port": c.network.udp_port,
+            "rigs": rig_rows(),
+            "warnings": [{"code": w["code"], "message": w["message"]}
+                         for w in hub.admin_warnings() + hub.wrong_sender_warnings()],
         }
+
+    def rig_rows() -> list[dict[str, Any]]:
+        now = time.monotonic()
+        return [{"rig_id": r.ip, "name": r.name, "number": r.auto_name, "custom_name": r.custom_name,
+                 "colour": rig_colour(r), "address": r.ip, "state_text": hub.state_text(r.ip, now),
+                 "moving": hub.rig_moving(r.ip, now), "has_session": hub.drivers.get(r.ip) is not None}
+                for r in hub.registry.all()]
+
+    def rig_edit(fn, *args) -> dict[str, Any]:
+        try:
+            fn(*args)
+        except RigError as exc:
+            raise HTTPException(400, str(exc)) from None
+        return {"rigs": rig_rows()}
+
+    @router.get("/api/setup/rigs")
+    def rigs() -> dict[str, Any]:
+        """The rig list with "moving now", polled by the setup page to tell which rig is which."""
+        return {"rigs": rig_rows()}
+
+    @router.put("/api/setup/rigs/{rig_id}")
+    def rename_rig(request: Request, rig_id: str, body: dict[str, Any] = Body(...),
+                   x_setup_code: str | None = Header(None)) -> dict[str, Any]:
+        """{"name": "..."}: up to 16 characters, shown on the TV; empty goes back to the rig's number."""
+        guard(request, x_setup_code)
+        return rig_edit(hub.rename_rig, rig_id, body.get("name"))
+
+    @router.delete("/api/setup/rigs/{rig_id}")
+    def forget_rig(request: Request, rig_id: str, x_setup_code: str | None = Header(None)) -> dict[str, Any]:
+        """Forget a rig that no longer exists (and its check-in code)."""
+        guard(request, x_setup_code)
+        return rig_edit(hub.forget_rig, rig_id)
+
+    @router.post("/api/setup/rigs/{rig_id}/same-as")
+    def same_rig_as(request: Request, rig_id: str, body: dict[str, Any] = Body(...),
+                    x_setup_code: str | None = Header(None)) -> dict[str, Any]:
+        """{"old": rig_id}: this rig is the PC that used to be `old` (it got a new address)."""
+        guard(request, x_setup_code)
+        return rig_edit(hub.merge_rig, str(body.get("old") or ""), rig_id)
+
+    @router.post("/api/setup/address/ok")
+    def address_ok(request: Request, x_setup_code: str | None = Header(None)) -> dict[str, Any]:
+        """"OK, done" on the address-change warning."""
+        guard(request, x_setup_code)
+        hub.address_watch.acknowledge()
+        return state()
 
     @router.post("/api/setup")
     def save(request: Request, body: dict[str, Any], x_setup_code: str | None = Header(None)) -> dict[str, Any]:

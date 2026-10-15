@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 
 import pytest
 from fastapi.testclient import TestClient
@@ -172,10 +173,16 @@ async def test_staff_health_has_the_diagnostics_the_tv_never_shows(tmp_path):
     hub, client = await client_with_rig(tmp_path)
     hub.port_shadows = ["simpro3.exe also listens on 127.0.0.1:20777"]
     hub.registry.see("192.168.1.99", 0.0, None, None)              # a rig the hub has no data from
+    hub.wall_clock = lambda: dt.datetime(2026, 10, 15, 14, 0)         # open (10 to 22)
+    hub.started_at -= 700                                            # silent for over 10 minutes
     h = client.get("/api/staff/health").json()
     assert {r["ip"] for r in h["rigs"]} >= {RIG}
     codes = [w["code"] for w in h["warnings"]]
     assert "port_shadowed" in codes
-    assert any(w["code"] == "no_data" and "192.168.1.99" in w["message"] for w in h["warnings"])
+    silent = [w for w in h["warnings"] if w["code"] == "no_data"]
+    assert [w["rig_id"] for w in silent] == ["192.168.1.99"]
+    assert silent[0]["message"].startswith(f"On {hub.registry.get('192.168.1.99').name} check: UDP Telemetry On · "
+                                           f"UDP IP Address = ")
+    assert silent[0]["message"].endswith(" · Port 20777 · Format 2025, then drive out of the garage.")
     assert h["target"]["port"] == hub.config.network.udp_port
     assert "tab-health" in client.get("/staff").text

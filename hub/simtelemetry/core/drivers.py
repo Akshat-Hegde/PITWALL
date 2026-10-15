@@ -135,6 +135,16 @@ class DriverRegistry:
         del self._current[rig_id]
         return True
 
+    def move(self, old_rig_id: str, new_rig_id: str) -> bool:
+        """Move the open session from one rig id to another (the rig got a new address); False if none."""
+        if old_rig_id not in self._current:
+            return False
+        if new_rig_id in self._current:
+            raise DriverError("Both rigs have a session. End one of them first.")
+        self._store.move_driver_session(old_rig_id, new_rig_id)
+        self._current[new_rig_id] = self._current.pop(old_rig_id)
+        return True
+
     def get(self, rig_id: str) -> Assignment | None:
         return self._current.get(rig_id)
 

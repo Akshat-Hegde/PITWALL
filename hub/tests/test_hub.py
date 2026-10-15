@@ -91,11 +91,11 @@ async def test_size_mismatch_counted_not_decoded(tmp_path):
     assert sum(h.totals.values()) == 0
 
 
-async def test_unsupported_format_registered_and_flagged(tmp_path):
+async def test_unsupported_format_of_a_known_rig_is_flagged(tmp_path):
     hub = make_hub(tmp_path)
     pkt = bytearray(motion(2025))
     struct.pack_into("<H", pkt, 0, 2024)
-    await feed(hub, [(RIG_A, bytes(pkt))])
+    await feed(hub, [(RIG_A, motion(2025)), (RIG_A, bytes(pkt))])
     snap = hub.health_snapshot()["rigs"][0]
     assert snap["data_format"] == "2024"
     assert snap["format_supported"] is False

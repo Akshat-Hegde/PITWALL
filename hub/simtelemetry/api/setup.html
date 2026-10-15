@@ -71,6 +71,16 @@
   .warn { color: var(--warn); font-size: 0.9rem; margin-top: 8px; }
   ul.list { list-style: none; margin: 8px 0 0; padding: 0; }
   ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
+  ul.list li.warn-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  ul.list li.warn-row span { flex: 1; min-width: 12em; }
+  .rig { display: flex; gap: 10px; align-items: flex-start; }
+  .rig .dot { flex: none; width: 14px; height: 14px; margin-top: 14px; }
+  .rig .grow { flex: 1; min-width: 0; }
+  .rigrow { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+  .rigrow input, .rigrow select { flex: 1; min-width: 10em; width: auto; }
+  .rigrow .btn { padding: 9px 12px; }
+  .moving { color: var(--ok); font-weight: 800; }
+  button.btn.danger { color: var(--error); border-color: rgba(255, 107, 107, 0.4); background: none; }
   [hidden] { display: none !important; }
   @media (max-width: 440px) { .grid2 { grid-template-columns: 1fr; } }
 </style>
@@ -152,11 +162,19 @@
     <section class="panel">
       <div class="title">Rigs</div>
       <div class="rigbox">
-        On each rig in F1 25 (Settings, Telemetry): UDP telemetry on, UDP IP address
-        <strong id="hub-ip"></strong>, port <strong id="udp-port"></strong>, format 2025.
+        On every rig, in F1 25: Game Options › Settings › UDP Telemetry Settings: UDP Telemetry On,
+        UDP Broadcast Mode Off, UDP IP Address = <strong id="hub-ip"></strong>, UDP Port <strong id="udp-port"></strong>,
+        UDP Send Rate 20Hz, UDP Format 2025. Your Telemetry may stay Restricted.
+        <div class="muted">This includes a rig on this PC: use the address above, not 127.0.0.1.</div>
       </div>
       <div class="warn">Reserve this address for the hub PC in your router (DHCP reservation), or rigs lose the hub when the router restarts.</div>
+      <p class="muted">A rig appears here once it sends telemetry. Not sure which rig is which? Drive on one rig:
+        the rig whose car is moving right now says <span class="moving">Moving now</span>.
+        Names show on the TV (up to 16 characters).</p>
+      <p class="muted">If a rig PC gets a new address it shows up as a new rig. On the new one choose
+        "Same rig as…" and its old entry: the name, colour, number and check-in sticker move over.</p>
       <ul class="list" id="rigs"></ul>
+      <div class="msg" id="rig-msg" role="status"></div>
     </section>
 
     <div class="actions">
@@ -215,9 +233,7 @@
     $("product").textContent = s.product;
     document.title = "Setup " + s.product;
     $("code-panel").hidden = !s.needs_code;
-    const warnings = s.warnings || [];
-    $("warnings-panel").hidden = warnings.length === 0;
-    $("warnings").replaceChildren(...warnings.map((w) => { const li = document.createElement("li"); li.className = "warn"; li.textContent = w.message; return li; }));
+    renderWarnings(s.warnings || []);
     // Once set up, the PINs are never sent back: blank means "keep the current PIN".
     $("owner-pin").required = !s.has_settings;
     $("owner-pin-label").textContent = s.has_settings ? "Owner PIN (leave blank to keep the current PIN)" : "Owner PIN (4 to 8 digits)";
@@ -236,11 +252,117 @@
     $("open").value = s.open_hour;
     $("close").value = s.close_hour;
     pickAccent(s.accent);
-    $("hub-ip").textContent = s.hub_address;
+    $("hub-ip").textContent = s.hub_address || "this PC's network address (not found: check the network cable or Wi-Fi)";
     $("udp-port").textContent = s.udp_port;
-    $("rigs").replaceChildren(...s.rigs.map((r) => { const li = document.createElement("li"); li.textContent = r.name; return li; }));
-    if (!s.rigs.length) { const li = document.createElement("li"); li.className = "muted"; li.textContent = "No rigs have sent data yet."; $("rigs").appendChild(li); }
+    renderRigs(s.rigs, true);
     showLogo();
+  }
+
+  function renderWarnings(warnings) {
+    $("warnings-panel").hidden = warnings.length === 0;
+    $("warnings").replaceChildren(...warnings.map((w) => {
+      const li = document.createElement("li");
+      li.className = "warn warn-row";
+      const text = document.createElement("span");
+      text.textContent = w.message;
+      li.appendChild(text);
+      if (w.code === "address_changed") {
+        const ok = document.createElement("button");
+        ok.type = "button"; ok.className = "btn"; ok.textContent = "OK, done";
+        ok.addEventListener("click", async () => {
+          ok.disabled = true;
+          const r = await call("/api/setup/address/ok", { method: "POST" });
+          if (r.ok) { const s = await r.json(); renderWarnings(s.warnings || []); $("hub-ip").textContent = s.hub_address || ""; }
+          else { ok.disabled = false; say($("rig-msg"), await detail(r), "error"); }
+        });
+        li.appendChild(ok);
+      }
+      return li;
+    }));
+  }
+
+  // --- rig editor (owner PIN): rename, forget, "same rig as…", and which rig is moving ----------
+  let rigKey = "";
+  function rigEditing() {
+    const el = document.activeElement;
+    return !!el && $("rigs").contains(el) && (el.tagName === "INPUT" || el.tagName === "SELECT");
+  }
+  function renderRigs(rigs, force) {
+    const key = JSON.stringify(rigs.map((r) => [r.rig_id, r.name, r.colour]));
+    if (!force && key === rigKey) {
+      for (const r of rigs) {                       // same rigs: only refresh what they're doing
+        const li = $("rigs").querySelector(`li[data-rig="${CSS.escape(r.rig_id)}"]`);
+        if (!li) continue;
+        li.querySelector(".state").textContent = r.state_text;
+        li.querySelector(".moving").hidden = !r.moving;
+      }
+      return;
+    }
+    if (!force && rigEditing()) return;           // don't pull the list away from someone typing
+    rigKey = key;
+    $("rigs").replaceChildren(...rigs.map((r) => rigItem(r, rigs)));
+    if (!rigs.length) {
+      const li = document.createElement("li"); li.className = "muted"; li.textContent = "No rigs have sent data yet.";
+      $("rigs").appendChild(li);
+    }
+  }
+  function button(text, cls, onClick) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "btn" + (cls ? " " + cls : ""); b.textContent = text;
+    b.addEventListener("click", onClick);
+    return b;
+  }
+  function rigItem(r, rigs) {
+    const li = document.createElement("li");
+    li.className = "rig"; li.dataset.rig = r.rig_id;
+    const dot = document.createElement("span"); dot.className = "dot"; dot.style.background = r.colour;
+    const grow = document.createElement("div"); grow.className = "grow";
+    const nameRow = document.createElement("div"); nameRow.className = "rigrow";
+    const name = document.createElement("input");
+    name.maxLength = 16; name.value = r.name; name.setAttribute("aria-label", "Name of " + r.name);
+    name.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); rename(); } });
+    const rename = () => rigCall("PUT", r.rig_id, { name: name.value.trim() }, "Saved: the TV shows the new name in a few seconds.");
+    nameRow.append(name, button("Rename", "", rename));
+    const info = document.createElement("div"); info.className = "muted";
+    const state = document.createElement("span"); state.className = "state"; state.textContent = r.state_text;
+    const moving = document.createElement("strong"); moving.className = "moving"; moving.textContent = " Moving now"; moving.hidden = !r.moving;
+    info.append(`${r.number} · ${r.address} · `, state, moving);
+    const editRow = document.createElement("div"); editRow.className = "rigrow";
+    const others = rigs.filter((o) => o.rig_id !== r.rig_id);
+    if (others.length) {
+      const same = document.createElement("select");
+      same.setAttribute("aria-label", "Same rig as");
+      same.add(new Option("Same rig as…", ""));
+      for (const o of others) same.add(new Option(`${o.name} (${o.address})`, o.rig_id));
+      const move = button("Move here", "", () => {
+        const old = others.find((o) => o.rig_id === same.value);
+        if (!old) { say($("rig-msg"), "Choose the rig's old entry first.", "error"); return; }
+        if (!confirm(`${r.address} is the same rig as ${old.name}? ${old.name}'s name, colour, number and check-in sticker move here, and the old entry is removed.`)) return;
+        rigCall("POST", r.rig_id + "/same-as", { old: old.rig_id }, `Done: ${old.name} is now at ${r.address}.`);
+      });
+      editRow.append(same, move);
+    }
+    editRow.append(button("Forget", "danger", () => {
+      if (!confirm(`Forget ${r.name}? Use this for a rig that no longer exists. Its check-in sticker stops working.`)) return;
+      rigCall("DELETE", r.rig_id, null, `${r.name} forgotten.`);
+    }));
+    grow.append(nameRow, info, editRow);
+    li.append(dot, grow);
+    return li;
+  }
+  async function rigCall(method, path, body, done) {
+    const init = { method };
+    if (body) { init.headers = { "Content-Type": "application/json" }; init.body = JSON.stringify(body); }
+    const r = await call("/api/setup/rigs/" + path, init);
+    if (r.ok) { const d = await r.json(); state.rigs = d.rigs; renderRigs(d.rigs, true); say($("rig-msg"), done, "ok"); }
+    else say($("rig-msg"), await detail(r), "error");
+  }
+  async function pollRigs() {
+    try {
+      const r = await fetch("/api/setup/rigs");
+      if (r.ok) { const d = await r.json(); if (state) state.rigs = d.rigs; renderRigs(d.rigs, false); }
+    } catch { /* the hub is restarting: try again shortly */ }
+    setTimeout(pollRigs, 3000);
   }
 
   async function load() {
@@ -305,7 +427,7 @@
 
   hours();
   swatches();
-  load();
+  load().then(() => setTimeout(pollRigs, 3000));
 })();
 </script>
 </body>
