@@ -49,12 +49,14 @@ class F1Adapter:
         self._session_of: dict[str, str | None] = {}
         self._laps: dict[str, F1LapTracker] = {}
         self._slides: dict[str, SlideDetector] = {}
+        self._paused: dict[str, bool] = {}      # game paused or spectating (from the Session packet): not driving
 
     def check(self, data: bytes, source: str) -> Checked:
         result = self._gate.check(data, source)
         header = result.header
         data_format = str(header.packet_format) if header else None
-        session_id = f"{header.session_uid:016x}" if header else None
+        # Session UID 0 is not a real session (menus): it never starts or ends one.
+        session_id = f"{header.session_uid:016x}" if header and header.session_uid else None
         if isinstance(result, Accepted):
             return Checked(ok=True, label=PACKET_LABELS[result.packet_id], data_format=data_format,
                            session_id=session_id, payload=result)
@@ -62,22 +64,28 @@ class F1Adapter:
 
     def decode(self, checked: Checked, data: bytes, source: str) -> DecodeResult:
         packet = decode(checked.payload, data)
-        if self._session_of.get(source, checked.session_id) != checked.session_id:
-            self._live.pop(source, None)  # new game session: nothing from the old one carries over
-            self._slides.pop(source, None)
-        self._session_of[source] = checked.session_id
+        session_id = checked.session_id
+        if session_id is not None:
+            previous = self._session_of.get(source)
+            if previous is not None and previous != session_id:
+                self._live.pop(source, None)  # a different real session: nothing from the old one carries over
+                self._slides.pop(source, None)
+                self._paused.pop(source, None)
+            self._session_of[source] = session_id
         live = self._live.setdefault(source, LiveSummary())
         result = DecodeResult()
         if packet is not None and hasattr(packet, "header"):
             tracker = self._laps.setdefault(source, F1LapTracker())
-            result.lap_events = tracker.on_packet(packet, packet.header.session_uid)
+            uid = packet.header.session_uid or tracker.session_uid or 0   # UID 0 (menus) keeps the current session
+            result.lap_events = tracker.on_packet(packet, uid)
             result.lap_update = isinstance(packet, LapData)
         if isinstance(packet, Motion):
             live.position = (packet.position[0], packet.position[2])
             live.g_lat = round(packet.g_force_lateral, 2)
             live.g_long = round(packet.g_force_longitudinal, 2)
-            result.driving = True
+            result.driving = not self._paused.get(source, False)   # paused or spectating is not driving
         elif isinstance(packet, Session):
+            self._paused[source] = packet.game_paused or packet.is_spectating
             live.track = track_name(packet.track_id, self._track_overrides)
             live.track_key = f"{self.game}:{packet.track_id}" if packet.track_id >= 0 else None
             live.track_length_m = float(packet.track_length) if packet.track_length else None

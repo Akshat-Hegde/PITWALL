@@ -459,3 +459,58 @@ def test_cafe_message_on_branding_change(tmp_path):
     hub.config.cafe.name, hub.config.cafe.logo = "Lap Lab", "logo.png"
     (msg,) = [m for m in conn.tick(0.0) if m["type"] == "cafe"]
     assert msg["cafe"]["name"] == "Lap Lab" and msg["cafe"]["logo"] == "/api/cafe/logo?v=logo.png"
+
+
+# --- K7: pause, spectating and gaps ---------------------------------------------------------
+
+def paused_session(fmt, uid, paused=0, spectating=0):
+    pkt = bytearray(session(fmt, uid))
+    set_fields(pkt, FORMATS[fmt].packets[PacketId.SESSION], 0, m_gamePaused=paused, m_isSpectating=spectating)
+    return bytes(pkt)
+
+
+@pytest.mark.parametrize("flags", [{"paused": 1}, {"spectating": 1}])
+async def test_paused_or_spectating_rig_is_not_driving(tmp_path, flags):
+    hub = make_hub(tmp_path)
+    await feed(hub, driving_rig(RIG_A))
+    driving_at = hub.health.get(RIG_A).last_driving
+    await feed(hub, [(RIG_A, paused_session(2025, 0x11, **flags)), (RIG_A, motion(2025, 0x11, 1.0, 2.0))])
+    assert hub.health.get(RIG_A).last_driving == driving_at       # Motion while paused/spectating isn't driving
+    assert hub.health.state(RIG_A, driving_at + 3).value == "in_menu_paused"
+    # Back in the car: Motion counts as driving again.
+    hub.health.get(RIG_A).last_driving = None
+    await feed(hub, [(RIG_A, paused_session(2025, 0x11)), (RIG_A, motion(2025, 0x11, 1.0, 2.0))])
+    assert hub.health.get(RIG_A).last_driving is not None
+
+
+async def test_paused_motion_is_not_a_driving_packet(tmp_path):
+    hub = make_hub(tmp_path)
+    await feed(hub, [(RIG_A, paused_session(2025, 0x11, paused=1)), (RIG_A, motion(2025, 0x11, 1.0, 2.0))])
+    assert hub.health.get(RIG_A).last_driving is None
+    assert hub.health.state(RIG_A, last_seen(hub)).value == "in_menu_paused"
+
+
+async def test_packet_gap_sends_no_session_changed(tmp_path):
+    hub = make_hub(tmp_path)
+    await feed(hub, driving_rig(RIG_A))
+    conn = FeedConnection(FeedBuilder(hub))
+    t = last_seen(hub)
+    conn.start(t)
+    # Silent for 10 s: the rig is no_data, but that is not a new game session.
+    assert "session_changed" not in [m["type"] for m in conn.tick(t + 10)]
+    # Packets again from the same session: still no session_changed.
+    await feed(hub, driving_rig(RIG_A))
+    assert "session_changed" not in [m["type"] for m in conn.tick(last_seen(hub))]
+    # A different real session after the gap is a change.
+    await feed(hub, [(RIG_A, session(2025, 0x99, track_id=10))])
+    msgs = [m for m in conn.tick(last_seen(hub)) if m["type"] == "session_changed"]
+    assert len(msgs) == 1 and msgs[0]["session"]["session_id"] == f"{0x99:016x}"
+
+
+async def test_session_uid_zero_keeps_live_state(tmp_path):
+    hub = make_hub(tmp_path)
+    await feed(hub, driving_rig(RIG_A, uid=0x11))
+    await feed(hub, [(RIG_A, motion(2025, 0, 1.0, 2.0))])      # a packet with no real session
+    rig = FeedBuilder(hub).frame_body(last_seen(hub))["rigs"][0]
+    assert rig["session"]["session_id"] == f"{0x11:016x}" and rig["session"]["track_key"] == "F1:7"
+    assert rig["speed_kph"] == 287

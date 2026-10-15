@@ -320,7 +320,7 @@ class FeedConnection:
         self._clock = clock
         self.seq = 0
         self._rig_infos: dict[str, dict[str, Any]] = {}
-        self._sessions: dict[str, dict[str, Any]] = {}
+        self._sessions: dict[str, str] = {}                   # rig -> last real game session id sent
         self._status: dict[str, Any] | None = None
         self._status_at = float("-inf")
         self._message_id = 0                                  # last lap book message sent
@@ -340,7 +340,8 @@ class FeedConnection:
     def start(self, now: float) -> dict[str, Any]:
         body = self.builder.snapshot_body(now)
         self._rig_infos = {r["rig_id"]: r for r in body["rigs"]}
-        self._sessions = {f["rig_id"]: f["session"] for f in body["frame"]["rigs"]}
+        self._sessions = {f["rig_id"]: f["session"]["session_id"] for f in body["frame"]["rigs"]
+                          if f["session"]["session_id"] is not None}
         self._status, self._status_at = body["status"], now
         laps = self.builder.hub.laps
         self._message_id = laps.last_message_id
@@ -360,9 +361,15 @@ class FeedConnection:
                 out.append(self._message("rig_info", {"rig": info}))
         frame = self.builder.frame_body(now)
         for rig in frame["rigs"]:
-            if rig["rig_id"] in self._sessions and self._sessions[rig["rig_id"]] != rig["session"]:
+            # Only a different real game session is a change: a gap in packets (no data, session null) is not,
+            # so the TV keeps the rig's trails and laps across it.
+            session_id = rig["session"]["session_id"]
+            if session_id is None:
+                continue
+            last = self._sessions.get(rig["rig_id"])
+            if last is not None and last != session_id:
                 out.append(self._message("session_changed", {"rig_id": rig["rig_id"], "session": rig["session"]}))
-            self._sessions[rig["rig_id"]] = rig["session"]
+            self._sessions[rig["rig_id"]] = session_id
         laps = self.builder.hub.laps
         for message_id, type_, body in laps.messages_after(self._message_id):
             self._message_id = message_id
