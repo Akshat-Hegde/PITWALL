@@ -68,3 +68,15 @@ def final_classification_packet(packet_format: int, *, player: int = 3, cars: di
                          v["position"], v["laps"], v["grid"], v["points"], v["pits"], v["status"], v["reason"],
                          v["best_ms"], v["total_s"], v["pen_s"], v["num_pen"], v["stints"], *([0] * 24))
     return pkt
+
+
+# --- staff page: a PIN is always required ----------------------------------------------------------------
+
+STAFF_PIN = "1357"
+STAFF = {"X-Staff-Pin": STAFF_PIN}
+
+
+def staff_ready(hub):
+    """Give the hub a staff PIN (the staff page never runs without one); send STAFF as the client's headers."""
+    hub.config.staff.pin = STAFF_PIN
+    return hub

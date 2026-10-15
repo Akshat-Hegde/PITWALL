@@ -10,6 +10,8 @@ from simtelemetry.core.rigs import RigRegistry
 from simtelemetry.hub import Hub
 from simtelemetry.tools.demo_sim import TRACK_ID, DemoSimulator, rig_ip
 
+from f1_helpers import STAFF, staff_ready
+
 
 async def test_simulated_rigs_drive_the_real_pipeline(tmp_path):
     config = AppConfig(data_dir=tmp_path, track_names={TRACK_ID: "Demo Circuit"})
@@ -47,7 +49,7 @@ async def test_demo_director_triggers_every_moment(tmp_path):
     config = AppConfig(data_dir=tmp_path / "demo", track_names={TRACK_ID: "Demo Circuit"})
     hub = Hub(config, F1Adapter(config.track_names), RigRegistry(config, tmp_path / "rigs.json"),
               store=LapStore(tmp_path / "demo" / "laps.db"))
-    client = TestClient(create_app(hub, dashboard_dir=tmp_path / "none"))
+    client = TestClient(create_app(staff_ready(hub), dashboard_dir=tmp_path / "none"), headers=STAFF)
     assert client.get("/api/staff/rigs").json()["demo"] is False
     assert client.post("/api/staff/demo/podium").status_code == 404     # only in demo mode
 

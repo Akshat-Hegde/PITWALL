@@ -12,6 +12,7 @@ from simtelemetry.api.app import create_app
 from simtelemetry.core.checkin import CheckinSession
 from simtelemetry.core.names import is_blocked
 
+from f1_helpers import STAFF, staff_ready
 from test_drivers import RIG, client_with_rig, feed, lap_packets, make_hub
 from test_feed import participants, session
 
@@ -34,7 +35,7 @@ def post(client, code, name="Maya", ip=None):
 async def test_free_rig_starts_a_session_and_laps_go_under_the_name(tmp_path):
     hub = make_hub(tmp_path)
     await feed(hub, [session(2025, UID), participants(2025, UID, b"Akshat")])
-    client = TestClient(create_app(hub, dashboard_dir=tmp_path / "none"))
+    client = TestClient(create_app(staff_ready(hub), dashboard_dir=tmp_path / "none"), headers=STAFF)
     code = client.get("/api/staff/checkin/codes").json()["rigs"][0]["code"]
 
     assert client.get(f"/api/checkin/{code}").json() == {"rig_name": "Rig 1", "state": "free", "laps": 0}
@@ -71,7 +72,7 @@ async def test_busy_rig_is_409_and_leaks_no_name(tmp_path):
 async def test_idle_takeover_after_120_s_makes_the_previous_card(tmp_path):
     hub = make_hub(tmp_path)
     await feed(hub, [session(2025, UID), participants(2025, UID, b"Akshat")])
-    client = TestClient(create_app(hub, dashboard_dir=tmp_path / "none"))
+    client = TestClient(create_app(staff_ready(hub), dashboard_dir=tmp_path / "none"), headers=STAFF)
     code = client.get("/api/staff/checkin/codes").json()["rigs"][0]["code"]
     hub.drivers._clock = lambda: time.time() - 600          # Maya's session began 10 minutes ago
     first = post(client, code, "Maya").json()
@@ -135,7 +136,7 @@ async def test_an_idle_staff_session_stays_busy_and_cannot_be_taken_over(tmp_pat
 async def test_an_idle_checkin_session_is_taken_over_and_the_old_card_is_recorded(tmp_path):
     hub = make_hub(tmp_path)
     await feed(hub, [session(2025, UID), participants(2025, UID, b"Akshat")])
-    client = TestClient(create_app(hub, dashboard_dir=tmp_path / "none"))
+    client = TestClient(create_app(staff_ready(hub), dashboard_dir=tmp_path / "none"), headers=STAFF)
     code = client.get("/api/staff/checkin/codes").json()["rigs"][0]["code"]
     hub.drivers._clock = lambda: time.time() - 600
     first = post(client, code, "Maya").json()
@@ -163,7 +164,7 @@ async def test_a_session_staff_just_started_is_not_taken_over(tmp_path):
 async def test_done_gives_the_card_url_and_a_wrong_secret_is_403(tmp_path):
     hub = make_hub(tmp_path)
     await feed(hub, [session(2025, UID), participants(2025, UID, b"Akshat")])
-    client = TestClient(create_app(hub, dashboard_dir=tmp_path / "none"))
+    client = TestClient(create_app(staff_ready(hub), dashboard_dir=tmp_path / "none"), headers=STAFF)
     code = client.get("/api/staff/checkin/codes").json()["rigs"][0]["code"]
     secret = post(client, code, "Maya").json()["secret"]
     await feed(hub, lap_packets(1, 89000, [LAP1], 10.0))
@@ -305,7 +306,7 @@ async def test_non_ascii_codes_are_just_invalid(tmp_path):
 async def test_staff_ending_the_session_keeps_the_card_link(tmp_path):
     hub = make_hub(tmp_path)
     await feed(hub, [session(2025, UID), participants(2025, UID, b"Akshat")])
-    client = TestClient(create_app(hub, dashboard_dir=tmp_path / "none"))
+    client = TestClient(create_app(staff_ready(hub), dashboard_dir=tmp_path / "none"), headers=STAFF)
     code = client.get("/api/staff/checkin/codes").json()["rigs"][0]["code"]
     secret = post(client, code, "Maya").json()["secret"]
     await feed(hub, lap_packets(1, 89000, [LAP1], 10.0))

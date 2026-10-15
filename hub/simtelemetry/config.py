@@ -112,22 +112,24 @@ class OwnerConfig(_Section):
     @classmethod
     def _pin(cls, value: Any) -> Any:
         return _pin_text(value)
-    # Opening hours, for rig utilisation (local hours, close after open).
+    # Opening hours (local hours). A closing hour of 0 to 6 at or before the opening hour means the next day.
     open_hour: int = Field(10, ge=0, le=23)
-    close_hour: int = Field(22, ge=1, le=24)
+    close_hour: int = Field(22, ge=0, le=24)
 
     @field_validator("close_hour")
     @classmethod
     def _close_after_open(cls, value: int, info: ValidationInfo) -> int:
+        from .core.hours import hours_problem
         opens = info.data.get("open_hour")
-        if opens is not None and value <= opens:
-            raise ValueError(f"must be after open_hour ({opens})")
+        if opens is not None and hours_problem(opens, value):
+            raise ValueError(f"must be after open_hour ({opens}), or 0 to 6 for closing after midnight")
         return value
 
 
 class LeaderboardConfig(_Section):
-    # "Today" starts at this hour (local time), so a session running past midnight stays on one day.
-    day_start_hour: int = Field(0, ge=0, le=23)
+    # "Today" starts at this hour (local time). Normally automatic (left out, or 0): the closing hour when the
+    # cafe closes after midnight, else midnight. See AppConfig.day_start_hour.
+    day_start_hour: int | None = Field(None, ge=0, le=23)
 
 
 class DashboardConfig(_Section):
@@ -153,6 +155,7 @@ class FeaturesConfig(_Section):
     owner: bool = True            # /owner analytics page
     race_podium: bool = True      # race podium + race cards when a race ends (needs sharing)
     self_checkin: bool = True     # guests put their own name on a rig from their phone (QR sticker per rig)
+    auto_end_sessions: bool = True  # end sessions at closing time, and timed sessions once over time and idle
 
 
 class CheckinConfig(_Section):
@@ -213,6 +216,14 @@ class AppConfig(_Section):
 
     def rig_by_ip(self, ip: str) -> RigConfig | None:
         return next((r for r in self.rigs if r.ip == ip), None)
+
+    @property
+    def day_start_hour(self) -> int:
+        """The hour the business day starts: [leaderboard] day_start_hour when set to 1-23, otherwise derived from
+        the opening hours (0, the old starter file's value, counts as not set)."""
+        from .core.hours import derived_day_start
+        explicit = self.leaderboard.day_start_hour
+        return explicit if explicit else derived_day_start(self.owner.open_hour, self.owner.close_hour)
 
     @property
     def recordings_dir(self) -> Path:

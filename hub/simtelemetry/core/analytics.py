@@ -14,6 +14,8 @@ import time
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any, Callable
 
+from .hours import open_minutes
+
 if TYPE_CHECKING:
     from .store import LapStore
 
@@ -67,7 +69,7 @@ class Analytics:
         laps = self.store.laps_between(start_ms, end_ms)
         rigs = sorted({r["rig_id"] for r in sessions} | {r["rig_id"] for r in laps},
                       key=lambda rig: _natural(self.rig_label(rig)))
-        open_min = max(1, (self.close_hour - self.open_hour) * 60)
+        open_min = max(1, open_minutes(self.open_hour, self.close_hour))
 
         daily = {d: {"date": d.isoformat(), "weekday": WEEKDAYS[d.weekday()], "sessions": 0, "minutes": 0,
                      "laps": 0, "new": 0, "returning": 0} for d in dates}

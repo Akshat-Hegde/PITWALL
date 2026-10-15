@@ -13,6 +13,7 @@ from simtelemetry.core.feed import FeedBuilder, FeedConnection
 from simtelemetry.core.laps import LapBook, LapCompleted, LapContext, LiveLap
 from simtelemetry.core.store import LapStore
 
+from f1_helpers import STAFF, staff_ready
 from test_drivers import RIG, feed, make_hub
 from test_feed import last_seen, participants, session
 
@@ -113,7 +114,7 @@ async def test_competitions_through_the_api_and_the_tv_feed(tmp_path):
     hub = make_hub(tmp_path)
     await feed(hub, [session(2025, 0x51), participants(2025, 0x51, b"Akshat")])
     lap(hub.laps, RIG, "Akshat", 2, 90000)
-    client = TestClient(create_app(hub, dashboard_dir=tmp_path / "none"))
+    client = TestClient(create_app(staff_ready(hub), dashboard_dir=tmp_path / "none"), headers=STAFF)
     assert client.get("/api/staff/competitions").json()["tracks"] == [{"track_key": "F1:7", "track_name": "Silverstone"}]
     today = dt.date.today().isoformat()
     r = client.post("/api/staff/challenges", json={"track_key": "F1:7", "starts": today, "ends": today, "prize": "Mug"})

@@ -28,19 +28,20 @@ CSV_KINDS = ("daily", "sessions", "laps")
 def owner_router(hub: Hub) -> APIRouter:
     router = APIRouter()
     config = hub.config
-    guard = PinGuard(lambda: config.owner.pin, header=OWNER_PIN_HEADER)
-    analytics = Analytics(hub.drivers.store, config.leaderboard.day_start_hour, config.owner.open_hour,
+    guard = PinGuard(lambda: config.owner.pin, header=OWNER_PIN_HEADER, attempts=hub.pin_attempts)
+    analytics = Analytics(hub.drivers.store, config.day_start_hour, config.owner.open_hour,
                           config.owner.close_hour, rig_label=hub.rig_label)
 
     def _sync_hours() -> None:
         """Opening hours can change from /setup while the hub runs; use the live values."""
         analytics.open_hour, analytics.close_hour = config.owner.open_hour, config.owner.close_hour
+        analytics.day_start_hour = config.day_start_hour
 
     def check(request: Request) -> None:
         if not config.features.owner:
-            raise HTTPException(404, "The owner page is switched off ([features] owner).")
+            raise HTTPException(404, "The owner page is switched off on this hub.")
         if not config.owner.pin:
-            raise HTTPException(403, "Set [owner] pin in config\\hub.toml to use the owner page, then restart the hub.")
+            raise HTTPException(403, "Finish setup first: open the setup page on the hub PC and choose an owner PIN.")
         guard(request)
 
     @router.get("/owner", response_class=HTMLResponse, include_in_schema=False)
@@ -50,7 +51,8 @@ def owner_router(hub: Hub) -> APIRouter:
     @router.get("/api/owner/report", dependencies=[Depends(check)])
     def report(days: int = 30) -> dict[str, Any]:
         _sync_hours()
-        return {"cafe": config.cafe.name, **analytics.report(days)}
+        return {"cafe": config.cafe.name, **analytics.report(days),
+                "pin_alerts": [a["text"] for a in hub.pin_attempts.alerts]}
 
     @router.get("/api/owner/export.csv", dependencies=[Depends(check)])
     def export(kind: str = "daily", days: int = 30) -> Response:

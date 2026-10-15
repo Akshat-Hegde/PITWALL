@@ -23,15 +23,20 @@ from simtelemetry.core.settings import CafeSettings, SettingsStore, recover_dama
 from simtelemetry.core.store import LapStore, open_lap_store
 from simtelemetry.startup import START_ERROR_FILE
 
+from f1_helpers import STAFF, staff_ready
 from test_cli import free_port
 from test_drivers import make_hub
 
 NOW = dt.datetime(2026, 10, 15, 9, 30, 0)
+OWNER_AS_STAFF = {"X-Staff-Pin": "2468"}
 
 
 def run_hub_briefly(argv, poll_paths=(), delay=1.2, duration="2.5", during=None):
-    """main(["run", ...]) on free ports, fetching the given API paths (with headers) while it runs."""
+    """main(["run", ...]) on free ports, fetching the given API paths (with headers) while it runs. The staff pages
+    need a PIN: the hub gets owner PIN 2468 (no staff PIN set, so the owner PIN opens them)."""
     results: dict[str, object] = {}
+    if any(p.startswith("/api/staff") for p in poll_paths):
+        argv = [*argv, "--owner-pin", "2468"]
 
     def poll():
         time.sleep(delay)
@@ -39,7 +44,8 @@ def run_hub_briefly(argv, poll_paths=(), delay=1.2, duration="2.5", during=None)
             during()
         port = argv[argv.index("--http-port") + 1]
         for path in poll_paths:
-            with urllib.request.urlopen(f"http://127.0.0.1:{port}{path}", timeout=5) as r:
+            request = urllib.request.Request(f"http://127.0.0.1:{port}{path}", headers=OWNER_AS_STAFF)
+            with urllib.request.urlopen(request, timeout=5) as r:
                 results[path] = json.load(r)
     poller = threading.Thread(target=poll)
     poller.start()
@@ -145,7 +151,8 @@ def test_udp_port_busy_serves_pages_warns_and_retries(tmp_path, monkeypatch):
     seen = {}
 
     def during():
-        with urllib.request.urlopen(f"http://127.0.0.1:{http_port}/api/staff/health", timeout=5) as r:
+        request = urllib.request.Request(f"http://127.0.0.1:{http_port}/api/staff/health", headers=OWNER_AS_STAFF)
+        with urllib.request.urlopen(request, timeout=5) as r:
             seen["before"] = json.load(r)["warnings"]
         blocker.close()
         time.sleep(1.0)
@@ -302,7 +309,7 @@ def test_hashed_pins_unlock_staff_and_owner_pages(tmp_path):
     from simtelemetry.core.settings import apply_settings
     hub = make_hub(tmp_path)
     apply_settings(hub.config, SettingsStore(tmp_path).read())
-    client = TestClient(create_app(hub, dashboard_dir=tmp_path / "none"))
+    client = TestClient(create_app(staff_ready(hub), dashboard_dir=tmp_path / "none"), headers=STAFF)
     assert client.get("/api/staff/rigs", headers={"X-Staff-Pin": "1357"}).status_code == 200
     assert client.get("/api/staff/rigs", headers={"X-Staff-Pin": "2468"}).status_code == 401
     assert client.get("/api/owner/report", headers={"X-Owner-Pin": "2468"}).status_code == 200
@@ -317,7 +324,7 @@ def test_wrong_or_missing_pin_is_refused(tmp_path, given):
     from simtelemetry.core.settings import apply_settings
     hub = make_hub(tmp_path)
     apply_settings(hub.config, SettingsStore(tmp_path).read())
-    client = TestClient(create_app(hub, dashboard_dir=tmp_path / "none"))
+    client = TestClient(create_app(staff_ready(hub), dashboard_dir=tmp_path / "none"), headers=STAFF)
     assert client.get("/api/staff/rigs", headers={"X-Staff-Pin": given}).status_code == 401
 
 
@@ -327,9 +334,9 @@ def test_saving_setup_again_clears_the_damaged_settings_warning(tmp_path):
     hub = make_hub(tmp_path)
     hub.add_startup_warning("settings_damaged", "The cafe settings were damaged ...")
     hub.add_startup_warning("laps_damaged", "The lap database was damaged ...")
-    client = TestClient(create_app(hub, dashboard_dir=tmp_path / "none"))
+    client = TestClient(create_app(staff_ready(hub), dashboard_dir=tmp_path / "none"), headers=STAFF)
     assert len(client.get("/api/setup").json()["warnings"]) == 2
-    body = {"name": "Lap Lab", "owner_pin": "2468", "staff_pin": "", "open_hour": 10, "close_hour": 22}
+    body = {"name": "Lap Lab", "owner_pin": "2468", "staff_pin": "1357", "open_hour": 10, "close_hour": 22}
     r = client.post("/api/setup", json=body, headers={"X-Setup-Code": code})
     assert r.status_code == 200 and [w["code"] for w in r.json()["warnings"]] == ["laps_damaged"]
 
@@ -338,7 +345,7 @@ def test_hash_shaped_pins_from_the_setup_form_are_refused(tmp_path):
     from simtelemetry.core.pins import hash_pin
     from simtelemetry.core.setup_code import SetupCode
     code = SetupCode(tmp_path).new()
-    client = TestClient(create_app(make_hub(tmp_path), dashboard_dir=tmp_path / "none"))
+    client = TestClient(create_app(staff_ready(make_hub(tmp_path)), dashboard_dir=tmp_path / "none"), headers=STAFF)
     stolen = hash_pin("9999")
     for field in ("owner_pin", "staff_pin"):
         body = {"name": "Lap Lab", "owner_pin": "2468", "staff_pin": "1357", "open_hour": 10, "close_hour": 22,

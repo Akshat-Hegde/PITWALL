@@ -12,7 +12,7 @@ from simtelemetry.core.wifi import wifi_share, wifi_string
 from test_drivers import make_hub
 
 GOOD = {"name": "Lap Lab", "tagline": "", "accent": "#FF2A6D", "owner_pin": "2468",
-        "staff_pin": "", "open_hour": 10, "close_hour": 22}
+        "staff_pin": "1357", "open_hour": 10, "close_hour": 22}
 WIFI = {"wifi_ssid": "Cafe Guest", "wifi_password": "secret-pass", "wifi_security": "WPA"}
 
 

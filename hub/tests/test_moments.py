@@ -11,6 +11,7 @@ from simtelemetry.core.adapter import LiveSummary
 from simtelemetry.core.laps import LapBook, LapContext, LiveLap
 from simtelemetry.core.store import LapStore
 
+from f1_helpers import STAFF, staff_ready
 from test_drivers import RIG, client_with_rig, make_hub
 from test_laps import lap
 
@@ -107,7 +108,7 @@ async def test_features_can_be_switched_off(tmp_path):
     drive(hub.laps, RIG, "Maya", 2, 90000, pro=False)
     assert client.post("/api/staff/podium").status_code == 409
     assert moments(hub.laps) == []
-    with TestClient(create_app(hub, dashboard_dir=tmp_path / "none")).websocket_connect("/ws") as ws:
+    with TestClient(create_app(staff_ready(hub), dashboard_dir=tmp_path / "none"), headers=STAFF).websocket_connect("/ws") as ws:
         snapshot = ws.receive_json()
     assert snapshot["hub"]["features"]["moments"] is False
     assert snapshot["hub"]["sounds"] == {"enabled": True, "volume": 0.3}
@@ -122,5 +123,5 @@ def test_portrait_serves_the_dashboard(tmp_path):
     dist = tmp_path / "dist"
     dist.mkdir()
     (dist / "index.html").write_text("<!doctype html><title>TV</title>", encoding="utf-8")
-    client = TestClient(create_app(make_hub(tmp_path), dashboard_dir=dist))
+    client = TestClient(create_app(staff_ready(make_hub(tmp_path)), dashboard_dir=dist), headers=STAFF)
     assert client.get("/portrait").text == client.get("/").text

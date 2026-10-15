@@ -74,7 +74,7 @@ def test_owner_page_needs_its_own_pin(tmp_path):
     client = TestClient(create_app(make_hub(tmp_path), dashboard_dir=tmp_path / "none"))
     assert client.get("/owner").status_code == 200
     r = client.get("/api/owner/report")
-    assert r.status_code == 403 and "Set [owner] pin" in r.json()["detail"]   # locked until a PIN is set
+    assert r.status_code == 403 and "Finish setup first" in r.json()["detail"]   # locked until a PIN is set
 
     hub = make_hub(tmp_path / "b", owner={"pin": "9090"}, staff={"pin": "1111"})
     client = TestClient(create_app(hub, dashboard_dir=tmp_path / "none"))

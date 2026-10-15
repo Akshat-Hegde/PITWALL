@@ -32,7 +32,7 @@ class CafeSettings(BaseModel):
     owner_pin: str                  # stored as a salted hash (core/pins.py); plain digits are hashed on the way in
     staff_pin: str = ""
     open_hour: int = Field(10, ge=0, le=23)
-    close_hour: int = Field(22, ge=1, le=24)
+    close_hour: int = Field(22, ge=0, le=24)    # 0-6 at or before open_hour: the next day
     setup_done: bool = False
     wifi_ssid: str = ""             # at most 32 BYTES of UTF-8 (checked below)
     wifi_password: str = Field("", max_length=63)
@@ -75,8 +75,10 @@ class CafeSettings(BaseModel):
 
     @model_validator(mode="after")
     def _hours(self) -> "CafeSettings":
-        if self.close_hour <= self.open_hour:
-            raise ValueError("closing hour must be after opening hour")
+        from .hours import hours_problem
+        problem = hours_problem(self.open_hour, self.close_hour)
+        if problem:
+            raise ValueError(problem)
         return self
 
 

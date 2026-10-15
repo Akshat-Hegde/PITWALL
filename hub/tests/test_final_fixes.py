@@ -36,13 +36,13 @@ def test_resave_with_blank_pins_keeps_both(tmp_path):
     assert client.get("/api/staff/rigs").status_code == 401           # /staff is still locked
 
 
-def test_remove_staff_pin_is_explicit(tmp_path):
+def test_the_staff_pin_cannot_be_removed(tmp_path):
     hub, client, code = _client(tmp_path)
     client.post("/api/setup", json={**GOOD, "staff_pin": "1357"}, headers=code)
     r = client.post("/api/setup", json={**GOOD, "owner_pin": "", "staff_pin": "", "remove_staff_pin": True},
                     headers={"X-Owner-Pin": "2468"})
-    assert r.status_code == 200 and hub.config.staff.pin == "" and verify_pin("2468", hub.config.owner.pin)
-    assert client.get("/api/staff/rigs").status_code == 200           # /staff follows: open now
+    assert r.status_code == 200 and verify_pin("1357", hub.config.staff.pin)    # the old "remove" is ignored
+    assert client.get("/api/staff/rigs").status_code == 401           # /staff stays locked
 
 
 def test_new_pins_replace_old_ones_and_owner_pin_is_required_before_setup(tmp_path):

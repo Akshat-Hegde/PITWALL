@@ -227,8 +227,21 @@ Laps are saved under the session's driver, else the game's player name, else the
 name later doesn't rename earlier laps. A profile's laps follow the profile (two profiles with the same name
 stay separate). The TV shows the name and that driver's best lap on the track ("PB").
 
-Set `[staff] pin` in `config\hub.toml` so customers can't use the page: it then asks for the PIN, and five
-wrong PINs in a minute lock that device out for a minute. Without a PIN anyone on the LAN can use it.
+The page always asks for the **staff PIN**, chosen on the setup page (it may be the same as the owner PIN; the
+setup page can't be saved without one). A hub set up by an older version without a staff PIN accepts the owner
+PIN instead and shows a red "Set a staff PIN on the setup page" banner until one is set. A hub with no PIN at all
+(setup not finished) shows "Finish setup first" and no staff data. Five wrong PINs in a minute lock that device
+out for a minute; the third lock-out within an hour locks it out for 15 minutes, is logged and is shown on the
+owner page ("Someone tried wrong PINs 15 times at 21:40").
+
+**Sessions end by themselves** (`[features] auto_end_sessions = true`, the default):
+
+- At **closing time** (the opening hours on the setup page) every open session ends, exactly as if staff had
+  pressed **End session**, so the driver's card is still made.
+- A **timed** session ends once its time is up **and** the car hasn't been on track for 5 minutes; a driver
+  still on track is never cut off. Sessions with no timer and self check-in sessions have no time limit.
+- A session left open when the hub PC was switched off ends as soon as the hub starts again on a later day.
+- The rig on the staff page then says "Ended automatically at closing time" or "Ended automatically: time was up".
 
 ## Competitions
 
@@ -289,7 +302,7 @@ This re-seeds `data-demo\` with 60 days of a busy cafe (sessions, laps, driver p
 queue) and starts the hub on it with six **simulated rigs** that send real F1 25 packets through the hub's
 normal pipeline: live cars on the map, laps, records, head to head, booking timers and story cards all work as
 they would in the cafe. Open the TV at `http://localhost:8000/`, the staff page at `/staff`, and the owner page
-at `/owner` (PIN `0000` unless `[owner] pin` is set). It doesn't listen for real rigs, so stop the normal hub
+at `/owner` (PIN `0000` unless `[owner] pin` is set; the staff page uses the same PIN unless `[staff] pin` is set). It doesn't listen for real rigs, so stop the normal hub
 first (or give the demo another `--http-port`).
 
 **Demo director (for filming):** on `/staff` in demo mode, press **Director** (top right) for buttons that put
@@ -373,8 +386,10 @@ qualifying and Time Trial never make a race result.
 
 Every recorded lap goes into SQLite at `<data_dir>/laps.db` (default `data\laps.db`), together with each
 track's outline. The TV's leaderboards (today, this week, all time) are read from it, so they survive hub
-restarts. "Today" starts at `[leaderboard] day_start_hour` (local time, default 0); the week starts on
-Monday. To start the boards from scratch, stop the hub and delete or rename `laps.db`.
+restarts. "Today" is the cafe's business day: it starts at midnight, or at the closing hour when the cafe
+closes after midnight (opening hours on the setup page, e.g. "closes at 02:00 (next day)"), so a lap at 01:30
+counts for the evening before. `[leaderboard] day_start_hour` in hub.toml overrides this when set to 1-23.
+The week starts on Monday. To start the boards from scratch, stop the hub and delete or rename `laps.db`.
 
 `replay` keeps its laps in memory, so replaying a capture never changes the real boards; add `--save-laps`
 to store them. `replay --rigs 6 --names "Maya,Kofi,..."` plays six rigs at once from a capture's sources

@@ -148,6 +148,10 @@ class DriverRegistry:
     def get(self, rig_id: str) -> Assignment | None:
         return self._current.get(rig_id)
 
+    def sessions(self) -> dict[str, Assignment]:
+        """Every open session by rig (a copy)."""
+        return dict(self._current)
+
     def time_left_ms(self, rig_id: str) -> int | None:
         a = self._current.get(rig_id)
         return None if a is None or a.ends_at is None else a.ends_at - self._now_ms()

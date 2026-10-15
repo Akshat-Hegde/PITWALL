@@ -324,6 +324,9 @@
     box.appendChild(t);
   }
 
+  const hh = (h) => String(h % 24).padStart(2, "0") + ":00";
+  const openHours = ([open, close]) => `${hh(open)}–${hh(close)}` + (close <= open ? " next day" : "");
+
   // --- render ----------------------------------------------------------------------------------
   function render() {
     const d = data;
@@ -332,7 +335,7 @@
     const s = d.summary;
     const tiles = [
       ["Driving hours", hours(s.hours), `${s.sessions} sessions`],
-      ["Rig utilisation", s.utilisation_pct + "%", `of opening hours (${d.open_hours[0]}:00–${d.open_hours[1]}:00)`],
+      ["Rig utilisation", s.utilisation_pct + "%", `of opening hours (${openHours(d.open_hours)})`],
       ["Drivers", String(s.drivers), `${s.new_drivers} new`],
       ["Average session", s.avg_session_min == null ? "–" : Math.round(s.avg_session_min) + " min", ""],
       ["Laps driven", String(s.laps), ""],
@@ -349,12 +352,13 @@
     bars($("drivers"), d.daily, [{ key: "new", colour: "var(--series-1)", label: "New" },
                                  { key: "returning", colour: "var(--series-2)", label: "Returning" }], (v) => String(Math.round(v)));
     const [open, close] = d.open_hours;
-    const hoursRange = [];
-    for (let h = Math.max(0, open - 1); h < Math.min(24, close + 1); h++) hoursRange.push(h);
+    const hoursRange = [];        // the hour before opening to the closing hour; wraps past midnight
+    const span = (close <= open ? close + 24 : close) - open;
+    for (let i = -1; i <= span && hoursRange.length < 24; i++) hoursRange.push((open + i + 24) % 24);
     heat($("heat"), d.heatmap.weekdays, hoursRange.map((h) => String(h).padStart(2, "0")),
          d.heatmap.rigs_in_use.map((row) => hoursRange.map((h) => row[h])),
          (wd, h, v) => `${wd} ${h}:00\n${v.toFixed(1)} rigs in use on average`, 2);
-    $("util-sub").textContent = `Share of opening hours each rig was booked (${open}:00–${close}:00)`;
+    $("util-sub").textContent = `Share of opening hours each rig was booked (${openHours(d.open_hours)})`;
     if (d.utilisation.length) {
       heat($("util"), d.utilisation.map((u) => u.rig_name), d.daily.map((r) => shortDate(r.date)),
            d.utilisation.map((u) => u.days), (rig, day, v) => `${rig} · ${day}\n${v}% booked`, Math.ceil(d.daily.length / 10));

@@ -51,6 +51,8 @@ steering_wheel_rotation_deg = 360       # lock-to-lock rotation of the TV's whee
 # events = true                        # corporate events with teams
 # race_podium = true                   # race podium and race story cards (needs sharing = true)
 # self_checkin = true                  # guests scan a QR sticker on the rig and type their own name
+# auto_end_sessions = true             # end every session at closing time, and a timed session once its
+                                       # time is up and the car hasn't moved for 5 minutes (cards still made)
 
 [checkin]
 # blocked_words = ["somename"]         # extra words the self check-in name filter rejects (whole words)
@@ -66,14 +68,15 @@ volume = 0.6
 [owner]
 # PINs go in quotes ("0123"): a bare number works too, but TOML rejects one that starts with 0.
 pin = ""                               # PIN for /owner (analytics); empty = the page stays locked
-open_hour = 10                         # opening hours, for rig utilisation
-close_hour = 22
+open_hour = 10                         # opening hours (set on the setup page): rig utilisation, and
+close_hour = 22                        # sessions end automatically at closing time; 0-6 = after midnight
 
 [staff]
 pin = ""                               # PIN for the /staff page (driver names); empty = no PIN
 
 [leaderboard]
-day_start_hour = 0                     # "today" starts at this hour (e.g. 5 for late-night sessions)
+# day_start_hour = 5                   # "today" starts at this hour. Normally leave this out: it is the closing
+                                       # hour when the cafe closes after midnight, else midnight
 
 [map]                                  # how game coordinates are drawn on the TV map
 flip_x = false                         # find the right values with the dashboard's ?map= option

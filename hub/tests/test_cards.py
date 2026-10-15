@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from simtelemetry.api.app import create_app
 from simtelemetry.core.laps import MINI_SECTORS, LapCompleted, LapContext, LiveLap, Trace, mini_sector_times
 
+from f1_helpers import STAFF, staff_ready
 from test_drivers import RIG, client_with_rig
 
 LENGTH = 4800.0
@@ -89,5 +90,5 @@ def test_card_page_serves_the_dashboard(tmp_path):
     dist = tmp_path / "dist"
     dist.mkdir()
     (dist / "index.html").write_text("<!doctype html><title>TV</title>", encoding="utf-8")
-    client = TestClient(create_app(make_hub(tmp_path), dashboard_dir=dist))
+    client = TestClient(create_app(staff_ready(make_hub(tmp_path)), dashboard_dir=dist), headers=STAFF)
     assert client.get("/card/abc123").text == client.get("/").text

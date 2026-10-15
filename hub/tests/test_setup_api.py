@@ -13,7 +13,7 @@ from test_drivers import make_hub
 PNG = (b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
        b"\x00\x00\x00\rIDATx\x9cc\xf8\xff\xff?\x00\x05\xfe\x02\xfe\xa7\x9a\xa0\xa0\x00\x00\x00\x00IEND\xaeB`\x82")
 GOOD = {"name": "Lap Lab", "tagline": "Beat the board", "accent": "#FF2A6D", "owner_pin": "2468",
-        "staff_pin": "", "open_hour": 10, "close_hour": 22}
+        "staff_pin": "1357", "open_hour": 10, "close_hour": 22}
 
 
 def _client(tmp_path):
@@ -69,7 +69,7 @@ def test_bad_values_are_400(tmp_path):
 
 def test_pins_set_in_setup_apply_without_restart(tmp_path):
     hub, client, code = _client(tmp_path)
-    assert client.get("/api/staff/rigs").status_code == 200             # no staff PIN yet
+    assert client.get("/api/staff/rigs").status_code == 403             # no PIN at all: never served open
     assert client.get("/api/owner/report").status_code == 403           # owner page locked until a PIN is set
     r = client.post("/api/setup", json={**GOOD, "staff_pin": "1357"}, headers=code)
     assert r.status_code == 200

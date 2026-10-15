@@ -63,7 +63,7 @@ def build_card(hub: Hub, rig_id: str, session: Assignment, ended_at: int) -> dic
     position = next((e["rank"] for e in board if e["lap_ms"] == best.lap_ms and e["driver"] == best.driver), None)
     improvement = None
     if session.driver_id is not None:
-        rows = hub.drivers.profile_details(session.driver_id, hub.config.leaderboard.day_start_hour) or {}
+        rows = hub.drivers.profile_details(session.driver_id, hub.config.day_start_hour) or {}
         row = next((r for r in rows.get("improvement", []) if r["track_key"] == track_key), None)
         if row:
             improvement = {"previous_best_ms": row["previous_best_ms"], "delta_ms": row["delta_ms"]}

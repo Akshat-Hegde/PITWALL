@@ -17,6 +17,7 @@ from simtelemetry.core.rigs import RigRegistry
 from simtelemetry.core.store import LapStore
 from simtelemetry.hub import Hub
 
+from f1_helpers import STAFF, staff_ready
 from test_feed import last_seen, participants, session
 from test_laps import history_bytes, lap_data_bytes
 
@@ -131,7 +132,9 @@ async def test_rig_name_when_nothing_else_is_known(tmp_path):
 async def client_with_rig(tmp_path, **cfg):
     hub = make_hub(tmp_path, store=False, **cfg)
     await feed(hub, [session(2025, UID), participants(2025, UID, b"Akshat")])
-    return hub, TestClient(create_app(hub, dashboard_dir=tmp_path / "none"))
+    if "staff" in cfg:                                   # the test sets its own PIN and sends it itself
+        return hub, TestClient(create_app(hub, dashboard_dir=tmp_path / "none"))
+    return hub, TestClient(create_app(staff_ready(hub), dashboard_dir=tmp_path / "none"), headers=STAFF)
 
 
 async def test_staff_page_and_api(tmp_path):

@@ -9,6 +9,7 @@ from simtelemetry.api.app import create_app
 from simtelemetry.core.feed import FeedBuilder, FeedConnection
 from simtelemetry.core.tv import TvControl, TvError
 
+from f1_helpers import STAFF, staff_ready
 from test_drivers import RIG, client_with_rig, make_hub
 
 
@@ -45,6 +46,6 @@ async def test_staff_api_and_feed_message(tmp_path):
 
 def test_overlays_follow_features(tmp_path):
     hub = make_hub(tmp_path, features={"head_to_head": False})
-    client = TestClient(create_app(hub, dashboard_dir=tmp_path / "none"))
+    client = TestClient(create_app(staff_ready(hub), dashboard_dir=tmp_path / "none"), headers=STAFF)
     r = client.put("/api/staff/tv", json={"overlay": "head_to_head"})
     assert r.status_code == 400 and "switched off" in r.json()["detail"]

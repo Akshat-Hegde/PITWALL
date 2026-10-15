@@ -35,6 +35,11 @@ def next_backup_at(now: dt.datetime, hour: int) -> dt.datetime:
     return at if at > now else at + dt.timedelta(days=1)
 
 
+AUTO_END_IDLE_S = 300.0      # a timed session over its time ends once the rig hasn't been DRIVING this long
+AUTO_END_EVERY_S = 15.0      # how often open sessions are checked for auto-end
+AUTO_END_TEXT = {"closing": "Ended automatically at closing time", "overrun": "Ended automatically: time was up"}
+NO_CARD_TEXT = "No card this time: no clean lap was completed."
+
 CATCH_UP_AFTER = dt.timedelta(hours=24)
 CATCH_UP_DELAY_S = 120.0
 
@@ -58,7 +63,7 @@ class Hub:
         self.health = HealthMonitor(config.health)
         self.recorder = recorder
         self.laps = LapBook(outline_display=config.map.model_dump(), store=store,
-                            day_start_hour=config.leaderboard.day_start_hour, bundled_outlines=bundled_outlines)
+                            day_start_hour=config.day_start_hour, bundled_outlines=bundled_outlines)
         self.drivers = DriverRegistry(store)
         self.races = RaceBook()
         from .core.checkin import CheckinService
@@ -66,7 +71,7 @@ class Hub:
         from .core.tv import TvControl
         self.tv = TvControl(config.data_dir / "tv.json" if store is not None and store.path is not None else None)
         from .core.competitions import Competitions
-        self.competitions = Competitions(self.drivers.store, config.data_dir, config.leaderboard.day_start_hour)
+        self.competitions = Competitions(self.drivers.store, config.data_dir, config.day_start_hour)
         # Other programs listening on the telemetry port on a specific address (see net/udp.py).
         self.port_shadows: list[str] = []
         # Problems found at start-up (hub.toml, settings.json, laps.db): staff and setup pages only, never the TV.
@@ -82,6 +87,10 @@ class Hub:
         self.wall_clock = dt.datetime.now                       # opening hours (tests replace it)
         # Addresses sending packets the hub can't read that never sent a valid one: ip -> (last seen, format).
         self.wrong_senders: dict[str, tuple[float, str | None]] = {}
+        # The last session on each rig that ended automatically (shown on the staff page until the next one starts).
+        self.auto_ended: dict[str, dict[str, Any]] = {}
+        from .core.pins import PinAttempts
+        self.pin_attempts = PinAttempts()          # wrong PINs on the staff, owner and setup pages
         self._wrong_log_window: tuple[float, int] | None = None     # (window start, lines logged in it)
         self._queue: asyncio.Queue[tuple[Checked, bytes, str, float]] = asyncio.Queue(QUEUE_MAX)
 
@@ -202,9 +211,15 @@ class Hub:
     def session_top_speed(self, ip: str) -> int | None:
         return self._session_top_kph.get(ip)
 
+    def apply_hours(self) -> None:
+        """Opening hours changed (from /setup): the business day ("today" boards, challenges) follows at once."""
+        self.laps.day_start_hour = self.config.day_start_hour
+        self.competitions.day_start_hour = self.config.day_start_hour
+
     def session_started(self, ip: str) -> None:
         """Staff started a session on a rig: reset its session stats and show 'now driving'."""
         self._session_top_kph.pop(ip, None)
+        self.auto_ended.pop(ip, None)
         self.announce_driver(ip)
 
     def end_session(self, ip: str) -> dict[str, Any] | None:
@@ -214,6 +229,55 @@ class Hub:
             return None
         self.drivers.end(ip)
         return self.session_card(ip, session)
+
+    # --- automatic end (closing time, overrun) ------------------------------------------------
+
+    def auto_end_reason(self, ip: str, session: Any, now: dt.datetime) -> str | None:
+        """"closing" once the session's closing time (or the next business day) has come, "overrun" for a timed
+        session over its time whose rig hasn't been DRIVING for 5 minutes, else None. Check-in sessions have no
+        time, so only closing time ends them."""
+        from .core.hours import auto_end_at
+        started = dt.datetime.fromtimestamp(session.started_at / 1000)
+        if now >= auto_end_at(started, self.config.owner.close_hour, self.config.day_start_hour):
+            return "closing"
+        if session.ends_at is not None and now.timestamp() * 1000 >= session.ends_at:
+            age = max(0.0, now.timestamp() - session.started_at / 1000)
+            since = self.health.seconds_since_driving(ip, time.monotonic())
+            if (age if since is None else min(since, age)) >= AUTO_END_IDLE_S:
+                return "overrun"
+        return None
+
+    def auto_end_sessions(self) -> list[dict[str, Any]]:
+        """End every session that is due (see auto_end_reason) through the normal end_session path, so the card is
+        still made. Also run at start-up, so a session left open from a previous day ends at once."""
+        if not self.config.features.auto_end_sessions:
+            return []
+        now = self.wall_clock()
+        done = []
+        with self.checkin.lock:          # not while a phone is checking in on the same rig
+            for ip, session in self.drivers.sessions().items():
+                reason = self.auto_end_reason(ip, session, now)
+                if reason is None or self.drivers.get(ip) is not session:
+                    continue
+                card = self.end_session(ip)
+                notice = {"rig_id": ip, "rig_name": self.rig_label(ip), "driver": session.name, "reason": reason,
+                          "text": AUTO_END_TEXT[reason], "at": round(now.timestamp() * 1000),
+                          "card": ({"token": card["token"], "url": card["url"], "driver": card["driver"]}
+                                   if card else None),
+                          "card_note": None if card or not self.config.features.sharing else NO_CARD_TEXT}
+                self.auto_ended[ip] = notice
+                log.info("%s: %s's session %s", notice["rig_name"], session.name, notice["text"].lower())
+                done.append(notice)
+        return done
+
+    async def tick_auto_end(self, every: float = AUTO_END_EVERY_S) -> None:
+        """Check at once (sessions left open from a previous day), then every `every` seconds."""
+        while True:
+            try:
+                self.auto_end_sessions()
+            except Exception:  # must never stop the hub
+                log.exception("Automatic session end failed")
+            await asyncio.sleep(every)
 
     def session_card(self, ip: str, session: Any) -> dict[str, Any] | None:
         """Story card for a session that has just ended (ended by staff, or replaced by the next driver)."""

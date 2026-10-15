@@ -1,13 +1,12 @@
 """Staff page (/staff) and its API: sessions per rig (with booking timers), driver profiles, the queue.
 
-With [staff] pin set, every /api/staff call needs the header X-Staff-Pin. Repeated wrong PINs from one
-address lock that address out for a minute.
+Every /api/staff call needs the header X-Staff-Pin: the staff PIN, or the owner PIN while no staff PIN is set.
+A hub with no PIN at all serves no staff data. Repeated wrong PINs lock the address out (core/pins.py).
 """
 
 from __future__ import annotations
 
 import time
-from collections import defaultdict, deque
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -19,43 +18,44 @@ from ..core.drivers import EXTEND_PROMPT_MS, DriverError
 from ..core.feed import FeedBuilder
 from ..core.tv import TvError
 from ..core.wifi import wifi_share
+from ..hub import NO_CARD_TEXT
 from ..core.health import RigState
-from ..core.pins import verify_pin
+from ..core.pins import PinAttempts, verify_pin
 from .pages import render_page
 
 if TYPE_CHECKING:
     from ..hub import Hub
 
 PIN_HEADER = "X-Staff-Pin"
-MAX_FAILURES = 5
-FAILURE_WINDOW_S = 60.0
+NO_PIN_TEXT = "Finish setup first: open the setup page on the hub PC and choose the PINs."
 
 STAFF_PAGE = Path(__file__).with_name("staff.html")
 PRINT_PAGE = Path(__file__).with_name("checkin_print.html")
 
 
 class PinGuard:
-    def __init__(self, pin: Callable[[], str], clock=time.monotonic, header: str = PIN_HEADER) -> None:
+    """Checks the PIN header on every request. No PIN set at all is refused (never served open); wrong PINs count
+    towards the shared lock-out (core/pins.py PinAttempts)."""
+
+    def __init__(self, pin: Callable[[], str], clock=time.monotonic, header: str = PIN_HEADER,
+                 attempts: PinAttempts | None = None, missing: str = NO_PIN_TEXT) -> None:
         self._pin = pin  # read on every request, so a PIN changed from /setup applies at once
         self.header = header
-        self._clock = clock
-        self._failures: dict[str, deque[float]] = defaultdict(deque)
+        self.attempts = attempts if attempts is not None else PinAttempts(clock)
+        self.missing = missing
 
     def __call__(self, request: Request) -> None:
         pin = self._pin()
         if not pin:
-            return
+            raise HTTPException(403, self.missing)
         client = request.client.host if request.client else "?"
-        now = self._clock()
-        failures = self._failures[client]
-        while failures and now - failures[0] > FAILURE_WINDOW_S:
-            failures.popleft()
-        if len(failures) >= MAX_FAILURES:
-            raise HTTPException(429, "Too many wrong PINs. Wait a minute, then try again.")
+        locked = self.attempts.locked(client)
+        if locked:
+            raise HTTPException(429, locked)
         given = request.headers.get(self.header, "")
         if not verify_pin(given, pin):
             if given:
-                failures.append(now)
+                self.attempts.failed(client)
             raise HTTPException(401, "Wrong PIN." if given else "Enter the staff PIN.")
 
 
@@ -65,7 +65,8 @@ def _bad(exc: DriverError) -> HTTPException:
 
 def staff_router(hub: Hub) -> APIRouter:
     router = APIRouter()
-    guard = PinGuard(lambda: hub.config.staff.pin)
+    # Until a staff PIN is set (installs from before it was required), the owner PIN opens the staff page.
+    guard = PinGuard(lambda: hub.config.staff.pin or hub.config.owner.pin, attempts=hub.pin_attempts)
     drivers = hub.drivers
 
     def rig_row(rig, now: float) -> dict[str, Any]:
@@ -85,6 +86,8 @@ def staff_router(hub: Hub) -> APIRouter:
             "time_left_ms": left,
             "extend_prompt": left is not None and left <= EXTEND_PROMPT_MS,
             "laps_stored_as": drivers.lap_name(rig.ip, rig.driver_name, rig.name),
+            # The last session here ended by itself (closing time, time up): until the next session starts.
+            "auto_ended": hub.auto_ended.get(rig.ip) if assigned is None else None,
         }
 
     def find_rig(rig_id: str):
@@ -105,7 +108,9 @@ def staff_router(hub: Hub) -> APIRouter:
     def rigs() -> dict[str, Any]:
         now = time.monotonic()
         return {"cafe": hub.config.cafe.name, "rigs": [rig_row(r, now) for r in hub.registry.all()],
-                "queue": drivers.queue(), "features": hub.config.features.model_dump(), "demo": hub.demo is not None}
+                "queue": drivers.queue(), "features": hub.config.features.model_dump(), "demo": hub.demo is not None,
+                # Unlocked with the owner PIN because no staff PIN is set: the page shows a red banner.
+                "staff_pin_missing": not hub.config.staff.pin}
 
     status_builder = FeedBuilder(hub)
 
@@ -136,9 +141,9 @@ def staff_router(hub: Hub) -> APIRouter:
         if fields.get("pinned_rig"):
             find_rig(str(fields["pinned_rig"]))
         if fields.get("overlay") == "head_to_head" and not hub.config.features.head_to_head:
-            raise HTTPException(400, "Head to head is switched off in [features].")
+            raise HTTPException(400, "Head to head is switched off on this hub.")
         if fields.get("overlay") == "teams" and not hub.config.features.events:
-            raise HTTPException(400, "Events are switched off in [features].")
+            raise HTTPException(400, "Corporate events are switched off on this hub.")
         try:
             return hub.tv.set(**fields)
         except TvError as exc:
@@ -149,7 +154,7 @@ def staff_router(hub: Hub) -> APIRouter:
         """Demo director (run --demo only): trigger a moment on demand. async so it runs on the event loop,
         the only place the RaceBook is touched."""
         if hub.demo is None:
-            raise HTTPException(404, "The demo director only exists in demo mode (run --demo).")
+            raise HTTPException(404, "The demo director only works when the hub runs in demo mode.")
         try:
             return hub.demo.run(action, body)
         except DriverError as exc:
@@ -185,8 +190,11 @@ def staff_router(hub: Hub) -> APIRouter:
     @router.delete("/api/staff/rigs/{rig_id}/driver", dependencies=[Depends(guard)])
     def end(rig_id: str) -> dict[str, Any]:
         rig = find_rig(rig_id)
+        had_session = drivers.get(rig.ip) is not None
         card = hub.end_session(rig.ip)
-        return {**rig_row(rig, time.monotonic()), "card": _card_link(card)}
+        hub.auto_ended.pop(rig.ip, None)
+        note = NO_CARD_TEXT if had_session and card is None and hub.config.features.sharing else None
+        return {**rig_row(rig, time.monotonic()), "card": _card_link(card), "card_note": note}
 
     # --- self check-in codes -------------------------------------------------------------------
 
@@ -244,7 +252,7 @@ def staff_router(hub: Hub) -> APIRouter:
 
     @router.get("/api/staff/drivers/{driver_id}", dependencies=[Depends(guard)])
     def profile(driver_id: int) -> dict[str, Any]:
-        details = drivers.profile_details(driver_id, hub.config.leaderboard.day_start_hour)
+        details = drivers.profile_details(driver_id, hub.config.day_start_hour)
         if details is None:
             raise HTTPException(404, "That driver profile doesn't exist.")
         return details

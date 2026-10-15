@@ -33,11 +33,27 @@ LOGO_TYPES = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}
 MAX_LOGO_BYTES = 1024 * 1024
 
 
+_FIELDS = {"name": "Cafe name", "tagline": "Tagline", "accent": "Accent colour", "owner_pin": "Owner PIN",
+           "staff_pin": "Staff PIN", "open_hour": "Opening time", "close_hour": "Closing time",
+           "wifi_ssid": "Wi-Fi name", "wifi_password": "Wi-Fi password", "wifi_security": "Wi-Fi security"}
+
+
+def _plain_errors(exc: ValidationError) -> str:
+    """The form's mistakes in plain words: "Staff PIN: PINs are 4 to 8 digits"."""
+    out = []
+    for e in exc.errors():
+        msg = str(e["msg"]).removeprefix("Value error, ")
+        field = _FIELDS.get(str(e["loc"][0])) if e["loc"] else None
+        out.append(f"{field}: {msg}" if field else msg[:1].upper() + msg[1:])
+    return "; ".join(out)
+
+
 def setup_router(hub: Hub) -> APIRouter:
     router = APIRouter()
     store = SettingsStore(hub.config.data_dir)
     setup_code = SetupCode(hub.config.data_dir)
-    owner_guard = PinGuard(lambda: hub.config.owner.pin, header=OWNER_PIN_HEADER)  # same rate limit as /owner
+    owner_guard = PinGuard(lambda: hub.config.owner.pin, header=OWNER_PIN_HEADER,      # same lock-out as /owner
+                           attempts=hub.pin_attempts)
 
     def current() -> CafeSettings | None:
         return store.load()
@@ -89,6 +105,7 @@ def setup_router(hub: Hub) -> APIRouter:
             "product": brand.PRODUCT_NAME,
             "setup_done": bool(s and s.setup_done),
             "has_settings": s is not None,          # earlier settings (and PINs) exist; blank PIN fields keep them
+            "has_staff_pin": bool(s and s.staff_pin),   # a staff PIN is required: the form asks for one until set
             "needs_code": not (s and s.setup_done),
             "name": c.cafe.name, "tagline": c.cafe.tagline, "logo": c.cafe.logo,
             "wifi_ssid": c.cafe.wifi_ssid, "wifi_security": c.cafe.wifi_security,   # never the password
@@ -172,16 +189,16 @@ def setup_router(hub: Hub) -> APIRouter:
             # Only PINs the hub stored itself may be hashes; one sent in would let a copied hash stand in for a PIN.
             if isinstance(body.get(key), str) and is_hashed(body[key].strip()):
                 raise HTTPException(422, "A PIN is 4 to 8 digits.")
-        remove_staff_pin = bool(body.pop("remove_staff_pin", False))
+        body.pop("remove_staff_pin", None)      # older pages: the staff PIN can't be removed any more
         if old is not None:
             # /api/setup never returns PINs, so the form's PIN fields start empty: blank means "keep the current one".
             # Applies whenever settings exist, also after `setup-code --reset` (setup_done is false again then).
             if not body.get("owner_pin"):
                 body["owner_pin"] = old.owner_pin
-            if remove_staff_pin:
-                body["staff_pin"] = ""
-            elif not body.get("staff_pin"):
+            if not body.get("staff_pin"):
                 body["staff_pin"] = old.staff_pin
+        if not body.get("staff_pin"):
+            raise HTTPException(400, "Choose a staff PIN (4 to 8 digits). It may be the same as the owner PIN.")
         if not (body.get("wifi_ssid") or "").strip():
             body["wifi_password"] = ""                      # clearing the SSID clears the stored password too
         elif old is not None and not body.get("wifi_password") and body.get("wifi_security", "WPA") == "WPA":
@@ -189,9 +206,10 @@ def setup_router(hub: Hub) -> APIRouter:
         try:
             s = CafeSettings(**{**body, "logo": old.logo if old else hub.config.cafe.logo, "setup_done": True})
         except ValidationError as exc:
-            raise HTTPException(400, "; ".join(f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors()))
+            raise HTTPException(400, _plain_errors(exc)) from None
         store.save(s)
         apply_settings(hub.config, s)
+        hub.apply_hours()
         hub.startup_warnings = [w for w in hub.startup_warnings if w["code"] != "settings_damaged"]   # dealt with
         setup_code.clear()                     # used up: from now on the owner PIN guards /setup
         return state(True)

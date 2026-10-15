@@ -133,6 +133,8 @@
         <div><label for="open">Opens</label><select id="open"></select></div>
         <div><label for="close">Closes</label><select id="close"></select></div>
       </div>
+      <div class="muted" id="hours-note"></div>
+      <div class="muted">Sessions still open at closing time end automatically, and their cards are made.</div>
     </section>
 
     <section class="panel">
@@ -140,10 +142,11 @@
       <div class="grid2">
         <div><label for="owner-pin" id="owner-pin-label">Owner PIN (4 to 8 digits)</label>
           <input id="owner-pin" type="password" inputmode="numeric" pattern="[0-9]{4,8}" maxlength="8" required></div>
-        <div><label for="staff-pin" id="staff-pin-label">Staff PIN (optional)</label>
+        <div><label for="staff-pin" id="staff-pin-label">Staff PIN (4 to 8 digits)</label>
           <input id="staff-pin" type="password" inputmode="numeric" pattern="([0-9]{4,8})?" maxlength="8"></div>
-        <div id="remove-staff-row" hidden><label><input id="remove-staff" type="checkbox"> Remove the staff PIN</label></div>
       </div>
+      <div class="muted">Staff use the staff PIN on the staff page; the owner PIN opens the owner and setup pages.
+        The staff PIN may be the same as the owner PIN.</div>
     </section>
 
     <section class="panel">
@@ -205,11 +208,23 @@
     return h;
   }
 
+  const hh = (h) => String(h % 24).padStart(2, "0") + ":00";
   function hours() {
-    for (const [id, from, to] of [["open", 0, 23], ["close", 1, 24]]) {
-      const sel = $(id);
-      for (let h = from; h <= to; h++) sel.add(new Option(String(h).padStart(2, "0") + ":00", h));
-    }
+    for (let h = 0; h <= 23; h++) $("open").add(new Option(hh(h), h));
+    $("open").addEventListener("change", () => closeOptions());
+    $("close").addEventListener("change", () => closeOptions());
+    closeOptions();
+  }
+  // Closing: any hour after opening up to midnight, or 01:00-06:00 the next day (a cafe open past midnight).
+  function closeOptions(want) {
+    const sel = $("close"), open = Number($("open").value);
+    const keep = want != null ? (Number(want) === 0 ? 24 : Number(want)) : Number(sel.value || 22);
+    sel.textContent = "";
+    for (let h = open + 1; h <= 24; h++) sel.add(new Option(h === 24 ? "00:00 (midnight)" : hh(h), h));
+    for (let h = 1; h <= Math.min(6, open); h++) sel.add(new Option(hh(h) + " (next day)", h));
+    if ([...sel.options].some((o) => Number(o.value) === keep)) sel.value = keep;
+    $("hours-note").textContent = Number(sel.value) <= open
+      ? `Closes at ${hh(Number(sel.value))} (next day). Laps until then count for the day the cafe opened.` : "";
   }
 
   function pickAccent(value) {
@@ -243,9 +258,8 @@
     // Once set up, the PINs are never sent back: blank means "keep the current PIN".
     $("owner-pin").required = !s.has_settings;
     $("owner-pin-label").textContent = s.has_settings ? "Owner PIN (leave blank to keep the current PIN)" : "Owner PIN (4 to 8 digits)";
-    $("staff-pin-label").textContent = s.has_settings ? "Staff PIN (leave blank to keep the current PIN)" : "Staff PIN (optional)";
-    $("remove-staff-row").hidden = !s.has_settings;
-    $("remove-staff").checked = false;
+    $("staff-pin").required = !s.has_staff_pin;      // required: until one is set the form asks for it
+    $("staff-pin-label").textContent = s.has_staff_pin ? "Staff PIN (leave blank to keep the current PIN)" : "Staff PIN (4 to 8 digits)";
     $("owner-pin").value = "";
     $("staff-pin").value = "";
     $("wifi-ssid").value = s.wifi_ssid || "";
@@ -256,7 +270,7 @@
     $("name").value = s.name;
     $("tagline").value = s.tagline || "";
     $("open").value = s.open_hour;
-    $("close").value = s.close_hour;
+    closeOptions(s.close_hour);
     pickAccent(s.accent);
     $("hub-ip").textContent = s.hub_address || "this PC's network address (not found: check the network cable or Wi-Fi)";
     $("udp-port").textContent = s.udp_port;
@@ -465,7 +479,6 @@
     const body = {
       name: $("name").value.trim(), tagline: $("tagline").value.trim(), accent: $("accent").value.toUpperCase(),
       owner_pin: $("owner-pin").value, staff_pin: $("staff-pin").value,
-      remove_staff_pin: $("remove-staff").checked,
       wifi_ssid: $("wifi-ssid").value.trim(), wifi_security: $("wifi-security").value, wifi_password: $("wifi-password").value,
       open_hour: Number($("open").value), close_hour: Number($("close").value),
     };

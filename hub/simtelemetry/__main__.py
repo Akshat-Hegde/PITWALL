@@ -244,6 +244,8 @@ async def run_hub(args: argparse.Namespace, hub: Hub, selection: SourceSelection
              asyncio.create_task(hub.tick_races())]
     if udp_retry is not None:
         tasks.append(asyncio.create_task(udp_retry))
+    if cmd == "run" and not demo:
+        tasks.append(asyncio.create_task(hub.tick_auto_end()))      # first check now: sessions left from yesterday
     if cmd == "run" and not demo and hub.config.backup.enabled and hub.drivers.store.path is not None:
         tasks.append(asyncio.create_task(hub.backup_loop()))
     if print_lines:
@@ -594,7 +596,9 @@ def prepare_demo(args: argparse.Namespace, config: AppConfig) -> None:
     config.track_names[TRACK_ID] = DEMO_TRACK_NAME
     if not config.owner.pin:
         config.owner.pin = "0000"
-    log.info("Demo: %d sessions and %d laps of history in %s; six simulated rigs; owner PIN %s; "
+    if not config.staff.pin:
+        config.staff.pin = config.owner.pin          # a staff PIN is required; the demo uses the same one
+    log.info("Demo: %d sessions and %d laps of history in %s; six simulated rigs; owner and staff PIN %s; "
              "Director panel on /staff", counts["sessions"], counts["laps"], config.data_dir, config.owner.pin)
 
 
