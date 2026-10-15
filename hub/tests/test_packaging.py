@@ -159,12 +159,57 @@ def test_waiting_for_the_hub_and_the_finish_page():
 
 
 def test_data_folder_permissions_use_language_neutral_sids():
-    perms = _iss().split("procedure SetDataPermissions", 1)[1].split("end;", 1)[0]
+    perms = _iss().split("procedure SetDataPermissions", 1)[1].split("\nend;", 1)[0]
     assert "/inheritance:r" in perms
     assert "*S-1-5-18:(OI)(CI)F" in perms and "*S-1-5-32-544:(OI)(CI)F" in perms   # SYSTEM, Administrators
-    assert "*S-1-5-32-545:(OI)(CI)RX" in perms                                      # Users: read only...
-    assert "\\logs\" /grant *S-1-5-32-545:(OI)(CI)M" in perms                      # ...except the logs
-    assert "users-modify" not in _iss()
+    assert "*S-1-5-32-545:(OI)(CI)RX" in perms                                      # Users: read the cafe folder...
+    data = perms.split("DataDir + '\" /inheritance:r", 1)[1].split("\n", 1)[0]
+    assert "*S-1-5-18:(OI)(CI)F *S-1-5-32-544:(OI)(CI)F /Q" in data and "545" not in data   # ...not data...
+    assert "\\logs\" /grant *S-1-5-32-545:(OI)(CI)RX" in perms                     # ...except the logs, read only
+    iss = _iss()
+    assert "(OI)(CI)M" not in iss and "users-modify" not in iss                   # no Users write anywhere
+    assert "IcaclsFailed := True" in iss and "IsHub and IcaclsFailed" in iss      # a failure is shown at the end
+    assert "if not SafeToLock(DataDir)" in perms                                  # never a drive or Windows folder
+
+
+def test_data_folder_comes_from_the_hub_program():
+    """A data_dir changed in hub.toml is honoured: the installer asks the program, else uses the default."""
+    iss = _iss()
+    resolve = iss.split("function ResolveDataDir", 1)[1].split("\nend;", 1)[0]
+    assert "folder data" in resolve and "HomeDir + '\\data'" in resolve
+    detect = iss.split("procedure DetectInstallState", 1)[1].split("\nend;", 1)[0]
+    assert "DataPath := ResolveDataDir" in detect and "settings.json" in detect
+    after = iss.split("procedure AfterAllFiles", 1)[1]
+    assert after.index("DetectInstallState") < after.index("SetDataPermissions") < after.index("setup-code --new")
+    assert "LoadStringsFromFile(DataDir + '\\last-start-error.txt'" in iss        # UTF-8 aware
+
+
+def test_hub_address_accepts_only_host_and_port():
+    valid = _iss().split("function ValidHostPort", 1)[1].split("\nend;", 1)[0]
+    assert "IsHostChar" in valid and "65535" in valid and "Length(Port) > 5" in valid
+    host = _iss().split("function IsHostChar", 1)[1].split("\nend;", 1)[0]
+    assert "(C = '.') or (C = '-')" in host
+
+
+def test_switching_to_tv_only_and_silent_tv_installs():
+    iss = _iss()
+    prep = iss.split("function PrepareToInstall", 1)[1].split("\nend;", 1)[0]
+    assert "/HUB=" in prep and "else if HubInstalledHere then" in prep and "RemoveHubFromThisPC" in prep
+    remove = iss.split("procedure RemoveHubFromThisPC", 1)[1].split("\nend;", 1)[0]
+    assert "/Delete /F /TN" in remove and "DeleteFirewallRules" in remove
+    assert "This PC will stop being the hub" in iss
+    assert _lines("InstallDelete", r"{app}\{#ExeName}.exe", "Components: tvonly")
+    assert "{param:HUB|}" in iss
+    (startup,) = _lines("Icons", "{commonstartup}")
+    assert "Check: WantStartupTv" in startup
+    want = iss.split("function WantStartupTv", 1)[1].split("\nend;", 1)[0]
+    assert "WizardSilent and IsTvOnly" in want
+    assert r"{userstartup}\{#AppName} TV.lnk" in iss                             # no second TV window at sign-in
+
+
+def test_waiting_keeps_the_wizard_responsive():
+    wait = _iss().split("procedure WaitForHub", 1)[1].split("\nend;", 1)[0]
+    assert "Sleep(" not in wait and "PumpWait(1)" in wait and "npbstMarquee" in wait
 
 
 def test_ready_page_warns_about_updates():
@@ -177,6 +222,10 @@ def test_version_info_and_optional_signing():
     assert "AppPublisher={#Company}" in setup and "#ifdef SignInstaller" in setup
     build = (PKG / "build.ps1").read_text(encoding="utf-8")
     assert "/DCompany=$($brand.COMPANY)" in build
-    assert "_SIGN_CERT" in build and "_SIGN_PASS" in build and "if ($signCert -and $signPass)" in build
+    assert "_SIGN_CERT" in build and "_SIGN_PASS" in build and "if ($signCert) {" in build
+    assert "timestamp.digicert.com" in build and '-eq "none"' in build
+    assert "$q" in build and "sign.ps1" in build and "/p `\"" not in build        # password never on ISCC's line
+    sign = (PKG / "sign.ps1").read_text(encoding="utf-8")
+    assert "if ($env:SIGN_CERT_PASS)" in sign                                     # a .pfx without a password works
     spec = (PKG / "pitwall.spec").read_text(encoding="utf-8")
     assert "version=VERSION_INFO" in spec and "brand.COMPANY" in spec and "brand.PRODUCT_NAME" in spec

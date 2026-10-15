@@ -19,25 +19,39 @@ $brand = & $py -c "import json; from simtelemetry import brand; print(json.dumps
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed" }
 $exe = "$root\dist\$($brand.EXE_NAME)\$($brand.EXE_NAME).exe"
 
-# Optional code signing (U8): only when <EXE_NAME>_SIGN_CERT (a .pfx file) and <EXE_NAME>_SIGN_PASS are set, e.g.
-# PITWALL_SIGN_CERT / PITWALL_SIGN_PASS; <EXE_NAME>_SIGN_TIMESTAMP may name a timestamp server URL. Skipped silently
-# otherwise. The exe is signed here, the installer and its uninstaller by Inno Setup (SignTool below).
+# Optional code signing (U8): only when <EXE_NAME>_SIGN_CERT (a .pfx file) is set, e.g. PITWALL_SIGN_CERT;
+# <EXE_NAME>_SIGN_PASS is its password (leave it unset for a .pfx without one). <EXE_NAME>_SIGN_TIMESTAMP names the
+# timestamp server (default http://timestamp.digicert.com; "none" for no timestamp, then the signature stops being
+# valid when the certificate expires). Skipped silently without a certificate. The exe is signed here, the installer
+# and its uninstaller by Inno Setup (SignTool below); both go through packaging\sign.ps1, which reads the settings
+# from SIGN_* environment variables of this build only, so the password is never on a command line or quoted.
 $signPrefix = $brand.EXE_NAME.ToUpper()
 $signCert = [Environment]::GetEnvironmentVariable("$($signPrefix)_SIGN_CERT")
 $signPass = [Environment]::GetEnvironmentVariable("$($signPrefix)_SIGN_PASS")
 $signTs = [Environment]::GetEnvironmentVariable("$($signPrefix)_SIGN_TIMESTAMP")
 $signtool = $null
-if ($signCert -and $signPass) {
+$signScript = "$root\packaging\sign.ps1"
+if ($signCert) {
   if (-not (Test-Path $signCert)) { throw "The signing certificate $signCert was not found" }
+  if (-not $signTs) {
+    $signTs = "http://timestamp.digicert.com"
+    Write-Warning "$($signPrefix)_SIGN_TIMESTAMP is not set: timestamping with $signTs."
+  } elseif ($signTs -eq "none") {
+    $signTs = ""
+    Write-Warning "No timestamp ($($signPrefix)_SIGN_TIMESTAMP=none): the signatures stop being valid when the certificate expires."
+  }
   $signtool = (Get-Command signtool.exe -ErrorAction SilentlyContinue).Source
   if (-not $signtool) {
     $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue |
                 Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
   }
   if (-not $signtool) { throw "signtool.exe not found: install the Windows SDK signing tools, or unset $($signPrefix)_SIGN_CERT" }
-  $tsArgs = @()
-  if ($signTs) { $tsArgs = @("/tr", $signTs, "/td", "SHA256") }
-  & $signtool sign /f $signCert /p $signPass /fd SHA256 @tsArgs $exe
+  # For sign.ps1, here and in the processes ISCC starts (process scope: gone when this build ends).
+  $env:SIGN_TOOL_EXE = $signtool
+  $env:SIGN_CERT_FILE = (Resolve-Path $signCert).Path
+  $env:SIGN_CERT_PASS = if ($signPass) { $signPass } else { "" }
+  $env:SIGN_TS_URL = $signTs
+  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $signScript $exe
   if ($LASTEXITCODE -ne 0) { throw "Signing $exe failed (exit $LASTEXITCODE)" }
   Write-Host "Signed $exe"
 }
@@ -71,10 +85,10 @@ if (-not $iscc) { throw "Inno Setup 6 not found. Install it: winget install -e -
 $isccArgs = @("/DAppName=$($brand.PRODUCT_NAME)", "/DExeName=$($brand.EXE_NAME)", "/DTaskName=$($brand.TASK_NAME)",
                "/DCompany=$($brand.COMPANY)", "/DAppVersion=$version")
 if ($signtool) {
-  # Inno Setup replaces $f with the quoted file to sign; a literal $ is written $$.
-  $ts = if ($signTs) { " /tr $signTs /td SHA256" } else { "" }
+  # Inno Setup replaces $f with the quoted file to sign and $q with a quote; a literal $ is written $$. No literal
+  # quotes in the value: Windows PowerShell would pass them to ISCC unescaped.
   $isccArgs += @("/DSignInstaller=1",
-                 "/Ssigntool=`"$signtool`" sign /f `"$signCert`" /p `"$($signPass.Replace('$', '$$'))`" /fd SHA256$ts `$f")
+                 "/Ssigntool=powershell.exe -NoProfile -ExecutionPolicy Bypass -File `$q$($signScript.Replace('$', '$$'))`$q `$f")
 }
 & $iscc @isccArgs "$root\packaging\pitwall.iss"
 if ($LASTEXITCODE -ne 0) { throw "ISCC failed (exit $LASTEXITCODE)" }

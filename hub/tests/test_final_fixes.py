@@ -224,6 +224,18 @@ def test_folder_command_prints_the_folders_and_writes_nothing(tmp_path, capsys):
     assert capsys.readouterr().out.strip() == str(tmp_path / "usb")                # the owner's choice
 
 
+def test_folder_command_falls_back_when_settings_cannot_be_read(tmp_path, capsys):
+    """A standard Windows user can't read the data folder: the hub.toml / default backup folder is the answer."""
+    data = tmp_path / "data"
+    (data / "settings.json").mkdir(parents=True)                       # reading it raises an OSError, like a denial
+    assert cli.main(["folder", "backups", "--data-dir", str(data)]) == 0
+    assert capsys.readouterr().out.strip() == str(tmp_path / "backups")
+    (data / "settings.json").rmdir()
+    (data / "settings.json").write_text("{not json", encoding="utf-8")
+    assert cli.main(["folder", "backups", "--data-dir", str(data)]) == 0
+    assert capsys.readouterr().out.strip() == str(tmp_path / "backups")
+
+
 def _settings(backup_dir: str):
     from simtelemetry.core.settings import CafeSettings
     return CafeSettings(name="Cafe", owner_pin="2468", setup_done=True, backup_dir=backup_dir)

@@ -32,10 +32,18 @@ function Find-HubExe {
 if (-not $Exe) { $Exe = Find-HubExe }
 $folder = $null
 if ($Exe -and (Test-Path -LiteralPath $Exe)) {
+  # Windows PowerShell 5.1 turns a native program's stderr line (a hub.toml warning) into an error record, which
+  # stops the script under "Stop" even with 2>$null: relax it for this one call. The path is the last stdout line.
+  $savedPreference = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
   try {
     $out = @(& $Exe folder $Which 2>$null)
-    if ($LASTEXITCODE -eq 0 -and $out.Count -gt 0) { $folder = ([string]$out[-1]).Trim() }
+    $exitCode = $LASTEXITCODE
+    $lines = @($out | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] } |
+               ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
+    if ($exitCode -eq 0 -and $lines.Count -gt 0) { $folder = $lines[-1] }
   } catch { $folder = $null }
+  finally { $ErrorActionPreference = $savedPreference }
 }
 
 if ($DryRun) { Write-Output "FOLDER $folder"; exit 0 }

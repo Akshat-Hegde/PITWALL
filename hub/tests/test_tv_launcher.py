@@ -93,3 +93,16 @@ def test_open_folder_script_parses_and_asks_the_hub_program():
     assert out.stdout.strip() == "0", out.stdout + out.stderr
     text = script.read_text(encoding="utf-8")
     assert "& $Exe folder $Which" in text and "Test-Path -LiteralPath $folder -PathType Container" in text
+    assert '$ErrorActionPreference = "Continue"' in text          # a warning on stderr must not stop the script
+
+
+def test_open_folder_script_survives_stderr_from_the_program(tmp_path):
+    """Windows PowerShell 5.1 turns a native stderr line into an error; with "Stop" that used to abort the shortcut."""
+    fake = tmp_path / "fake hub.cmd"
+    fake.write_text("@echo off\r\necho WARNING: hub.toml has a problem 1>&2\r\necho C:\\Some Folder\\backups\r\n"
+                    "echo.\r\n", encoding="ascii")
+    script = SCRIPT.parent / "open-folder.ps1"
+    out = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script),
+                          "-Which", "backups", "-Exe", str(fake), "-DryRun"],
+                         capture_output=True, text=True, timeout=60)
+    assert out.stdout.strip() == r"FOLDER C:\Some Folder\backups", out.stdout + out.stderr

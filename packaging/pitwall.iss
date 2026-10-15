@@ -67,6 +67,17 @@ Name: "startuptv"; Description: "Open the TV page when this PC signs in"; Flags:
 ; Program files of the previous version: old libraries must not mix with the new ones. (The cafe's data lives in
 ; ProgramData and is never touched.)
 Type: filesandordirs; Name: "{app}\_internal"; Components: hub
+; A hub PC switched to TV-only: its hub program and hub shortcuts go (the hub was stopped and its boot task and
+; firewall rules removed in PrepareToInstall). The cafe's data stays in ProgramData.
+Type: filesandordirs; Name: "{app}\_internal"; Components: tvonly
+Type: files; Name: "{app}\{#ExeName}.exe"; Components: tvonly
+Type: files; Name: "{autoprograms}\{#AppName} Staff.*"; Components: tvonly
+Type: files; Name: "{autoprograms}\{#AppName} Owner.*"; Components: tvonly
+Type: files; Name: "{autoprograms}\{#AppName} Setup.*"; Components: tvonly
+Type: files; Name: "{autoprograms}\{#AppName} Show setup code.lnk"; Components: tvonly
+Type: files; Name: "{autoprograms}\{#AppName} Reset owner PIN.lnk"; Components: tvonly
+Type: files; Name: "{autoprograms}\{#AppName} Open backups folder.lnk"; Components: tvonly
+Type: files; Name: "{autoprograms}\{#AppName} Open logs folder.lnk"; Components: tvonly
 
 [Files]
 Source: "..\dist\{#ExeName}\*"; DestDir: "{app}"; Components: hub; Flags: recursesubdirs createallsubdirs ignoreversion
@@ -84,7 +95,7 @@ Source: "pitwall-task.xml"; DestDir: "{tmp}"; Components: hub; Flags: ignorevers
 ; The TV launcher runs hidden; it opens the TV page, or a local waiting page until the hub answers.
 Name: "{autoprograms}\{#AppName} TV"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "{code:TvLauncherParams}"; WorkingDir: "{app}\tools"; IconFilename: "{app}\{#ExeName}.ico"; Flags: runminimized
 Name: "{autodesktop}\{#AppName} TV"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "{code:TvLauncherParams}"; WorkingDir: "{app}\tools"; IconFilename: "{app}\{#ExeName}.ico"; Flags: runminimized
-Name: "{commonstartup}\{#AppName} TV"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "{code:TvLauncherParams}"; WorkingDir: "{app}\tools"; IconFilename: "{app}\{#ExeName}.ico"; Flags: runminimized; Tasks: startuptv
+Name: "{commonstartup}\{#AppName} TV"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "{code:TvLauncherParams}"; WorkingDir: "{app}\tools"; IconFilename: "{app}\{#ExeName}.ico"; Flags: runminimized; Check: WantStartupTv
 Name: "{autoprograms}\{#AppName} Staff"; Filename: "http://localhost:{#HttpPort}/staff"; Components: hub
 Name: "{autoprograms}\{#AppName} Owner"; Filename: "http://localhost:{#HttpPort}/owner"; Components: hub
 Name: "{autoprograms}\{#AppName} Setup"; Filename: "http://localhost:{#HttpPort}/setup"; Components: hub
@@ -114,10 +125,10 @@ const
   HUB_WAIT_MS = 90000;           // how long the installer waits for a freshly started hub to answer
 
 var
-  FreshInstall, SetupDone, HubAnswered, StartupTvDefaulted: Boolean;
-  SetupCodeText, StartErrorLine: String;
+  FreshInstall, SetupDone, HubAnswered, StartupTvDefaulted, IcaclsFailed: Boolean;
+  SetupCodeText, StartErrorLine, DataPath: String;
   TaskDisabled, TaskRecreated: Boolean;
-  CodeLabel, HelpLabel: TNewStaticText;
+  CodeLabel, HelpLabel, WarnLabel: TNewStaticText;
   HubAddrPage: TInputQueryWizardPage;
 
 function HomeDir: String;
@@ -125,9 +136,14 @@ begin
   Result := ExpandConstant('{commonappdata}\{#AppName}');
 end;
 
+// The cafe's data folder: hub.toml's data_dir as the hub program reports it (ResolveDataDir, once the new program is
+// in place), else the default <ProgramData>\<name>\data.
 function DataDir: String;
 begin
-  Result := HomeDir + '\data';
+  if DataPath <> '' then
+    Result := DataPath
+  else
+    Result := HomeDir + '\data';
 end;
 
 function IsHub: Boolean;
@@ -138,6 +154,53 @@ end;
 function IsTvOnly: Boolean;
 begin
   Result := WizardIsComponentSelected('tvonly');
+end;
+
+// The last non-empty line of a text file (UTF-8 with or without a BOM, or plain ASCII), trimmed; '' when none.
+function LastLineOf(FileName: String): String;
+var
+  Lines: TArrayOfString;
+  I: Integer;
+begin
+  Result := '';
+  if not LoadStringsFromFile(FileName, Lines) then Exit;
+  for I := GetArrayLength(Lines) - 1 downto 0 do
+    if Trim(Lines[I]) <> '' then
+    begin
+      Result := Trim(Lines[I]);
+      Break;
+    end;
+end;
+
+// Asks the installed hub program where its data folder is ("<exe> folder data": reads hub.toml, writes nothing), so
+// a data_dir changed in hub.toml is honoured. Falls back to the default folder when the program can't answer.
+function ResolveDataDir: String;
+var
+  Exe, OutFile, Line: String;
+  ResultCode: Integer;
+begin
+  Result := HomeDir + '\data';
+  Exe := ExpandConstant('{app}\{#ExeName}.exe');
+  if not FileExists(Exe) then
+  begin
+    Log('No hub program yet: data folder ' + Result);
+    Exit;
+  end;
+  OutFile := ExpandConstant('{tmp}\data-folder.txt');
+  DeleteFile(OutFile);
+  // cmd strips the outer quotes of /c "..."; UTF-8 output so a folder name in any language comes back intact.
+  if not Exec(ExpandConstant('{cmd}'), '/c "set PYTHONIOENCODING=utf-8&& "' + Exe + '" folder data > "' + OutFile +
+      '" 2>nul"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
+  begin
+    Log('"folder data" failed (exit code ' + IntToStr(ResultCode) + '): data folder ' + Result);
+    Exit;
+  end;
+  Line := LastLineOf(OutFile);
+  if (Length(Line) > 3) and ((Copy(Line, 2, 2) = ':\') or (Copy(Line, 1, 2) = '\\')) then
+    Result := RemoveBackslashUnlessRoot(Line)
+  else
+    Log('"folder data" gave no usable folder (' + Line + ')');
+  Log('Data folder: ' + Result);
 end;
 
 // settings.json says setup_done = true (it is written with json.dumps(indent=2); spaces and line breaks ignored).
@@ -156,18 +219,50 @@ begin
   Result := Pos('"setup_done":true', Text) > 0;
 end;
 
-function InitializeSetup: Boolean;
+// Decided once the new program is in place but before the hub has started again (it was stopped in
+// PrepareToInstall): settings.json only exists once a previous install was set up.
+procedure DetectInstallState;
 begin
-  // Decided before any file is written: settings.json only exists once a previous install was set up.
+  DataPath := ResolveDataDir;
   FreshInstall := not FileExists(DataDir + '\settings.json');
   SetupDone := ReadSetupDone;
   Log('Fresh install: ' + IntToStr(Ord(FreshInstall)) + ', setup done: ' + IntToStr(Ord(SetupDone)));
-  Result := True;
 end;
 
 // --- TV-only PCs: the hub PC's address ------------------------------------------------------------------------
 
-// "192.168.1.20", "hubpc", "http://192.168.1.20:8000/staff" -> "192.168.1.20:8000" (empty when nothing usable).
+function IsHostChar(C: Char): Boolean;
+begin
+  Result := ((C >= 'A') and (C <= 'Z')) or ((C >= 'a') and (C <= 'z')) or ((C >= '0') and (C <= '9')) or
+    (C = '.') or (C = '-');
+end;
+
+// host or host:port, host = letters, digits, dots and dashes, port = 1 to 5 digits (1-65535).
+function ValidHostPort(S: String): Boolean;
+var
+  I, Colon: Integer;
+  Host, Port: String;
+begin
+  Result := False;
+  Colon := Pos(':', S);
+  if Colon > 0 then
+  begin
+    Host := Copy(S, 1, Colon - 1);
+    Port := Copy(S, Colon + 1, Length(S));
+    if (Length(Port) < 1) or (Length(Port) > 5) then Exit;
+    for I := 1 to Length(Port) do
+      if (Port[I] < '0') or (Port[I] > '9') then Exit;
+    if (StrToIntDef(Port, 0) < 1) or (StrToIntDef(Port, 0) > 65535) then Exit;
+  end
+  else
+    Host := S;
+  if Host = '' then Exit;
+  for I := 1 to Length(Host) do
+    if not IsHostChar(Host[I]) then Exit;
+  Result := True;
+end;
+
+// "192.168.1.20", "hubpc", "http://192.168.1.20:8000/staff" -> "192.168.1.20:8000"; '' when it isn't an address.
 function HubHostPort(Typed: String): String;
 var
   P: Integer;
@@ -175,9 +270,9 @@ begin
   Result := Trim(Typed);
   if Pos('http://', Lowercase(Result)) = 1 then Delete(Result, 1, 7)
   else if Pos('https://', Lowercase(Result)) = 1 then Delete(Result, 1, 8);
-  P := Pos('/', Result);
+  P := Pos('/', Result);                       // a trailing slash, or a pasted page such as /staff
   if P > 0 then Result := Copy(Result, 1, P - 1);
-  if (Result = '') or (Pos(' ', Result) > 0) or (Result[1] = ':') then
+  if not ValidHostPort(Result) then
   begin
     Result := '';
     Exit;
@@ -197,6 +292,14 @@ function TvLauncherParams(Param: String): String;
 begin
   Result := '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + ExpandConstant('{app}\tools\tv-launcher.ps1') +
     '" -Url "' + TvUrl + '"';
+end;
+
+// The TV opens at sign-in: the task is ticked, or a silent TV-only install that didn't choose its tasks (a TV-only
+// PC is there to show the TV).
+function WantStartupTv: Boolean;
+begin
+  Result := WizardIsTaskSelected('startuptv') or
+    (WizardSilent and IsTvOnly and (ExpandConstant('{param:TASKS|}') = '') and (ExpandConstant('{param:MERGETASKS|}') = ''));
 end;
 
 function UrlAnswers(Url: String; TimeoutMs: Integer): Boolean;
@@ -223,6 +326,9 @@ begin
     'This PC''s TV then shows that hub.');
   HubAddrPage.Add('Hub PC address or name:', False);
   HubAddrPage.Values[0] := GetPreviousData('HubAddress', '');
+  // Silent TV-only install: /HUB=192.168.1.20 (required, see PrepareToInstall).
+  if ExpandConstant('{param:HUB|}') <> '' then
+    HubAddrPage.Values[0] := ExpandConstant('{param:HUB|}');
 end;
 
 procedure RegisterPreviousData(PreviousDataKey: Integer);
@@ -240,11 +346,18 @@ var
   HostPort: String;
 begin
   Result := True;
-  if CurPageID <> HubAddrPage.ID then Exit;
+  if (CurPageID <> HubAddrPage.ID) or WizardSilent then Exit;
+  if Trim(HubAddrPage.Values[0]) = '' then
+  begin
+    MsgBox('Type the hub PC''s address, for example 192.168.1.20, or its name.', mbError, MB_OK);
+    Result := False;
+    Exit;
+  end;
   HostPort := HubHostPort(HubAddrPage.Values[0]);
   if HostPort = '' then
   begin
-    MsgBox('Type the hub PC''s address, for example 192.168.1.20, or its name.', mbError, MB_OK);
+    MsgBox('That isn''t a PC address. Type it like 192.168.1.20 or hubpc: only letters, digits, dots and dashes, ' +
+      'with :8000 at the end only if the hub uses another port.', mbError, MB_OK);
     Result := False;
     Exit;
   end;
@@ -259,6 +372,16 @@ end;
 function GetTickCount: Cardinal;
   external 'GetTickCount@kernel32.dll stdcall';
 
+// Waits about Seconds seconds without freezing the wizard: Exec keeps the window painted and responsive while it
+// waits for ping (Sleep would not).
+procedure PumpWait(Seconds: Integer);
+var
+  ResultCode: Integer;
+begin
+  Exec(ExpandConstant('{sys}\ping.exe'), '-n ' + IntToStr(Seconds + 1) + ' 127.0.0.1', '', SW_HIDE,
+    ewWaitUntilTerminated, ResultCode);
+end;
+
 function HubRunning: Boolean;
 var
   ResultCode: Integer;
@@ -266,6 +389,20 @@ begin
   // find exits 0 when the exe is in the tasklist
   Result := Exec(ExpandConstant('{sys}\cmd.exe'), '/c tasklist /FI "IMAGENAME eq {#ExeName}.exe" | find /I "{#ExeName}.exe" >nul',
     '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
+end;
+
+function HubTaskExists: Boolean;
+var
+  ResultCode: Integer;
+begin
+  Result := Exec('schtasks.exe', '/Query /TN "{#TaskName}"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and
+    (ResultCode = 0);
+end;
+
+// This PC runs (or ran) the hub: its program or its boot task is here.
+function HubInstalledHere: Boolean;
+begin
+  Result := FileExists(ExpandConstant('{app}\{#ExeName}.exe')) or HubTaskExists;
 end;
 
 procedure StopHub;
@@ -281,14 +418,42 @@ begin
   for I := 1 to 15 do
   begin
     if not HubRunning then Break;
-    Sleep(1000);
+    PumpWait(1);
   end;
   if HubRunning then
   begin
     Log('Hub still running after the task was ended: taskkill');
     Exec('taskkill.exe', '/F /IM {#ExeName}.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    Sleep(1000);
+    PumpWait(1);
   end;
+end;
+
+procedure Netsh(Params: String);
+var
+  ResultCode: Integer;
+begin
+  Exec('netsh.exe', Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Log('netsh ' + Params + ' -> ' + IntToStr(ResultCode));
+end;
+
+procedure DeleteFirewallRules;
+begin
+  Netsh('advfirewall firewall delete rule name="{#AppName} hub"');
+  Netsh('advfirewall firewall delete rule name="{#AppName} telemetry"');
+  Netsh('advfirewall firewall delete rule name="{#AppName} pages"');
+end;
+
+// A hub PC switched to TV-only: what the uninstaller does ([UninstallRun]): the boot task and the firewall rules go.
+// (The hub was stopped first; its program files go in [InstallDelete]; the cafe's data is kept.)
+procedure RemoveHubFromThisPC;
+var
+  ResultCode: Integer;
+begin
+  Exec('schtasks.exe', '/End /TN "{#TaskName}"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('schtasks.exe', '/Delete /F /TN "{#TaskName}"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Log('Switched to TV-only: schtasks /Delete -> ' + IntToStr(ResultCode));
+  TaskDisabled := False;                // nothing to turn back on if the install is cancelled now
+  DeleteFirewallRules;
 end;
 
 procedure DeinitializeSetup;
@@ -306,7 +471,20 @@ end;
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := '';
-  if IsHub then StopHub;          // a TV-only PC has no hub to stop
+  if IsTvOnly and (HubHostPort(HubAddrPage.Values[0]) = '') then
+  begin
+    // Only possible in a silent install, which has no address page: it must be given on the command line.
+    Result := 'A TV-only install needs the hub PC''s address. Run it with /HUB=<address>, for example /HUB=192.168.1.20.';
+    Log(Result);
+    Exit;
+  end;
+  if IsHub then StopHub          // a TV-only PC has no hub to stop...
+  else if HubInstalledHere then  // ...unless it was the hub until now
+  begin
+    Log('This PC was the hub and becomes TV-only: stopping and removing the hub.');
+    StopHub;
+    RemoveHubFromThisPC;
+  end;
 end;
 
 procedure WriteTaskXml;
@@ -338,61 +516,89 @@ var
   Started: Cardinal;
 begin
   // Up to 90 s, measured on the clock (each probe can itself take a second): a first start on a slow PC, with
-  // the virus scanner looking at every new file, takes a while.
+  // the virus scanner looking at every new file, takes a while. The wizard stays responsive (PumpWait) and the
+  // progress bar moves while it waits.
   HubAnswered := False;
+  WizardForm.StatusLabel.Caption := 'Starting the hub' + #$2026 + ' this can take a minute';
+  WizardForm.ProgressGauge.Style := npbstMarquee;
   Started := GetTickCount;
-  while (GetTickCount - Started) < HUB_WAIT_MS do
+  while not HubAnswered and ((GetTickCount - Started) < HUB_WAIT_MS) do
   begin
     if UrlAnswers('http://localhost:{#HttpPort}/api/health', 1000) then
     begin
       HubAnswered := True;
       Log('The hub answers after ' + IntToStr((GetTickCount - Started) div 1000) + ' s.');
-      Exit;
-    end;
-    Sleep(500);
+    end
+    else
+      PumpWait(1);
   end;
-  Log('The hub did not answer on port {#HttpPort} within 90 s.');
+  WizardForm.ProgressGauge.Style := npbstNormal;
+  if not HubAnswered then
+    Log('The hub did not answer on port {#HttpPort} within 90 s.');
 end;
 
-// The first line of <data>\last-start-error.txt (the hub writes the plain-English reason there), or ''.
+// The first line of <data>\last-start-error.txt (the hub writes the plain-English reason there, UTF-8), or ''.
 function ReadStartError: String;
 var
-  Raw: AnsiString;
-  P: Integer;
+  Lines: TArrayOfString;
+  I: Integer;
 begin
   Result := '';
-  if not LoadStringFromFile(DataDir + '\last-start-error.txt', Raw) then Exit;
-  Result := Trim(String(Raw));
-  P := Pos(#10, Result);
-  if P > 0 then Result := Trim(Copy(Result, 1, P - 1));
+  if not LoadStringsFromFile(DataDir + '\last-start-error.txt', Lines) then Exit;
+  for I := 0 to GetArrayLength(Lines) - 1 do
+    if Trim(Lines[I]) <> '' then
+    begin
+      Result := Trim(Lines[I]);
+      Break;
+    end;
   if Length(Result) > 220 then Result := Copy(Result, 1, 217) + '...';
-end;
-
-procedure Netsh(Params: String);
-var
-  ResultCode: Integer;
-begin
-  Exec('netsh.exe', Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Log('netsh ' + Params + ' -> ' + IntToStr(ResultCode));
 end;
 
 procedure Icacls(Params: String);
 var
   ResultCode: Integer;
 begin
-  Exec(ExpandConstant('{sys}\icacls.exe'), Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  if not Exec(ExpandConstant('{sys}\icacls.exe'), Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    ResultCode := -1;
   Log('icacls ' + Params + ' -> ' + IntToStr(ResultCode));
+  if ResultCode <> 0 then IcaclsFailed := True;      // the finish page says so
 end;
 
-// The cafe's folder: SYSTEM (the hub) and Administrators full control, ordinary users read only, except the logs
-// folder, which they may also change. Well-known SIDs, so it works in every Windows language. Inheritance from
-// ProgramData is cut (it lets every user create files), and anything below is reset to inherit from here.
+// A data_dir set in hub.toml to a drive or a Windows folder must never have its permissions replaced.
+function SafeToLock(Folder: String): Boolean;
+var
+  F: String;
+begin
+  F := Lowercase(RemoveBackslashUnlessRoot(Folder));
+  Result := (Length(F) > 3) and (F <> Lowercase(ExpandConstant('{win}'))) and
+    (F <> Lowercase(ExpandConstant('{commonpf}'))) and (F <> Lowercase(ExpandConstant('{commonappdata}'))) and
+    (F <> Lowercase(RemoveBackslashUnlessRoot(GetEnv('USERPROFILE')))) and (F <> Lowercase(GetEnv('SystemDrive') + '\users'));
+end;
+
+// Who may do what (well-known SIDs, so it works in every Windows language; nobody but SYSTEM and Administrators
+// may write anywhere):
+//   <ProgramData>\<name>, config, backups: SYSTEM and Administrators full control, Users read.
+//   data (laps.db with guests' phone numbers, settings.json, setup-code.txt): SYSTEM and Administrators only.
+//   data\logs: also Users read (the "Open logs folder" shortcut; Windows lets anyone pass through data to it).
+// Inheritance from ProgramData is cut (it lets every user create files); everything below is reset to inherit from
+// these folders. The hub runs as SYSTEM and the admin shortcuts run elevated, so they can still write everything.
 procedure SetDataPermissions;
 begin
+  IcaclsFailed := False;
+  ForceDirectories(HomeDir);
   ForceDirectories(DataDir + '\logs');
   Icacls('"' + HomeDir + '" /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F *S-1-5-32-544:(OI)(CI)F *S-1-5-32-545:(OI)(CI)RX /Q');
   Icacls('"' + HomeDir + '\*" /reset /T /C /Q');
-  Icacls('"' + DataDir + '\logs" /grant *S-1-5-32-545:(OI)(CI)M /Q');
+  if not SafeToLock(DataDir) then
+  begin
+    Log('Data folder ' + DataDir + ' is a drive or a Windows folder: its permissions are left alone.');
+    IcaclsFailed := True;
+    Exit;
+  end;
+  Icacls('"' + DataDir + '" /reset /Q');                    // no leftover explicit entries (a data_dir elsewhere)
+  Icacls('"' + DataDir + '" /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F *S-1-5-32-544:(OI)(CI)F /Q');
+  Icacls('"' + DataDir + '\*" /reset /T /C /Q');
+  Icacls('"' + DataDir + '\logs" /grant *S-1-5-32-545:(OI)(CI)RX /Q');
 end;
 
 procedure RunAsAdministrator(LinkPath: String);
@@ -422,6 +628,7 @@ var
   Ok: Boolean;
 begin
   WizardForm.StatusLabel.Caption := 'Setting up the hub...';
+  DetectInstallState;
   WriteTaskXml;
   SetDataPermissions;
   if FreshInstall or not SetupDone then
@@ -445,9 +652,7 @@ begin
     Log('Upgrade over an existing setup: no new setup code.');
 
   // Firewall: old rules out, then the program rule plus port rules (in case the network profile is Public).
-  Netsh('advfirewall firewall delete rule name="{#AppName} hub"');
-  Netsh('advfirewall firewall delete rule name="{#AppName} telemetry"');
-  Netsh('advfirewall firewall delete rule name="{#AppName} pages"');
+  DeleteFirewallRules;
   Netsh('advfirewall firewall add rule name="{#AppName} hub" dir=in action=allow program="' + ExpandConstant('{app}\{#ExeName}.exe') + '" enable=yes profile=private,domain');
   Netsh('advfirewall firewall add rule name="{#AppName} telemetry" dir=in action=allow protocol=UDP localport=20777 enable=yes profile=any');
   Netsh('advfirewall firewall add rule name="{#AppName} pages" dir=in action=allow protocol=TCP localport={#HttpPort} enable=yes profile=any');
@@ -464,7 +669,7 @@ begin
       '). The install log has the details. The hub will not start by itself until this is fixed.', mbError, MB_OK, IDOK);
     Exit;
   end;
-  WizardForm.StatusLabel.Caption := 'Starting the hub (this can take up to a minute)...';
+  WizardForm.StatusLabel.Caption := 'Starting the hub' + #$2026 + ' this can take a minute';
   Ok := Exec('schtasks.exe', '/Run /TN "{#TaskName}"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
   Log('schtasks /Run -> ' + IntToStr(ResultCode));
   if Ok then
@@ -491,10 +696,28 @@ begin
   Log('powercfg monitor-timeout-ac 0 -> ' + IntToStr(ResultCode));
 end;
 
+// tv-launcher.ps1 -StartOnLogin puts "<name> TV.lnk" in the user's own Startup folder; with the all-users one from
+// this installer the TV would open twice at sign-in. ({userstartup} is the account the installer runs as: the
+// signed-in user when they confirmed the administrator prompt themselves.)
+procedure RemoveOwnStartupTv;
+var
+  Lnk: String;
+begin
+  Lnk := ExpandConstant('{userstartup}\{#AppName} TV.lnk');
+  if FileExists(Lnk) then
+  begin
+    if DeleteFile(Lnk) then Log('Removed ' + Lnk + ' (the installer''s sign-in shortcut replaces it).')
+    else Log('Could not remove ' + Lnk);
+  end;
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
-  if (CurStep = ssPostInstall) and WizardIsTaskSelected('keepawake') then
+  if CurStep <> ssPostInstall then Exit;
+  if WizardIsTaskSelected('keepawake') then
     KeepAwake;
+  if WantStartupTv then
+    RemoveOwnStartupTv;
 end;
 
 // --- Wizard pages -----------------------------------------------------------------------------------------------
@@ -508,13 +731,27 @@ function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo, MemoType
   MemoGroupInfo, MemoTasksInfo: String): String;
 begin
   Result := '';
-  if IsHub and (not FreshInstall or FileExists(ExpandConstant('{app}\{#ExeName}.exe'))) then
+  if IsHub and HubInstalledHere then
     Result := 'Install updates when nobody is driving: the hub restarts.' + NewLine + NewLine;
+  if IsTvOnly and HubInstalledHere then
+    Result := 'This PC will stop being the hub. The hub on this PC is stopped and no longer starts with Windows; ' +
+      'rigs, phones and other TVs must use the new hub PC. The cafe''s data is kept in ' + HomeDir + '.' +
+      NewLine + NewLine;
   if MemoTypeInfo <> '' then Result := Result + MemoTypeInfo + NewLine + NewLine;
   if IsTvOnly then
     Result := Result + 'The TV shows the hub at:' + NewLine + Space + TvUrl + NewLine + NewLine;
   if MemoDirInfo <> '' then Result := Result + MemoDirInfo + NewLine + NewLine;
   if MemoTasksInfo <> '' then Result := Result + MemoTasksInfo + NewLine;
+end;
+
+function NewLabel: TNewStaticText;
+begin
+  Result := TNewStaticText.Create(WizardForm);
+  Result.Parent := WizardForm.FinishedPage;
+  Result.AutoSize := False;
+  Result.WordWrap := True;
+  Result.Left := WizardForm.FinishedLabel.Left;
+  Result.Width := WizardForm.FinishedLabel.Width;
 end;
 
 procedure CurPageChanged(CurPageID: Integer);
@@ -529,20 +766,12 @@ begin
   if CurPageID <> wpFinished then Exit;
   if CodeLabel = nil then
   begin
-    CodeLabel := TNewStaticText.Create(WizardForm);
-    CodeLabel.Parent := WizardForm.FinishedPage;
-    CodeLabel.AutoSize := False;
-    CodeLabel.WordWrap := True;
-    CodeLabel.Left := WizardForm.FinishedLabel.Left;
-    CodeLabel.Width := WizardForm.FinishedLabel.Width;
+    CodeLabel := NewLabel;
     CodeLabel.Font.Size := 16;
     CodeLabel.Font.Style := [fsBold];
-    HelpLabel := TNewStaticText.Create(WizardForm);
-    HelpLabel.Parent := WizardForm.FinishedPage;
-    HelpLabel.AutoSize := False;
-    HelpLabel.WordWrap := True;
-    HelpLabel.Left := WizardForm.FinishedLabel.Left;
-    HelpLabel.Width := WizardForm.FinishedLabel.Width;
+    HelpLabel := NewLabel;
+    WarnLabel := NewLabel;
+    WarnLabel.Font.Color := clRed;
   end;
   CodeLabel.Top := WizardForm.FinishedLabel.Top + WizardForm.FinishedLabel.Height + ScaleY(12);
   CodeLabel.Height := ScaleY(40);
@@ -586,7 +815,19 @@ begin
     HelpLabel.Caption := 'Open "{#AppName} Show setup code" in the Start menu to get it.';
   end;
   HelpLabel.Top := CodeLabel.Top + CodeLabel.Height + ScaleY(4);
-  WizardForm.RunList.Top := HelpLabel.Top + HelpLabel.Height + ScaleY(8);
+  WarnLabel.Top := HelpLabel.Top + HelpLabel.Height + ScaleY(4);
+  if IsHub and IcaclsFailed then
+  begin
+    WarnLabel.Caption := 'Warning: the cafe''s data folder could not be fully locked to administrators (the install ' +
+      'log has the details). Run this installer again; if this stays, ask for help.';
+    WarnLabel.Height := ScaleY(30);
+  end
+  else
+  begin
+    WarnLabel.Caption := '';
+    WarnLabel.Height := 0;
+  end;
+  WizardForm.RunList.Top := WarnLabel.Top + WarnLabel.Height + ScaleY(8);
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);

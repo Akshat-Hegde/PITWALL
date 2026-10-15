@@ -475,18 +475,24 @@ def setup_code_command(args: argparse.Namespace, config: AppConfig) -> int:
 
 def folder_command(args: argparse.Namespace, config: AppConfig) -> int:
     """`folder data|logs|backups`: print the folder. Run by an ordinary Windows user (the "Open backups folder"
-    shortcut), who can only read the cafe's data folder, so it must never write anything."""
+    shortcut), so it must never write anything (and reads settings.json directly: SettingsStore.read may rewrite it).
+
+    The installed data folder is closed to ordinary users (guest phone numbers, PINs): only SYSTEM and Administrators
+    can read it, except data\\logs. So for `backups`, when settings.json can't be read (access denied, or damaged),
+    the answer falls back to hub.toml's [backup] directory, else the default <home>\\backups. That is the right folder
+    unless the owner picked another one on the owner page."""
     if args.which == "data":
         print(config.data_dir)
     elif args.which == "logs":
         print(config.data_dir / "logs")
     else:
         try:
-            saved = SettingsStore(config.data_dir).load()
-        except Exception:                       # unreadable: the default folder is still a useful answer
-            saved = None
-        if saved is not None and saved.backup_dir:
-            config.set_owner_backup_dir(Path(saved.backup_dir))
+            raw = json.loads((config.data_dir / "settings.json").read_text(encoding="utf-8"))
+            chosen = raw.get("backup_dir") if isinstance(raw, dict) else None
+        except (OSError, ValueError):           # not readable by this user, missing or damaged: use the fallback
+            chosen = None
+        if isinstance(chosen, str) and chosen.strip():
+            config.set_owner_backup_dir(Path(chosen.strip()))
         print(config.backups_dir)
     return 0
 
