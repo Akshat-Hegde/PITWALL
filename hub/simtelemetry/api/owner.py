@@ -11,10 +11,11 @@ from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
+from pydantic import ValidationError
 
 from ..core.analytics import Analytics
-from ..core.backup import BackupFailed, check_folder, last_backup
-from ..core.settings import SettingsDamaged, SettingsStore
+from ..core.backup import TOO_LONG, BackupFailed, check_folder, last_backup
+from ..core.settings import CafeSettings, SettingsDamaged, SettingsStore
 from .pages import render_page
 from .staff import PinGuard
 
@@ -96,7 +97,7 @@ def owner_router(hub: Hub) -> APIRouter:
         r"""{"folder": "E:\Backups"}: where backups go from now on (checked by writing a small file there);
         empty goes back to the default folder. Kept in settings.json."""
         try:
-            folder = check_folder(body.get("folder"))
+            folder = check_folder(body.get("folder"), data_dir=config.data_dir)
         except BackupFailed as exc:
             raise HTTPException(400, exc.text) from None
         try:
@@ -105,7 +106,11 @@ def owner_router(hub: Hub) -> APIRouter:
             current = None
         if current is None:
             raise HTTPException(409, "Finish setup first: open the setup page on the hub PC.")
-        settings_store.save(current.model_copy(update={"backup_dir": str(folder) if folder else ""}))
+        try:                                 # checked as a whole, so settings.json can never be saved unreadable
+            updated = CafeSettings.model_validate({**current.model_dump(), "backup_dir": str(folder) if folder else ""})
+        except ValidationError:
+            raise HTTPException(400, TOO_LONG) from None
+        settings_store.save(updated)
         config.set_owner_backup_dir(folder)
         log.info("Backup folder is now %s", config.backups_dir)
         return backup_status()

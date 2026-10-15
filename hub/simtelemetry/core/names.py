@@ -35,7 +35,9 @@ def _squeeze(word: str) -> str:
 
 def _forms(text: str) -> set[str]:
     """Every word in the text, plus runs of single letters joined into one word."""
-    folded = "".join(c for c in unicodedata.normalize("NFKD", text) if not unicodedata.combining(c))
+    # Marks and invisible format characters (zero-width joiners...) dropped: they must not split a word in two.
+    folded = "".join(c for c in unicodedata.normalize("NFKD", text)
+                     if not unicodedata.combining(c) and unicodedata.category(c) != "Cf")
     tokens = _TOKEN.findall(folded.casefold().translate(_LEET))
     words = set(tokens)
     run = ""

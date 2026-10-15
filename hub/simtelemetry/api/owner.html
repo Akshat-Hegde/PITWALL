@@ -161,8 +161,10 @@
       <p class="sub">Backups go to: <span id="backup-dir"></span></p>
       <form class="folder" id="backup-folder-form">
         <label for="backup-folder">Backup folder. A USB stick is best, so a backup survives if this PC breaks.
-          Type the folder, for example <b>E:\Backups</b>, or leave it empty for the standard folder.</label>
-        <input id="backup-folder" type="text" autocomplete="off" spellcheck="false" maxlength="260">
+          Type the folder, for example <b>E:\Backups</b>, or leave it empty for the standard folder.
+          Use a USB stick or a folder on another drive of this PC. Network folders and mapped drives (like Z:)
+          aren't supported: the hub runs in the background and can't see them.</label>
+        <input id="backup-folder" type="text" autocomplete="off" spellcheck="false" maxlength="200">
         <button class="btn" type="submit">Use this folder</button>
       </form>
       <button class="btn" type="button" id="backup-now">Back up now</button>

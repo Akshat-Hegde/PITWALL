@@ -42,6 +42,14 @@ GENERIC_FAILURE = "The backup couldn't be saved. Check the backup folder, then t
 NOT_A_FOLDER = "That is a file, not a folder. Choose a folder."
 WHOLE_PATH = r"Type the whole folder path, like E:\Backups."
 CHECK_FOLDER = "Check the backup folder or USB stick."
+# Choosing a folder: the hub runs in the background (as Windows' SYSTEM account), so it can't see mapped network
+# drives or most network folders; a drive letter it can't find is reported as not available to it.
+DRIVE_UNAVAILABLE = "Drive {drive} isn't available to the hub. Use a USB stick or a folder on this PC."
+NETWORK_FOLDER = ("Network folders aren't supported: the hub runs in the background and can't see them. "
+                  "Use a USB stick or a folder on this PC.")
+INSIDE_DATA = "Choose a folder outside the hub's data folder."
+FOLDER_MAX = 200                           # leaves room for the zip names under Windows' 260-character limit
+TOO_LONG = r"That folder path is too long. Choose a shorter one, like E:\Backups."
 
 _WIN_DISK_FULL = (39, 112)                 # ERROR_HANDLE_DISK_FULL, ERROR_DISK_FULL
 _WIN_NO_DEVICE = (15, 21)                  # ERROR_INVALID_DRIVE, ERROR_NOT_READY (card reader without a card)
@@ -94,29 +102,58 @@ def clean_folder_text(text: Any) -> str:
     return value
 
 
-def check_folder(text: Any, exists=os.path.exists) -> Path | None:
+def _inside(folder: Path, parent: Path) -> bool:
+    """Is `folder` `parent` or somewhere under it (compared without case, as Windows does)?"""
+    try:
+        a, b = os.path.normcase(os.path.abspath(folder)), os.path.normcase(os.path.abspath(parent))
+    except (OSError, ValueError):
+        return False
+    return a == b or a.startswith(b.rstrip("\\/") + os.sep)
+
+
+def check_folder(text: Any, exists=os.path.exists, data_dir: Path | None = None) -> Path | None:
     """The folder the owner chose, created if needed and checked by writing a small file; None for "the
-    default". Raises BackupFailed with a plain sentence when it can't be used."""
+    default". Raises BackupFailed with a plain sentence when it can't be used, and then leaves nothing behind (no
+    test file, no folders it made)."""
     value = clean_folder_text(text)
     if not value:
         return None
     if len(value) == 2 and value[1] == ":":
         value += "\\"                                      # "E:" means the top of the stick
+    if len(value) > FOLDER_MAX:
+        raise BackupFailed(TOO_LONG)
+    if value.startswith(("\\\\", "//")):
+        raise BackupFailed(NETWORK_FOLDER)
     folder = Path(value)
     if not folder.is_absolute():
         raise BackupFailed(WHOLE_PATH)
+    if data_dir is not None and _inside(folder, data_dir):
+        raise BackupFailed(INSIDE_DATA)
     drive = drive_missing(folder, exists)
     if drive is not None:
-        raise BackupFailed(USB_MISSING.format(drive=drive))
+        raise BackupFailed(DRIVE_UNAVAILABLE.format(drive=drive))
     probe = folder / f".{brand.SLUG}-write-test"
+    made: list[Path] = []                                  # folders this check created, deepest last
     try:
         if folder.exists() and not folder.is_dir():
             raise NotADirectoryError(str(folder))
-        folder.mkdir(parents=True, exist_ok=True)
+        for p in reversed([folder, *folder.parents]):
+            if not p.exists():
+                p.mkdir()
+                made.append(p)
         probe.write_bytes(b"ok")
         probe.unlink()
     except OSError as exc:
         log.warning("Can't use %s as the backup folder: %r", folder, exc)
+        try:
+            probe.unlink(missing_ok=True)
+        except OSError:
+            pass
+        for p in reversed(made):
+            try:
+                p.rmdir()                                  # only empty folders it made itself
+            except OSError:
+                break
         raise BackupFailed(plain_backup_error(exc, folder, exists)) from None
     return folder
 

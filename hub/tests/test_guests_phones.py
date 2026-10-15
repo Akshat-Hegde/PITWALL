@@ -277,3 +277,21 @@ def test_staff_start_holds_the_end_lock(tmp_path, monkeypatch):
     r = client.put(f"/api/staff/rigs/{RIG}/driver", json={"name": "Alex"})
     assert r.status_code == 200, r.text
     assert seen == {"auto_end_could_run": False}
+
+
+# --- Task 5 review fixes: combining marks can't smuggle a joiner into a Latin word ----------------------------
+
+def test_marks_around_a_joiner_do_not_hide_a_blocked_word():
+    name = "fu\u0331\u200d\u0331ck"
+    assert "\u200d" not in clean_name(name)                  # the mark sits on a Latin "u": the joiner goes
+    assert is_blocked(clean_name(name))
+    assert is_blocked(name)                                  # and the blocklist itself ignores joiners
+
+
+@pytest.mark.parametrize("name", [
+    "\u0938\u0942\u0930\u094d\u200d\u092f\u093e",            # ZWJ after a virama (a mark) on a Devanagari letter
+    "\u0915\u094d\u200c\u0937\u093f\u0924\u093f\u091c",
+    "\u0930\u093e\u091c\u094d\u200d\u092f",
+])
+def test_indic_joiners_after_a_virama_still_survive(name):
+    assert clean_name(name) == name and not is_blocked(name)

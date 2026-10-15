@@ -38,6 +38,7 @@ class CafeSettings(BaseModel):
     wifi_password: str = Field("", max_length=63)
     wifi_security: str = "WPA"
     backup_dir: str = Field("", max_length=260)     # chosen on the owner page; "" = hub.toml's folder or the default
+    # (260 so older files stay readable; the owner page allows 200, core/backup.FOLDER_MAX)
 
     @field_validator("accent")
     @classmethod

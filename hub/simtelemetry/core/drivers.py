@@ -54,8 +54,9 @@ _EMOJI_MODIFIERS = range(0x1F3FB, 0x1F400)      # skin tones
 
 
 def _script(c: str) -> str | None:
-    """The script of a letter or combining mark ("DEVANAGARI", "TAMIL"...), from its Unicode name; else None."""
-    if unicodedata.category(c)[0] not in "LM":
+    """The script of a letter ("DEVANAGARI", "TAMIL"...), from its Unicode name; else None. A combining mark has no
+    script of its own (a Latin "u" with a macron below is still Latin): see _base_script."""
+    if unicodedata.category(c)[0] != "L":
         return None
     try:
         return unicodedata.name(c).split(" ", 1)[0]
@@ -63,13 +64,25 @@ def _script(c: str) -> str | None:
         return None
 
 
-def _keep_joiner(prev: str, joiner: str, nxt: str) -> bool:
-    """ZWJ/ZWNJ shape Indic and other non-Latin scripts (the Marathi eyelash "rya" needs the ZWJ): keep one between two
-    characters of the same non-Latin script, and ZWJ inside an emoji sequence (family, flag). Drop it elsewhere."""
-    if not prev or not nxt:
+def _base_script(text: str, i: int) -> str | None:
+    """The script of text[i], or of the letter its combining marks sit on (an Indic virama takes its consonant's)."""
+    while i >= 0 and unicodedata.category(text[i])[0] == "M":
+        i -= 1
+    return _script(text[i]) if i >= 0 else None
+
+
+def _keep_joiner(text: str, i: int) -> bool:
+    """ZWJ/ZWNJ shape Indic and other non-Latin scripts (the Marathi eyelash "rya" needs the ZWJ): keep the one at
+    text[i] between two characters of the same non-Latin script, and ZWJ inside an emoji sequence (family, flag).
+    Drop it elsewhere. Combining marks count as their base letter's script, so marks around a joiner can't smuggle
+    one into a Latin word."""
+    joiner = text[i]
+    if i == 0 or i + 1 >= len(text):
         return False
-    script = _script(prev)
-    if script is not None and script != "LATIN" and script == _script(nxt):
+    prev, nxt = text[i - 1], text[i + 1]
+    script = _base_script(text, i - 1)
+    after = script if unicodedata.category(nxt)[0] == "M" else _script(nxt)   # a mark after it joins the same base
+    if script is not None and script != "LATIN" and script == after:
         return True
     if joiner == ZWJ and unicodedata.category(nxt) == "So":
         return (unicodedata.category(prev) == "So" or prev == "\ufe0f" or ord(prev) in _EMOJI_MODIFIERS)
@@ -90,7 +103,7 @@ def clean_name(value: Any) -> str:
         if c in _BLANKS:
             continue
         if unicodedata.category(c) == "Cf":
-            if c in (ZWJ, ZWNJ) and _keep_joiner(text[i - 1] if i else "", c, text[i + 1:i + 2]):
+            if c in (ZWJ, ZWNJ) and _keep_joiner(text, i):
                 kept.append(c)
             continue
         kept.append(c)

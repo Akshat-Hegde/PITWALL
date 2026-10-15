@@ -111,7 +111,7 @@ def test_check_folder_says_what_is_wrong(tmp_path):
     drive = missing_drive()
     with pytest.raises(BackupFailed) as e:
         check_folder(f"{drive}\\Backups")
-    assert e.value.text == f"The USB stick isn't plugged in (drive {drive} not found)."
+    assert e.value.text == f"Drive {drive} isn't available to the hub. Use a USB stick or a folder on this PC."
 
 
 def test_check_folder_permission_problem(tmp_path, monkeypatch):
@@ -123,10 +123,10 @@ def test_check_folder_permission_problem(tmp_path, monkeypatch):
     assert e.value.text == NO_PERMISSION
 
 
-def test_owner_chooses_the_backup_folder_and_it_survives_setup_and_restart(tmp_path):
+def test_owner_chooses_the_backup_folder_and_it_survives_setup_and_restart(tmp_path, tmp_path_factory):
     hub, client, code = _client(tmp_path)
     assert client.post("/api/setup", json={**GOOD, "staff_pin": "1357"}, headers=code).status_code == 200
-    usb = tmp_path / "E" / "Backups"
+    usb = tmp_path_factory.mktemp("E") / "Backups"           # outside the data folder (tmp_path here)
     before = client.get("/api/owner/backup", headers=OWNER).json()
     assert before["chosen"] == "" and before["directory"] == before["default_directory"]
     r = client.post("/api/owner/backup/folder", json={"folder": str(usb)}, headers=OWNER)
@@ -164,15 +164,15 @@ def test_owner_folder_errors_are_plain(tmp_path):
     client.post("/api/setup", json={**GOOD, "staff_pin": "1357"}, headers=code)
     drive = missing_drive()
     r = client.post("/api/owner/backup/folder", json={"folder": f"{drive}\\Backups"}, headers=OWNER)
-    assert r.status_code == 400 and r.json()["detail"] == f"The USB stick isn't plugged in (drive {drive} not found)."
+    assert r.status_code == 400 and r.json()["detail"] == f"Drive {drive} isn't available to the hub. Use a USB stick or a folder on this PC."
     assert SettingsStore(tmp_path).load().backup_dir == ""
     assert client.post("/api/owner/backup/folder", json={"folder": "x"}).status_code == 401
 
 
-def test_choosing_a_folder_before_setup_says_finish_setup(tmp_path):
+def test_choosing_a_folder_before_setup_says_finish_setup(tmp_path, tmp_path_factory):
     hub = make_hub(tmp_path, owner={"pin": "2468"})
     client = TestClient(create_app(hub, dashboard_dir=tmp_path / "none"))
-    r = client.post("/api/owner/backup/folder", json={"folder": str(tmp_path / "usb")}, headers=OWNER)
+    r = client.post("/api/owner/backup/folder", json={"folder": str(tmp_path_factory.mktemp("usb"))}, headers=OWNER)
     assert r.status_code == 409 and r.json()["detail"].startswith("Finish setup first")
 
 
@@ -285,3 +285,61 @@ def test_damaged_settings_are_found_in_the_last_backup_folder(tmp_path):
                                        more_dirs=backup_mod.last_backup_folder(data))
     assert warning.startswith("The cafe settings were damaged, so the hub put back the copy from the backup")
     assert store.load().name == "Lap Lab"
+
+
+# --- Task 5 review fixes ----------------------------------------------------------------------------------------
+
+def test_check_folder_refuses_the_data_folder_and_anything_inside_it(tmp_path):
+    data = tmp_path / "data"
+    data.mkdir()
+    for inside in (data, data / "backups", data / "logs" / "deep"):
+        with pytest.raises(BackupFailed) as e:
+            check_folder(str(inside), data_dir=data)
+        assert e.value.text == "Choose a folder outside the hub's data folder."
+    assert not (data / "backups").exists() and not (data / "logs").exists()     # nothing was made
+    assert check_folder(str(tmp_path / "data-backups"), data_dir=data) == tmp_path / "data-backups"   # a sibling is fine
+
+
+def test_check_folder_refuses_long_and_network_paths(tmp_path):
+    with pytest.raises(BackupFailed) as e:
+        check_folder(str(tmp_path / ("x" * 210)))
+    assert "too long" in e.value.text
+    for unc in (r"\\nas\share\Backups", "//nas/share"):
+        with pytest.raises(BackupFailed) as e:
+            check_folder(unc)
+        assert e.value.text.startswith("Network folders aren't supported")
+
+
+def test_a_failed_check_leaves_no_test_file_or_new_folders_behind(tmp_path, monkeypatch):
+    def denied(self, *a, **k):
+        Path.touch(self)                                      # the file got made, then writing failed
+        raise PermissionError(13, "Access is denied")
+    monkeypatch.setattr(Path, "write_bytes", denied)
+    with pytest.raises(BackupFailed):
+        check_folder(str(tmp_path / "new" / "deeper" / "Backups"))
+    assert list(tmp_path.iterdir()) == []                     # no folders it made, no test file
+    (tmp_path / "kept").mkdir()
+    with pytest.raises(BackupFailed):
+        check_folder(str(tmp_path / "kept"))
+    assert (tmp_path / "kept").is_dir() and list((tmp_path / "kept").iterdir()) == []   # an existing folder stays
+
+
+def test_owner_page_refuses_the_data_folder_and_says_why_network_drives_fail(tmp_path):
+    hub, client, code = _client(tmp_path)
+    client.post("/api/setup", json={**GOOD, "staff_pin": "1357"}, headers=code)
+    r = client.post("/api/owner/backup/folder", json={"folder": str(tmp_path / "backups")}, headers=OWNER)
+    assert r.status_code == 400 and r.json()["detail"] == "Choose a folder outside the hub's data folder."
+    assert SettingsStore(tmp_path).load().backup_dir == ""
+    page = client.get("/owner").text
+    assert "Network folders and mapped drives (like Z:)" in page and 'maxlength="200"' in page
+
+
+def test_a_bad_backup_folder_value_never_reaches_settings_json(tmp_path, monkeypatch, tmp_path_factory):
+    """Even if a value got past check_folder, the whole settings are validated before saving."""
+    from simtelemetry.api import owner as owner_api
+    hub, client, code = _client(tmp_path)
+    client.post("/api/setup", json={**GOOD, "staff_pin": "1357"}, headers=code)
+    monkeypatch.setattr(owner_api, "check_folder", lambda *a, **k: Path("E:\\" + "x" * 300))
+    r = client.post("/api/owner/backup/folder", json={"folder": "anything"}, headers=OWNER)
+    assert r.status_code == 400 and "too long" in r.json()["detail"]
+    assert SettingsStore(tmp_path).read().backup_dir == ""                      # still readable, unchanged
