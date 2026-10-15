@@ -49,6 +49,14 @@ Never run the installer on the development PC: it registers a boot task and fire
       - [ ] The old "Pitwall TV.lnk" is gone from `shell:startup`.
       - [ ] Sign out and in again: exactly one TV window opens.
     - **Installer file details:** right-click the installer and `Pitwall.exe`, Properties, Details: company 9T7 Racing, product Pitwall, version 0.5.0.
+    - **Real upgrade from 0.4.0:** on a clean spare PC or VM (or uninstall and delete `C:\ProgramData\Pitwall` first), install `dist\Pitwall-Setup-0.4.0.exe` as a hub. On its setup page choose a cafe name, owner PIN `2468`, **no staff PIN**, and opening hours 10:00 to 24:00 (midnight). Drive a lap or two (or replay a capture into it) so the boards have laps, open the TV on this PC or a TV-only PC, and back up once on the owner page. Then run `Pitwall-Setup-0.5.0.exe` over it and check:
+      - [ ] The last page says "Already set up: use your owner PIN." (no setup code).
+      - [ ] Staff page: the owner PIN `2468` opens it, with the red "Set a staff PIN" banner.
+      - [ ] Staff Health tab and the setup page (after the owner PIN) say "Sessions now end automatically at closing time (midnight). Check your opening hours on the setup page — if you close after midnight, choose the next-day time." Without the owner PIN the setup page shows only "1 thing needs attention".
+      - [ ] Save the setup page once with a staff PIN `1357`: the hours reminder and the red banner go away, and stay gone after restarting the PC.
+      - [ ] TV: it does not reload by itself this once (0.4 TVs don't know how). Press F5 on the TV, or restart the TV PC: it shows the 0.5.0 TV. Upgrade the hub again (same installer): this time the TV reloads by itself within a minute.
+      - [ ] Permissions as in "Permissions" above: `data` and `backups` (including the backup zip made by 0.4.0) SYSTEM and Administrators only; `C:\ProgramData\Pitwall` and `config` Users "Read & execute"; `data\logs` Users "Read & execute".
+      - [ ] Data kept: the cafe name, logo, rig names and the laps from before the upgrade are on the boards and the owner page.
     - **Disabled-task check in any Windows language:** with the task disabled in Task Scheduler and the hub stopped, `Pitwall.exe restore <zip>` from an administrator prompt must not print the warning; with it enabled, it must.
 12. **Send back** the install log (`%TEMP%\Setup Log *.txt`) and `C:\ProgramData\Pitwall\data\logs\hub.log`, plus a note of any step that failed.
 

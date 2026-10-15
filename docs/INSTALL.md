@@ -145,7 +145,12 @@ Wrong PINs: after five wrong PINs a device is locked out for a minute; after rep
 
 ## Upgrading
 
-Run the newer installer on the hub PC, **when nobody is driving**: the hub restarts during the install. The cafe's data and setup are kept, and the last page says "Already set up: use your owner PIN." Upgrade the TV-only PCs too (choose "This PC only shows the TV" again); they keep working in the meantime, and the TV reloads itself when the hub has been upgraded.
+Run the newer installer on the hub PC, **when nobody is driving**: the hub restarts during the install. The cafe's data and setup are kept, and the last page says "Already set up: use your owner PIN." Upgrade the TV-only PCs too (choose "This PC only shows the TV" again); they keep working in the meantime. From 0.5.0 on, TVs reload themselves after an update. When upgrading from 0.4, restart each TV PC once (or press F5 on the TV).
+
+**Upgrading from 0.4:**
+
+- **Sessions now end automatically at closing time (22:00).** Check your opening hours on the setup page — if you close after midnight, choose the next-day time. Until you save the setup page once, the staff and setup pages show this reminder.
+- **Staff PIN.** If staff had no PIN before, set a staff PIN on the setup page right after upgrading; until then staff can use the owner PIN (the staff page shows a red "Set a staff PIN" banner).
 
 **No going back below 0.5.0.** Version 0.5.0 stores PINs in a form older versions can't read. If you need to go back to an older version, uninstall, install the older version and restore a backup made before the upgrade.
 

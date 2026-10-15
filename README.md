@@ -193,9 +193,9 @@ Browsers only play sound after someone has clicked the page once; on a kiosk PC 
 | `backup_warning` | Owner page and staff Health warn when the last backup is over 2 days old |
 
 **The TV looks after itself.** If the feed goes quiet for 3 seconds the TV reconnects; after 10 seconds it shows
-the waiting or attract screen rather than frozen cars. When the hub is upgraded the TV reloads itself (at most
-once a minute), so nobody has to touch the TV PC. It keeps the screen awake where the browser allows it, and
-uses the hub's clock, not its own. The TV shows the same screens around the clock, and never shows addresses,
+the waiting or attract screen rather than frozen cars. From 0.5.0 on, TVs reload themselves after an update (at
+most once a minute), so nobody has to touch the TV PC. When upgrading from 0.4, restart each TV PC once (or press
+F5 on the TV). It keeps the screen awake where the browser allows it, and uses the hub's clock, not its own. The TV shows the same screens around the clock, and never shows addresses,
 warnings or other technical messages: those are on the staff page's Health tab.
 
 Mock options for demos: `?moment=now_driving|record|podium&momentAfter=5` shows that moment after 5 s;

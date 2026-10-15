@@ -374,7 +374,8 @@ The installer's own checks are in [INSTALL-TEST.md](INSTALL-TEST.md), step 11.
 **TV (K12)**
 
 - [ ] Restart the hub with the TV open: the TV comes back by itself, without anyone touching the TV PC.
-- [ ] Upgrade the hub (or run a newer build): the TV reloads itself within a minute.
+- [ ] Upgrade the hub (or run a newer build): the TV reloads itself within a minute. From 0.5.0 on, TVs reload
+      themselves after an update; when upgrading from 0.4, restart each TV PC once (or press F5 on the TV) first.
 - [ ] Set the TV PC's clock 5 minutes wrong: lap times, moments and the session story still look right.
 - [ ] With 7 or more rigs (real or `?source=mock&rigs=9`), MULTIVIEW shows every rig in a grid.
 
