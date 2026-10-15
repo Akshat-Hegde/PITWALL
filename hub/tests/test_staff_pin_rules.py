@@ -101,3 +101,59 @@ def test_wrong_pins_across_pages_lock_out_and_reach_the_owner_page(tmp_path):
     now["t"] += 15 * 60
     report = client.get("/api/owner/report", headers={"X-Owner-Pin": "2468"}).json()
     assert len(report["pin_alerts"]) == 1 and report["pin_alerts"][0].startswith("Someone tried wrong PINs 15 times at ")
+
+
+# --- same name today (K8) ------------------------------------------------------------------------------
+
+async def test_same_name_check_finds_a_driver_on_another_rig_or_todays_board(tmp_path):
+    import time
+
+    from test_drivers import RIG, client_with_rig
+    hub, client = await client_with_rig(tmp_path)
+    other = "192.168.1.22"
+    hub.registry.see(other, time.monotonic(), "2025", None)
+
+    def check(name, rig=RIG):
+        r = client.get("/api/staff/names/check", params={"name": name, "rig_id": rig})
+        assert r.status_code == 200, r.text
+        return r.json()
+
+    assert check("Alex") == {"name": "Alex", "in_use": False, "where": None}
+    client.put(f"/api/staff/rigs/{other}/driver", json={"name": "Alex"})
+    assert check("  alex ") == {"name": "alex", "in_use": True, "where": "driving on Rig 2"}
+    assert check("Alex", rig=other)["in_use"] is False          # its own rig doesn't count
+    client.delete(f"/api/staff/rigs/{other}/driver")
+    assert check("Alex")["in_use"] is False
+    # A lap today under the walk-in name: same line on the board.
+    now_ms = round(time.time() * 1000)
+    with hub.drivers.store._lock, hub.drivers.store._db as db:
+        db.execute("INSERT INTO laps (rig_id, rig_name, driver, driver_key, track_key, lap_number, lap_ms, valid, "
+                   "out_lap, completed_at) VALUES (?, 'Rig 2', 'Sam', 'driver:sam', 'F1:7', 2, 90000, 1, 0, ?)",
+                   (other, now_ms))
+    assert check("SAM") == {"name": "SAM", "in_use": True, "where": "on today's board"}
+    assert client.get("/api/staff/names/check", params={"name": ""}).status_code == 400
+
+
+async def test_wifi_qr_for_the_card_panel(tmp_path):
+    from test_drivers import client_with_rig
+    hub, client = await client_with_rig(tmp_path)
+    assert client.get("/api/staff/wifi").json() == {"wifi": None}
+    hub.config.cafe.wifi_ssid, hub.config.cafe.wifi_password = "Lap Lab Guests", "fastlaps1"
+    wifi = client.get("/api/staff/wifi").json()["wifi"]
+    assert wifi["ssid"] == "Lap Lab Guests" and wifi["svg"].startswith("<svg") and "fastlaps1" not in wifi["svg"]
+
+
+def test_staff_and_owner_pages_ask_before_destructive_actions_and_speak_plainly():
+    from pathlib import Path
+    api = Path(__file__).parents[1] / "simtelemetry" / "api"
+    staff = (api / "staff.html").read_text(encoding="utf-8")
+    owner = (api / "owner.html").read_text(encoding="utf-8")
+    assert "Their card will be made now." in staff and "rig__end-row" in staff        # confirm, apart from +time
+    assert "from the queue?" in staff and "Remove ${m.name} from ${t.name}?" in staff
+    assert "Same person" in staff and "Add a letter" in staff and "Their laps will be on one line." in staff
+    assert "Set a staff PIN on the setup page" in staff and "Join the Wi-Fi first" in staff
+    assert '["INPUT", "SELECT", "TEXTAREA"].includes(el.tagName)' in staff            # buttons don't block redraws
+    for page in (staff, owner, (api / "setup.html").read_text(encoding="utf-8"),
+                 (api / "checkin_print.html").read_text(encoding="utf-8")):
+        assert "The hub answered" not in page and "Failed to fetch" not in page and "[features]" not in page
+    assert "pin_alerts" in owner

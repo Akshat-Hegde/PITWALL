@@ -453,8 +453,10 @@
     ownerPin = "";
   }
 
+  const OFFLINE = "Can't reach the hub. Check that the hub PC is on and this device is on the cafe network.";
+  const BROKEN = "Something went wrong on the hub. Try again; if it keeps happening, restart the hub PC.";
   async function detail(r) {
-    try { return (await r.json()).detail; } catch { return "Something went wrong."; }
+    try { const d = (await r.json()).detail; return typeof d === "string" && d ? d : BROKEN; } catch { return BROKEN; }
   }
 
   $("logo-file").addEventListener("change", async () => {
@@ -490,7 +492,8 @@
         fill(await r.json());
         say($("msg"), "Saved. Your TV updates in a few seconds.", "ok");
       } else say($("msg"), await detail(r), "error");
-    } finally { $("save").disabled = false; }
+    } catch { say($("msg"), OFFLINE, "error"); }
+    finally { $("save").disabled = false; }
   });
 
   hours();

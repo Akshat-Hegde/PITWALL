@@ -397,6 +397,13 @@ class LapStore:
                            "delta_ms": min(latest) - min(before)})
         return sorted(result, key=lambda r: r["delta_ms"])
 
+    def has_laps_since(self, driver_key: str, since_ms: int) -> bool:
+        """Any lap stored under this driver key since `since_ms` (e.g. a walk-in name on today's board)."""
+        with self._lock:
+            row = self._db.execute("SELECT 1 FROM laps WHERE driver_key = ? AND completed_at >= ? LIMIT 1",
+                                   (driver_key, since_ms)).fetchone()
+        return row is not None
+
     def tracks(self) -> list[dict[str, Any]]:
         """Every track with at least one lap, by name."""
         with self._lock:

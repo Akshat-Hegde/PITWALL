@@ -216,6 +216,18 @@ class Hub:
         self.laps.day_start_hour = self.config.day_start_hour
         self.competitions.day_start_hour = self.config.day_start_hour
 
+    def name_in_use(self, name: str, rig_id: str | None = None) -> str | None:
+        """Where a walk-in name is already used today ("driving on Rig 2", "on today's board"), else None.
+        Walk-in laps with the same name share one line on the boards, so staff are asked first."""
+        folded = name.casefold()
+        for ip, session in self.drivers.sessions().items():
+            if ip != rig_id and session.driver_id is None and session.name.casefold() == folded:
+                return f"driving on {self.rig_label(ip)}"
+        since = self.laps.period_starts()["today"] or 0
+        if self.drivers.store.has_laps_since(driver_key(name, rig_id or "", None), since):
+            return "on today's board"
+        return None
+
     def session_started(self, ip: str) -> None:
         """Staff started a session on a rig: reset its session stats and show 'now driving'."""
         self._session_top_kph.pop(ip, None)

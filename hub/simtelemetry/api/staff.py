@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
-from ..core.drivers import EXTEND_PROMPT_MS, DriverError
+from ..core.drivers import EXTEND_PROMPT_MS, DriverError, clean_name
 from ..core.feed import FeedBuilder
 from ..core.tv import TvError
 from ..core.wifi import wifi_share
@@ -177,6 +177,23 @@ def staff_router(hub: Hub) -> APIRouter:
         card = hub.session_card(rig.ip, previous) if previous else None
         hub.session_started(rig.ip)
         return {**rig_row(rig, time.monotonic()), "card": _card_link(card)}
+
+    @router.get("/api/staff/names/check", dependencies=[Depends(guard)])
+    def name_check(name: str = "", rig_id: str = "") -> dict[str, Any]:
+        """Before starting a walk-in name: is it already driving on another rig or on today's board? The page then
+        asks "There's already an Alex today. Same person?" (same name = one line on the boards)."""
+        try:
+            clean = clean_name(name)
+        except DriverError as exc:
+            raise _bad(exc) from None
+        where = hub.name_in_use(clean, rig_id or None)
+        return {"name": clean, "in_use": where is not None, "where": where}
+
+    @router.get("/api/staff/wifi", dependencies=[Depends(guard)])
+    def wifi() -> dict[str, Any]:
+        """The guest Wi-Fi QR for the card panel ("Join the Wi-Fi first"), or null when none is set."""
+        share = wifi_share(hub.config)
+        return {"wifi": {"ssid": share["ssid"], "svg": _qr_svg(share["qr"])} if share else None}
 
     @router.post("/api/staff/rigs/{rig_id}/extend", dependencies=[Depends(guard)])
     def extend(rig_id: str, body: dict[str, Any] = Body(...)) -> dict[str, Any]:

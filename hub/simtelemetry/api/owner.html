@@ -82,6 +82,7 @@
   form.pin { max-width: 360px; background: var(--surface-1); padding: 16px; margin: 24px auto; }
   form.pin input { width: 100%; padding: 10px; font: inherit; color: var(--text-primary); background: var(--surface-2); border: 1px solid var(--line); margin: 8px 0; }
   .empty { color: var(--text-muted); padding: 24px 0; text-align: center; }
+  .alert { margin: 0 0 12px; padding: 10px 14px; background: rgba(242, 194, 48, 0.12); border-left: 3px solid #f2c230; color: var(--text-primary); }
   @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
 </style>
 </head>
@@ -100,6 +101,7 @@
   <p class="msg" id="msg" role="status"></p>
 
   <div id="report" hidden>
+    <div id="pin-alerts"></div>
     <div class="filters" role="group" aria-label="Period">
       <div class="seg" id="range">
         <button type="button" data-days="7" aria-pressed="false">7 days</button>
@@ -178,11 +180,15 @@
   const hashPin = /^#pin=(\w+)$/.exec(location.hash);
   if (hashPin) { setPin(hashPin[1]); history.replaceState(null, "", location.pathname); }
 
-  async function api(path) {
-    const res = await fetch(path, { headers: { "X-Owner-Pin": pin() } });
+  const OFFLINE = "Can't reach the hub. Check that the hub PC is on and this device is on the cafe network, then reload.";
+  const BROKEN = "Something went wrong on the hub. Try again; if it keeps happening, restart the hub PC.";
+  async function api(path, init) {
+    let res;
+    try { res = await fetch(path, { ...(init || {}), headers: { "X-Owner-Pin": pin() } }); }
+    catch { throw new Error(OFFLINE); }
     const body = await res.json().catch(() => null);
     if (res.status === 401 || res.status === 429) { showPin(body && body.detail); throw new Error("locked"); }
-    if (!res.ok) throw new Error((body && body.detail) || `The hub answered ${res.status}.`);
+    if (!res.ok) throw new Error((body && typeof body.detail === "string" && body.detail) || BROKEN);
     return body;
   }
   function showPin(message) { $("pin-form").hidden = false; $("report").hidden = true; $("pin-msg").textContent = message || ""; $("pin").focus(); }
@@ -331,6 +337,12 @@
   function render() {
     const d = data;
     $("cafe").textContent = d.cafe || "Owner";
+    $("pin-alerts").replaceChildren(...(d.pin_alerts || []).map((t) => {
+      const p = document.createElement("p");
+      p.className = "alert";
+      p.textContent = `${t}. They were locked out for 15 minutes; if it wasn't staff, change the PINs on the setup page.`;
+      return p;
+    }));
     $("period").textContent = `${shortDate(d.from)} – ${shortDate(d.to)}`;
     const s = d.summary;
     const tiles = [
@@ -374,8 +386,10 @@
     document.querySelectorAll("[data-csv]").forEach((a) => {
       a.onclick = async (e) => {
         e.preventDefault();
-        const res = await fetch(`/api/owner/export.csv?kind=${a.dataset.csv}&days=${days}`, { headers: { "X-Owner-Pin": pin() } });
-        if (!res.ok) { $("msg").textContent = "Export failed: " + res.status; return; }
+        let res = null;
+        try { res = await fetch(`/api/owner/export.csv?kind=${a.dataset.csv}&days=${days}`, { headers: { "X-Owner-Pin": pin() } }); }
+        catch { /* shown below */ }
+        if (!res || !res.ok) { $("msg").textContent = res ? "The export didn't work. Reload the page and try again." : OFFLINE; return; }
         const url = URL.createObjectURL(await res.blob());
         const link = document.createElement("a");
         link.href = url; link.download = `${a.dataset.csv}-last-${days}-days.csv`; link.click();
@@ -396,12 +410,9 @@
   $("backup-now").addEventListener("click", async () => {
     $("backup-msg").textContent = "Backing up...";
     try {
-      const res = await fetch("/api/owner/backup", { method: "POST", headers: { "X-Owner-Pin": pin() } });
-      const body = await res.json().catch(() => null);
-      if (!res.ok) throw new Error((body && body.detail) || `The hub answered ${res.status}.`);
-      showBackup(body);
+      showBackup(await api("/api/owner/backup", { method: "POST" }));
       $("backup-msg").textContent = "Done.";
-    } catch (err) { $("backup-msg").textContent = err.message; }
+    } catch (err) { $("backup-msg").textContent = err.message === "locked" ? "" : err.message; }
   });
 
   async function load() {

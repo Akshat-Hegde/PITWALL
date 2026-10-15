@@ -112,6 +112,14 @@
   td.r, th.r { text-align: right; }
   .faster { color: var(--ok); }
   .slower { color: var(--warn); }
+  .rig__end-row { justify-content: flex-end; margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--line); }
+  .same { margin-top: 10px; padding: 10px 12px; background: rgba(242, 194, 48, 0.12); border-left: 3px solid var(--warn); }
+  .last { margin: 8px 0 0; padding: 8px 10px; background: var(--panel-2); font-size: 0.92rem; }
+  .qr-row { display: flex; flex-wrap: wrap; gap: 16px; margin: 8px 0; }
+  .qr-row figure { margin: 0; }
+  .qr-row figcaption { font-weight: 700; margin-bottom: 6px; }
+  .qr-row img, .qr-row .qr-svg { display: block; width: 200px; height: 200px; background: #fff; }
+  .qr-row .qr-svg svg { width: 100%; height: 100%; }
   [hidden] { display: none !important; }
   @media (max-width: 440px) { .grid2 { grid-template-columns: 1fr; } }
 </style>
@@ -143,6 +151,11 @@
     <p class="msg error" id="pin-msg" role="alert"></p>
   </form>
   <p class="msg" id="top-msg" role="status"></p>
+  <section class="panel" id="staff-pin-banner" style="border-left-color: var(--error)" hidden>
+    <div class="title" style="color: var(--error)">Set a staff PIN on the setup page</div>
+    <p>This page was unlocked with the owner PIN because no staff PIN is set yet. Open the setup page, enter the
+      owner PIN and choose a staff PIN (it may be the same as the owner PIN), so staff don't need the owner PIN.</p>
+  </section>
   <section class="panel" id="address-banner" style="border-left-color: var(--warn)" hidden>
     <div class="title">Network address changed</div>
     <p id="address-text"></p>
@@ -170,7 +183,17 @@
   <section class="panel" id="card-panel" hidden>
     <div class="row"><span class="title">Session card</span><button class="btn small" type="button" id="card-close">Close</button></div>
     <p class="muted" id="card-text"></p>
-    <img id="card-qr" alt="QR code of the session card" width="220" height="220" style="display:block;background:#fff;margin:8px 0">
+    <div class="qr-row">
+      <figure id="card-wifi" hidden>
+        <figcaption>1. Join the Wi-Fi first</figcaption>
+        <div class="qr-svg" id="card-wifi-qr" role="img" aria-label="QR code to join the guest Wi-Fi"></div>
+        <div class="faint" id="card-wifi-name"></div>
+      </figure>
+      <figure>
+        <figcaption id="card-qr-caption">Scan for the card</figcaption>
+        <img id="card-qr" alt="QR code of the session card" width="200" height="200">
+      </figure>
+    </div>
     <a id="card-link" class="muted" target="_blank" rel="noopener"></a>
   </section>
 
@@ -315,9 +338,13 @@
       <div class="actions">
         <button class="btn small" type="button" data-extend="5">+5 min</button>
         <button class="btn small" type="button" data-extend="15">+15 min</button>
+      </div>
+      <div class="actions rig__end-row">
         <button class="btn danger small rig__end" type="button">End session</button>
       </div>
     </div>
+    <p class="last rig__last" hidden><span class="rig__last-text"></span>
+      <button class="btn small rig__last-card" type="button" hidden>Show card</button></p>
     <form class="rig__start">
       <p class="faint rig__stored"></p>
       <div class="rig__next" hidden>
@@ -333,6 +360,13 @@
             <option value="20" selected>20 min</option><option value="30">30 min</option>
             <option value="45">45 min</option><option value="60">60 min</option>
           </select></div>
+      </div>
+      <div class="same rig__same" hidden>
+        <p class="rig__same-text" style="margin:0"></p>
+        <div class="actions">
+          <button class="btn small primary rig__same-yes" type="button">Same person</button>
+          <button class="btn small rig__same-no" type="button">Add a letter</button>
+        </div>
       </div>
       <div class="actions"><button class="btn primary" type="submit">Start session</button></div>
     </form>
@@ -356,18 +390,22 @@
   function storedPin() { try { return sessionStorage.getItem(PIN_KEY) || ""; } catch { return ""; } }
   function storePin(pin) { try { sessionStorage.setItem(PIN_KEY, pin); } catch { /* private mode */ } }
 
+  const OFFLINE = "Can't reach the hub. Check that the hub PC is on and this device is on the cafe Wi-Fi. Trying again…";
+  const BROKEN = "Something went wrong on the hub. Try again; if it keeps happening, restart the hub PC.";
   async function api(method, path, body) {
     const headers = { "X-Staff-Pin": storedPin() };
     if (body) headers["Content-Type"] = "application/json";
-    const res = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+    let res;
+    try { res = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined }); }
+    catch { const e = new Error(OFFLINE); e.offline = true; throw e; }
     let data = null;
     try { data = await res.json(); } catch { /* empty body */ }
     if (res.status === 401 || res.status === 429) { showPin(data && data.detail); throw new Error("locked"); }
-    if (!res.ok) throw new Error((data && data.detail) || `The hub answered ${res.status}.`);
+    if (!res.ok) throw new Error((data && typeof data.detail === "string" && data.detail) || BROKEN);
     return data;
   }
 
-  function showCard(card) {
+  async function showCard(card) {
     if (!card) return;
     $("card-panel").hidden = false;
     $("card-text").textContent = `${card.driver}: scan to open your session card (phone on the cafe Wi-Fi).`;
@@ -375,7 +413,26 @@
     $("card-link").href = `/card/${encodeURIComponent(card.token)}`;
     $("card-link").textContent = "Open the card";
     window.scrollTo(0, 0);
+    let wifi = null;
+    try { wifi = (await api("GET", "/api/staff/wifi")).wifi; } catch { /* the card QR alone still works */ }
+    $("card-wifi").hidden = !wifi;
+    $("card-qr-caption").textContent = wifi ? "2. Scan for the card" : "Scan for the card";
+    $("card-wifi-qr").innerHTML = wifi ? wifi.svg : "";       // an SVG the hub made from the Wi-Fi settings
+    $("card-wifi-name").textContent = wifi ? wifi.ssid : "";
   }
+  function noCard(name, note) {
+    if (note) say($("top-msg"), `${name}: ${note}`, "");
+  }
+  // Messages per rig survive the 3-second redraw; drafts keep a half-typed name when the list is redrawn.
+  const rigMsgs = {}, drafts = {};
+  let sameName = null;    // {rig_id, body, text}: the "There's already an Alex today" question being asked
+  function rigSay(rigId, text, kind) {
+    rigMsgs[rigId] = text ? { text, kind } : null;
+    const el = document.querySelector(`.rig[data-rig="${CSS.escape(rigId)}"] .rig__msg`);
+    if (el) say(el, text, kind);
+  }
+  function rigFail(rigId, err) { if (err.message !== "locked") rigSay(rigId, err.message, "error"); }
+  function fmtClock(ms) { return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
   function say(el, text, kind) { el.textContent = text || ""; el.className = "msg" + (kind ? " " + kind : ""); }
   function fail(el, err) { if (err.message !== "locked") say(el, err.message, "error"); }
 
@@ -421,8 +478,9 @@
   // --- rigs ----------------------------------------------------------------------------------
   function renderRigs() {
     const box = $("rigs");
-    const focused = document.activeElement && box.contains(document.activeElement);
-    if (focused) return; // don't redraw under someone typing
+    const el = document.activeElement;
+    // Don't redraw under someone typing or choosing; a focused button doesn't count (actions blur it).
+    if (el && box.contains(el) && ["INPUT", "SELECT", "TEXTAREA"].includes(el.tagName)) return;
     box.textContent = "";
     if (!state.rigs.length) {
       box.innerHTML = '<p class="muted">No rigs yet. Each rig appears as soon as its game sends telemetry.</p>';
@@ -433,17 +491,20 @@
 
   function rigCard(rig) {
     const el = $("rig-template").content.firstElementChild.cloneNode(true);
+    el.dataset.rig = rig.rig_id;
     el.style.setProperty("--rig-colour", rig.colour);
     el.querySelector(".rig__name").textContent = rig.rig_name;
     el.querySelector(".rig__state").textContent = rig.state_text + (rig.track_name ? " · " + rig.track_name : "");
     const msg = el.querySelector(".rig__msg");
+    if (rigMsgs[rig.rig_id]) say(msg, rigMsgs[rig.rig_id].text, rigMsgs[rig.rig_id].kind);
     const s = rig.session;
+    const done = (b) => { if (b && b.blur) b.blur(); };    // a pressed button must not stop the next redraw
     const checkin = el.querySelector(".rig__checkin");
     checkin.hidden = !(state.features && state.features.self_checkin);
     el.querySelector(".rig__newcode").addEventListener("click", async () => {
       if (!confirm("Make a new check-in code for " + rig.rig_name + "? Old stickers stop working.")) return;
-      try { await api("POST", `/api/staff/checkin/codes/${encodeURIComponent(rig.rig_id)}/regenerate`); say(msg, "New code made. Print the stickers again.", "ok"); }
-      catch (err) { fail(msg, err); }
+      try { await api("POST", `/api/staff/checkin/codes/${encodeURIComponent(rig.rig_id)}/regenerate`); rigSay(rig.rig_id, "New code made. Print the stickers again.", "ok"); }
+      catch (err) { rigFail(rig.rig_id, err); }
     });
     el.querySelector(".rig__session").hidden = !s;
     el.querySelector(".rig__start").hidden = !!s;
@@ -461,38 +522,103 @@
       }
       el.querySelector(".rig__extend").hidden = !rig.extend_prompt;
       el.querySelectorAll("[data-extend]").forEach((b) => b.addEventListener("click", async () => {
-        try { await api("POST", `/api/staff/rigs/${encodeURIComponent(rig.rig_id)}/extend`, { minutes: Number(b.dataset.extend) }); await load(); }
-        catch (err) { fail(msg, err); }
+        done(b);
+        try { await api("POST", `/api/staff/rigs/${encodeURIComponent(rig.rig_id)}/extend`, { minutes: Number(b.dataset.extend) }); rigSay(rig.rig_id, `${b.dataset.extend} minutes added.`, "ok"); }
+        catch (err) { rigFail(rig.rig_id, err); }
+        await load();
       }));
-      el.querySelector(".rig__end").addEventListener("click", async () => {
-        try { const r = await api("DELETE", `/api/staff/rigs/${encodeURIComponent(rig.rig_id)}/driver`); showCard(r.card); await load(); }
-        catch (err) { fail(msg, err); }
+      el.querySelector(".rig__end").addEventListener("click", async (e) => {
+        done(e.currentTarget);
+        if (!confirm(`End ${s.name}'s session on ${rig.rig_name}? Their card will be made now.`)) return;
+        try {
+          const r = await api("DELETE", `/api/staff/rigs/${encodeURIComponent(rig.rig_id)}/driver`);
+          rigSay(rig.rig_id, "", "");
+          if (r.card) showCard(r.card); else noCard(s.name, r.card_note);
+        } catch (err) { rigFail(rig.rig_id, err); }
+        await load();
       });
     } else {
       el.querySelector(".rig__stored").textContent =
         `Laps now saved as ${rig.laps_stored_as}` + (rig.game_driver ? " (name from the game)" : "");
+      const last = rig.auto_ended;          // the last session ended by itself (closing time, time up)
+      el.querySelector(".rig__last").hidden = !last;
+      if (last) {
+        el.querySelector(".rig__last-text").textContent =
+          `${last.driver}: ${last.text} (${fmtClock(last.at)}).` + (last.card_note ? " " + last.card_note : "");
+        const show = el.querySelector(".rig__last-card");
+        show.hidden = !last.card;
+        show.addEventListener("click", () => { done(show); showCard(last.card); });
+      }
       const chips = el.querySelector(".rig__queue");
       el.querySelector(".rig__next").hidden = !state.queue.length && !selectedDriver;
-      const minutes = () => el.querySelector(".rig__minutes").value || null;
-      const start = async (body) => {
-        try { const r = await api("PUT", `/api/staff/rigs/${encodeURIComponent(rig.rig_id)}/driver`, { ...body, minutes: minutes() }); showCard(r.card); await load(); }
-        catch (err) { fail(msg, err); }
+      const nameInput = el.querySelector(".rig__name-input");
+      const minutesSel = el.querySelector(".rig__minutes");
+      const draft = drafts[rig.rig_id];
+      if (draft) { nameInput.value = draft.name; minutesSel.value = draft.minutes; }
+      const keep = () => { drafts[rig.rig_id] = { name: nameInput.value, minutes: minutesSel.value }; };
+      nameInput.addEventListener("input", keep);
+      minutesSel.addEventListener("change", keep);
+      const minutes = () => minutesSel.value || null;
+      const send = async (body) => {
+        sameName = null;
+        try {
+          const r = await api("PUT", `/api/staff/rigs/${encodeURIComponent(rig.rig_id)}/driver`, { ...body, minutes: minutes() });
+          delete drafts[rig.rig_id];
+          rigSay(rig.rig_id, "", "");
+          showCard(r.card);
+        } catch (err) { rigFail(rig.rig_id, err); }
+        await load();
       };
+      // A walk-in name already driving on another rig or on today's board shares one line: ask first.
+      const start = async (body, name) => {
+        if (name != null) {
+          try {
+            const c = await api("GET", `/api/staff/names/check?name=${encodeURIComponent(name)}&rig_id=${encodeURIComponent(rig.rig_id)}`);
+            if (c.in_use) {
+              sameName = { rig_id: rig.rig_id, body, text: `There's already ${/^[aeiou]/i.test(c.name) ? "an" : "a"} ${c.name} today (${c.where}). Same person? Their laps will be on one line.` };
+              renderRigs();
+              return;
+            }
+          } catch (err) { rigFail(rig.rig_id, err); return; }
+        }
+        await send(body);
+      };
+      if (sameName && sameName.rig_id === rig.rig_id) {
+        const box = el.querySelector(".rig__same");
+        box.hidden = false;
+        el.querySelector(".rig__same-text").textContent = sameName.text;
+        const pending = sameName.body;
+        el.querySelector(".rig__same-yes").addEventListener("click", (e) => { done(e.currentTarget); send(pending); });
+        el.querySelector(".rig__same-no").addEventListener("click", () => {
+          sameName = null;
+          box.hidden = true;
+          if (pending.queue_id == null) {
+            nameInput.value = (pending.name || "").trim() + " ";
+            keep();
+            nameInput.focus();
+            rigSay(rig.rig_id, "Add a letter or a surname so the two drivers stay apart, then press Start session.", "");
+          } else {
+            rigSay(rig.rig_id, "Type the name with a letter added under Walk-in name, then press Start session.", "");
+          }
+        });
+      }
       if (selectedDriver) {
         const b = document.createElement("button");
         b.type = "button"; b.className = "btn small primary"; b.textContent = "★ " + selectedDriver.name;
-        b.addEventListener("click", () => start({ driver_id: selectedDriver.id }));
+        b.addEventListener("click", () => { done(b); start({ driver_id: selectedDriver.id }); });
         chips.appendChild(b);
       }
       state.queue.slice(0, 3).forEach((q, i) => {
         const b = document.createElement("button");
         b.type = "button"; b.className = "btn small"; b.textContent = `${i + 1}. ${q.name}`;
-        b.addEventListener("click", () => start({ queue_id: q.id }));
+        b.addEventListener("click", () => { done(b); start({ queue_id: q.id }, q.driver_id ? null : q.name); });
         chips.appendChild(b);
       });
       el.querySelector(".rig__start").addEventListener("submit", (e) => {
         e.preventDefault();
-        start({ name: el.querySelector(".rig__name-input").value });
+        nameInput.blur();
+        const name = nameInput.value;
+        start({ name }, name.trim() ? name : null);
       });
     }
     return el;
@@ -512,6 +638,7 @@
       const b = document.createElement("button");
       b.type = "button"; b.className = "btn danger small"; b.textContent = "Remove";
       b.addEventListener("click", async () => {
+        if (!confirm(`Remove ${q.name} from the queue?`)) return;
         try { await api("DELETE", `/api/staff/queue/${q.id}`); await load(); } catch (err) { fail($("queue-msg"), err); }
       });
       li.appendChild(b);
@@ -702,7 +829,10 @@
           const rm = document.createElement("button");
           rm.type = "button"; rm.className = "btn danger small"; rm.textContent = "×";
           rm.setAttribute("aria-label", `Remove ${m.name}`);
-          rm.addEventListener("click", async () => { try { await api("DELETE", `/api/staff/members/${m.id}`); loadCompete(); } catch (err) { fail($("ev-msg"), err); } });
+          rm.addEventListener("click", async () => {
+            if (!confirm(`Remove ${m.name} from ${t.name}?`)) return;
+            try { await api("DELETE", `/api/staff/members/${m.id}`); loadCompete(); } catch (err) { fail($("ev-msg"), err); }
+          });
           li.appendChild(rm);
           ul.appendChild(li);
         }
@@ -885,10 +1015,13 @@
   });
 
   // --- refresh -------------------------------------------------------------------------------
+  let hubDown = false;
   async function load() {
     clearTimeout(refreshTimer);
     try {
       state = await api("GET", "/api/staff/rigs");
+      if (hubDown) { hubDown = false; say($("top-msg"), "", ""); }      // the hub answers again
+      $("staff-pin-banner").hidden = !state.staff_pin_missing;
       if (state.cafe) $("cafe").textContent = state.cafe;
       $("podium-btn").hidden = state.features && state.features.podium === false;
       $("director-btn").hidden = !state.demo;
@@ -899,7 +1032,8 @@
       if (currentTab === "compete" && !compete) loadCompete();
     } catch (err) {
       if (err.message === "locked") return;
-      say($("top-msg"), "Can't reach the hub: " + err.message, "error");
+      hubDown = true;
+      say($("top-msg"), err.message, "error");
     }
     refreshTimer = setTimeout(load, 3000);
   }
