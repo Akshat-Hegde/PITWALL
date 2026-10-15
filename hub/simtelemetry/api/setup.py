@@ -100,6 +100,7 @@ def setup_router(hub: Hub) -> APIRouter:
 
     def state(full: bool) -> dict[str, Any]:
         s = current()
+        admin = hub.admin_warnings() if full else []
         c = hub.config
         return {
             "product": brand.PRODUCT_NAME,
@@ -116,8 +117,10 @@ def setup_router(hub: Hub) -> APIRouter:
             "phone_test": hub.phone_test.status(hub.hub_address(), c.network.http_port, _qr_svg),
             "authed": full,                         # rig addresses and editing need the owner PIN
             "rigs": rig_rows(full),
-            "warnings": [{"code": w["code"], "message": w["message"]}
-                         for w in hub.admin_warnings()] + wrong_senders(full),
+            # Start-up, address and settings problems only for the owner (or the setup code before setup); anyone
+            # else on the network learns only how many there are, so the page can say "unlock to see them".
+            "warnings": [{"code": w["code"], "message": w["message"]} for w in admin] + wrong_senders(full),
+            "hidden_warnings": 0 if full else len(hub.admin_warnings()),
         }
 
     def wrong_senders(full: bool) -> list[dict[str, Any]]:

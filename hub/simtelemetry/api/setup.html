@@ -278,7 +278,7 @@
     $("product").textContent = s.product;
     document.title = "Setup " + s.product;
     $("code-panel").hidden = !s.needs_code;
-    renderWarnings(s.warnings || []);
+    renderWarnings(s.warnings || [], s.hidden_warnings || 0);
     // Once set up, the PINs are never sent back: blank means "keep the current PIN".
     $("owner-pin").required = !s.has_settings;
     $("owner-pin-label").textContent = s.has_settings ? "Owner PIN (leave blank to keep the current PIN)" : "Owner PIN (4 to 8 digits)";
@@ -325,7 +325,12 @@
     setTimeout(pollPhoneTest, 5000);
   }
 
-  function renderWarnings(warnings) {
+  function renderWarnings(warnings, hidden = 0) {
+    if (hidden > 0) {       // only the owner (or the setup code) sees what they are
+      warnings = [...warnings, { code: "hidden", message: (hidden === 1 ? "1 thing needs" : hidden + " things need")
+        + " attention. Press “Show addresses and edit rigs” below" + (state && state.needs_code ? " (with the setup code entered above)" : "")
+        + " to see " + (hidden === 1 ? "it." : "them.") }];
+    }
     $("warnings-panel").hidden = warnings.length === 0;
     $("warnings").replaceChildren(...warnings.map((w) => {
       const li = document.createElement("li");
@@ -481,6 +486,9 @@
     state.rigs = d.rigs;
     renderRigs(d.rigs, true);
     say($("rig-msg"), "", "");
+    // Now the warnings kept for the owner too (only the warnings: the form may have unsaved changes).
+    fetch("/api/setup", { headers: readHeaders() }).then((x) => x.ok ? x.json() : null)
+      .then((s) => { if (s && s.authed) renderWarnings(s.warnings || [], 0); }).catch(() => {});
   });
 
   // Sends the request; once setup is done a 401 means the owner PIN is needed: ask and retry.

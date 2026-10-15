@@ -43,9 +43,10 @@ def wait_for_server(port, timeout=10.0):
     return False
 
 
-def run_hub_briefly(argv, poll_paths=(), during=None, duration="15"):
+def run_hub_briefly(argv, poll_paths=(), during=None, duration="15", headers=None):
     """main(["run", ...]) on free ports, fetching the given API paths (with headers) once it answers, then stopping
-    it. The staff pages need a PIN: the hub gets owner PIN 2468 (no staff PIN set, so the owner PIN opens them)."""
+    it. The staff pages need a PIN: the hub gets owner PIN 2468 (no staff PIN set, so the owner PIN opens them).
+    `headers` are sent too (a setup code, say: /api/setup shows its warnings only to the owner)."""
     results: dict[str, object] = {}
     if any(p.startswith("/api/staff") for p in poll_paths):
         argv = [*argv, "--owner-pin", "2468"]
@@ -57,7 +58,7 @@ def run_hub_briefly(argv, poll_paths=(), during=None, duration="15"):
             if during:
                 during()
             for path in poll_paths:
-                request = urllib.request.Request(f"http://127.0.0.1:{port}{path}", headers=OWNER_AS_STAFF)
+                request = urllib.request.Request(f"http://127.0.0.1:{port}{path}", headers={**OWNER_AS_STAFF, **(headers or {})})
                 with urllib.request.urlopen(request, timeout=5) as r:
                     results[path] = json.load(r)
         finally:
@@ -78,8 +79,10 @@ def ports():
 def test_bad_hub_toml_starts_with_defaults_and_warns_staff_and_setup(tmp_path):
     config = tmp_path / "hub.toml"
     config.write_text("[recorder]\nenabled_in_run = tru\n", encoding="utf-8")
+    from simtelemetry.core.setup_code import SetupCode
+    setup = {"X-Setup-Code": SetupCode(tmp_path / "data").new()}
     code, got = run_hub_briefly(["run", "--config", str(config), "--data-dir", str(tmp_path / "data"), *ports()],
-                                ["/api/setup", "/api/staff/health"])
+                                ["/api/setup", "/api/staff/health"], headers=setup)
     assert code == 0
     setup_msgs = [w["message"] for w in got["/api/setup"]["warnings"]]
     assert setup_msgs == ["Your settings file (hub.toml) has a mistake on line 2: Invalid value. "
@@ -237,10 +240,12 @@ def test_run_with_damaged_settings_warns_on_setup_page(tmp_path):
     data = tmp_path / "data"
     (data).mkdir()
     (data / "settings.json").write_text("{", encoding="utf-8")
-    code, got = run_hub_briefly(["run", "--data-dir", str(data), *ports()], ["/api/setup"])
+    from simtelemetry.core.setup_code import SetupCode
+    setup = {"X-Setup-Code": SetupCode(data).new()}
+    code, got = run_hub_briefly(["run", "--data-dir", str(data), *ports()], ["/api/setup"], headers=setup)
     assert code == 0
     state = got["/api/setup"]
-    assert state["needs_code"] is True
+    assert state["needs_code"] is True and state["authed"] is True
     assert [w["code"] for w in state["warnings"]] == ["settings_damaged"]
 
 
@@ -351,7 +356,9 @@ def test_saving_setup_again_clears_the_damaged_settings_warning(tmp_path):
     hub.add_startup_warning("settings_damaged", "The cafe settings were damaged ...")
     hub.add_startup_warning("laps_damaged", "The lap database was damaged ...")
     client = TestClient(create_app(staff_ready(hub), dashboard_dir=tmp_path / "none"), headers=STAFF)
-    assert len(client.get("/api/setup").json()["warnings"]) == 2
+    anon = client.get("/api/setup").json()                  # anyone on the network: only how many
+    assert anon["warnings"] == [] and anon["hidden_warnings"] == 2
+    assert len(client.get("/api/setup", headers={"X-Setup-Code": code}).json()["warnings"]) == 2
     body = {"name": "Lap Lab", "owner_pin": "2468", "staff_pin": "1357", "open_hour": 10, "close_hour": 22}
     r = client.post("/api/setup", json=body, headers={"X-Setup-Code": code})
     assert r.status_code == 200 and [w["code"] for w in r.json()["warnings"]] == ["laps_damaged"]

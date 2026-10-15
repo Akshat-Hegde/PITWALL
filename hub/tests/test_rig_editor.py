@@ -91,10 +91,12 @@ def test_address_watch_warns_on_change_until_acknowledged(tmp_path):
 
 def test_address_change_shows_on_setup_and_staff_and_ok_done_clears_it(tmp_path):
     hub, client, owner = set_up(tmp_path)
-    assert client.get("/api/setup").json()["warnings"] == []
+    assert client.get("/api/setup", headers=owner).json()["warnings"] == []
     hub.address_watch.current = lambda: "192.168.1.44"
-    codes = [w["code"] for w in client.get("/api/setup").json()["warnings"]]
+    codes = [w["code"] for w in client.get("/api/setup", headers=owner).json()["warnings"]]
     assert codes == ["address_changed"]
+    anon = client.get("/api/setup").json()                   # without the owner PIN: only that there is one
+    assert anon["warnings"] == [] and anon["hidden_warnings"] == 1 and "192.168.1.44" not in json.dumps(anon)
     staff = {"X-Staff-Pin": "1357"}
     health = client.get("/api/staff/health", headers=staff).json()
     assert [w["code"] for w in health["warnings"]].count("address_changed") == 1
