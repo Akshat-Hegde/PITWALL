@@ -73,6 +73,7 @@ def setup_router(hub: Hub) -> APIRouter:
             "open_hour": c.owner.open_hour, "close_hour": c.owner.close_hour,
             "hub_address": lan_address(), "http_port": c.network.http_port, "udp_port": c.network.udp_port,
             "rigs": [{"rig_id": r.ip, "name": r.name} for r in hub.registry.all()],
+            "warnings": [{"code": w["code"], "message": w["message"]} for w in hub.admin_warnings()],
         }
 
     @router.post("/api/setup")
@@ -100,7 +101,8 @@ def setup_router(hub: Hub) -> APIRouter:
             raise HTTPException(400, "; ".join(f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors()))
         store.save(s)
         apply_settings(hub.config, s)
-        setup_code.clear()                      # used up: from now on the owner PIN guards /setup
+        hub.startup_warnings = [w for w in hub.startup_warnings if w["code"] != "settings_damaged"]   # dealt with
+        setup_code.clear()                     # used up: from now on the owner PIN guards /setup
         return state()
 
     @router.post("/api/setup/logo")

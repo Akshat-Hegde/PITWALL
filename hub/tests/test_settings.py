@@ -40,11 +40,17 @@ def test_corrupt_file_is_ignored_not_fatal(tmp_path):
 
 # --- stored PINs are hashed -----------------------------------------------------------------------------
 
+def stored_pins(data_dir):
+    """How each PIN in settings.json starts: 'scrypt$' when hashed (a plain PIN would show its digits)."""
+    import json
+    raw = json.loads((data_dir / "settings.json").read_text(encoding="utf-8"))
+    return [raw[k][:7] for k in ("owner_pin", "staff_pin")]
+
+
 def test_pins_are_stored_hashed_never_in_plain_text(tmp_path):
     store = SettingsStore(tmp_path)
     store.save(CafeSettings(name="Lap Lab", owner_pin="2468", staff_pin="1357"))
-    text = (tmp_path / "settings.json").read_text(encoding="utf-8")
-    assert "2468" not in text and "1357" not in text and "scrypt$" in text
+    assert stored_pins(tmp_path) == ["scrypt$", "scrypt$"]
     s = store.load()
     assert verify_pin("2468", s.owner_pin) and not verify_pin("2469", s.owner_pin)
     assert verify_pin("1357", s.staff_pin) and not verify_pin("2468", s.staff_pin)
@@ -62,8 +68,7 @@ def test_plain_text_pins_from_an_old_install_are_migrated_on_load(tmp_path):
         {"name": "Lap Lab", "owner_pin": "2468", "staff_pin": "1357", "setup_done": True}), encoding="utf-8")
     s = SettingsStore(tmp_path).load()
     assert verify_pin("2468", s.owner_pin) and verify_pin("1357", s.staff_pin)
-    text = (tmp_path / "settings.json").read_text(encoding="utf-8")
-    assert "2468" not in text and "1357" not in text            # rewritten at once
+    assert stored_pins(tmp_path) == ["scrypt$", "scrypt$"]       # rewritten at once
     assert verify_pin("2468", SettingsStore(tmp_path).load().owner_pin)
 
 

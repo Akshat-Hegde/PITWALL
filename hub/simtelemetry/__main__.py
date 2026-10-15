@@ -13,6 +13,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+import traceback
 import zipfile
 from pathlib import Path
 
@@ -21,20 +22,24 @@ import uvicorn
 from .adapters.f1.adapter import F1Adapter
 from . import __version__, brand, paths
 from .api.app import create_app
-from .config import AppConfig, ConfigError, load_config
+from .config import AppConfig, ConfigProblem, load_config_safe
 from .core.feed import lan_address
 from .core.health import RigState
 from .core.rigs import RigRegistry
-from .core.settings import SettingsStore, apply_settings
+from .core.settings import SettingsStore, apply_settings, recover_damaged_settings
 from .core.setup_code import SetupCode
 from .hub import Hub
 from .logging_setup import setup_logging, teardown_logging
 from .net.udp import PortInUseError, UdpListener, bind_socket, port_shadows
-from .core.store import LapStore
+from .core.store import LapStore, open_lap_store
+from .startup import allow_sleep, clear_start_error, keep_awake, write_start_error
 from .tools.recorder import GB, Recorder
 from .tools.replay import ReplayError, SourceSelection, replay, select_source
 
 log = logging.getLogger("simtelemetry")
+
+HUB_COMMANDS = ("run", "listen", "record", "replay")
+UDP_RETRY_S = 30.0          # while another program holds the telemetry port, try again this often
 
 
 def add_record_flags(p: argparse.ArgumentParser) -> None:
@@ -208,24 +213,29 @@ async def run_hub(args: argparse.Namespace, hub: Hub, selection: SourceSelection
     # Bind everything first so a taken port fails before anything starts.
     http_sock = bind_socket(socket.SOCK_STREAM, net.http_host, net.http_port) if serve_api else None
     listener = None
+    udp_retry = None
     if live:
         handler = live_handler(hub, selection.as_ip or selection.from_ip) if is_replay else hub.on_datagram
         listener = UdpListener(net.udp_host, net.udp_port, net.udp_receive_buffer_bytes, handler)
         try:
             await listener.start()
-        except PortInUseError:
-            if http_sock:
-                http_sock.close()
-            raise
-        hub.port_shadows = port_shadows(listener.port)
-        for shadow in hub.port_shadows:
-            log.warning("%s", shadow)
+        except PortInUseError as exc:
+            if http_sock is None:       # nothing to show without the telemetry port (listen, record)
+                raise
+            # The pages still work (setup, staff, owner); keep trying the port in the background.
+            hub.udp_busy = udp_busy_message(exc.port)
+            log.warning("%s (%s)", port_in_use_message(exc).replace("\n", " "), exc.cause)
+            udp_retry = retry_udp(hub, listener)
+        else:
+            note_port_shadows(hub, listener.port)
 
     if hub.recorder is not None:
         hub.recorder.start()
     tasks = [asyncio.create_task(hub.consume()), asyncio.create_task(hub.tick_health()),
              asyncio.create_task(hub.tick_podium()), asyncio.create_task(hub.tick_competitions()),
              asyncio.create_task(hub.tick_races())]
+    if udp_retry is not None:
+        tasks.append(asyncio.create_task(udp_retry))
     if cmd == "run" and not demo and hub.config.backup.enabled and hub.drivers.store.path is not None:
         tasks.append(asyncio.create_task(hub.backup_loop()))
     if print_lines:
@@ -245,6 +255,8 @@ async def run_hub(args: argparse.Namespace, hub: Hub, selection: SourceSelection
         server_task = asyncio.create_task(server.serve(sockets=[http_sock]))
         host = "localhost" if net.http_host == "0.0.0.0" else net.http_host
         log.info("Dashboard on http://%s:%d/ (API: /api/health)", host, net.http_port)
+        if cmd == "run":
+            clear_start_error(hub.config.data_dir)      # a clean start: the pages are being served
 
     replay_task = None
     if is_replay:
@@ -269,6 +281,35 @@ async def run_hub(args: argparse.Namespace, hub: Hub, selection: SourceSelection
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+
+
+def note_port_shadows(hub: Hub, port: int) -> None:
+    hub.port_shadows = port_shadows(port)
+    for shadow in hub.port_shadows:
+        log.warning("%s", shadow)
+
+
+def udp_busy_message(port: int) -> str:
+    """Staff and setup pages (never the TV)."""
+    return (f"Another program is using port {port} (often SimHub). Close it or change its port. "
+            f"Until then no rig data reaches the hub; it tries again every {UDP_RETRY_S:g} seconds.")
+
+
+async def retry_udp(hub: Hub, listener: UdpListener, every: float | None = None) -> None:
+    """Try to bind the telemetry port every `every` seconds until it works; then clear the warning."""
+    while True:
+        await asyncio.sleep(UDP_RETRY_S if every is None else every)
+        try:
+            await listener.start()
+        except PortInUseError:
+            continue
+        except OSError:
+            log.exception("Could not open the telemetry port")
+            continue
+        hub.udp_busy = None
+        log.info("The telemetry port %d is free now: listening for rigs", listener.port)
+        note_port_shadows(hub, listener.port)
+        return
 
 
 def port_in_use_message(exc: PortInUseError) -> str:
@@ -299,11 +340,12 @@ def main(argv: list[str] | None = None) -> int:
               f"{counts['drivers']} drivers ({counts['profiles']} with profiles).\n"
               f"Run it with:  python -m simtelemetry run --data-dir {args.data_dir} --owner-pin 0000")
         return 0
-    try:
-        config = apply_overrides(load_config(args.config), args)
-    except ConfigError as exc:
-        print(f"\nERROR: {exc}\n", file=sys.stderr)
-        return 2
+    if args.command in HUB_COMMANDS:
+        return hub_main(args)
+    config, problems = load_config_safe(args.config)
+    for problem in problems:
+        print(f"WARNING: {problem.detail}", file=sys.stderr)
+    config = apply_overrides(config, args)
     if args.command == "save-outline":
         return save_outline(args, config)
     if args.command == "setup-code":
@@ -312,11 +354,33 @@ def main(argv: list[str] | None = None) -> int:
         return backup_command(args, config)
     if args.command == "restore":
         return restore_command(args, config)
-    lap_log = setup_logging(config.data_dir / "logs", args.verbose, args.lap_debug)
-    if lap_log is not None:
-        log.info("Lap debug log: %s", lap_log)
+    raise AssertionError(args.command)
+
+
+def hub_main(args: argparse.Namespace) -> int:
+    """run / listen / record / replay. Never refuses to start over configuration (see load_config_safe), and every
+    start-up failure ends up in hub.log and, for `run`, in <data>/last-start-error.txt."""
+    data_dir = args.data_dir if args.data_dir is not None else paths.home() / "data"
+    log_dir = data_dir / "logs"
+    lap_log = setup_logging(log_dir, args.verbose, args.lap_debug)   # before the config, so its problems are logged
     try:
-        return run_command(args, config)
+        config, problems = load_config_safe(args.config)
+        config = apply_overrides(config, args)
+        data_dir = config.data_dir
+        if config.data_dir / "logs" != log_dir:
+            lap_log = setup_logging(config.data_dir / "logs", args.verbose, args.lap_debug)
+        if lap_log is not None:
+            log.info("Lap debug log: %s", lap_log)
+        for problem in problems:
+            log.warning("%s", problem.detail)
+        return run_command(args, config, problems)
+    except Exception:
+        log.exception("The hub could not start")
+        if args.command == "run":
+            write_start_error(data_dir, f"{brand.PRODUCT_NAME} stopped because of an unexpected error. Restart the "
+                                        "PC; if this happens again, send this file and the logs folder to support.",
+                              traceback.format_exc())
+        return 1
     finally:
         teardown_logging()  # main() may be called again in-process (tests); don't leave handlers behind
 
@@ -469,7 +533,8 @@ def prepare_demo(args: argparse.Namespace, config: AppConfig) -> None:
              "Director panel on /staff", counts["sessions"], counts["laps"], config.data_dir, config.owner.pin)
 
 
-def run_command(args: argparse.Namespace, config: AppConfig) -> int:
+def run_command(args: argparse.Namespace, config: AppConfig, problems: list[ConfigProblem] = ()) -> int:
+    warnings: list[tuple[str, str]] = [("config", p.message) for p in problems]
     if getattr(args, "demo", False):
         from .tools.seed_demo import DemoTargetError
         try:
@@ -478,6 +543,9 @@ def run_command(args: argparse.Namespace, config: AppConfig) -> int:
             print(f"\nERROR: {exc}\n", file=sys.stderr)
             return 2
     if not getattr(args, "demo", False):
+        damaged = recover_damaged_settings(SettingsStore(config.data_dir), config.backups_dir, dt.datetime.now())
+        if damaged:
+            warnings.append(("settings_damaged", damaged))
         setup_done = apply_saved_settings(config, args)
         if args.command == "run" and not setup_done:
             # Console and logs/hub.log only; never the TV or the API.
@@ -493,11 +561,18 @@ def run_command(args: argparse.Namespace, config: AppConfig) -> int:
                             disk_check_interval_s=rc.disk_check_interval_s)
     # Replays keep their laps in memory unless asked, so old captures don't change the real boards.
     save_laps = args.command != "replay" or args.save_laps
-    store = LapStore(config.data_dir / "laps.db" if save_laps else None)
+    if save_laps:
+        store, damaged = open_lap_store(config.data_dir / "laps.db", dt.datetime.now())
+        if damaged:
+            warnings.append(("laps_damaged", damaged))
+    else:
+        store = LapStore(None)
     from .core.tracks import load_bundled
     bundled = None if getattr(args, "demo", False) else load_bundled()  # the demo circuit is made up
     hub = Hub(config, F1Adapter(config.track_names), registry, recorder, store, bundled,
               config_path=args.config or paths.config_path())
+    for code, message in warnings:
+        hub.add_startup_warning(code, message)
 
     selection = SourceSelection()
     if args.command == "replay":
@@ -510,14 +585,24 @@ def run_command(args: argparse.Namespace, config: AppConfig) -> int:
             return 2
 
     exit_code = 0
+    awake = args.command == "run" and not getattr(args, "demo", False) and keep_awake()
     try:
         asyncio.run(run_hub(args, hub, selection))
     except PortInUseError as exc:
-        print(f"\nERROR: {port_in_use_message(exc)}\n", file=sys.stderr)
+        message = port_in_use_message(exc)
+        log.error("%s (%s)", message.replace("\n", " "), exc.cause)
+        print(f"\nERROR: {message}\n", file=sys.stderr)
+        if args.command == "run" and exc.protocol == "TCP":
+            write_start_error(config.data_dir,
+                              f"{brand.PRODUCT_NAME} could not start: another program is already using port "
+                              f"{exc.port}, often a second copy of {brand.PRODUCT_NAME}. Restart the PC; if this "
+                              "happens again, contact support.", message)
         exit_code = 2
     except KeyboardInterrupt:
         log.info("Stopping")
     finally:
+        if awake:
+            allow_sleep()
         if recorder is not None:
             recorder.close()
         store.close()

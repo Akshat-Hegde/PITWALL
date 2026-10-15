@@ -115,7 +115,7 @@ def staff_router(hub: Hub) -> APIRouter:
         """Technical diagnostics for staff only (addresses, warnings, packet rates). The TV never shows these."""
         now = time.monotonic()
         snapshot = hub.health_snapshot()
-        warnings = list(status_builder.status(now)["warnings"])
+        warnings = hub.admin_warnings() + list(status_builder.status(now)["warnings"])
         for rig in snapshot["rigs"]:
             if rig["state"] == RigState.NO_DATA.value:
                 warnings.append({"code": "no_data", "rig_id": rig["ip"],

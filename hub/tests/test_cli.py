@@ -202,5 +202,5 @@ def test_double_click_means_run(monkeypatch, tmp_path):
     from simtelemetry import brand
     monkeypatch.setenv(brand.HOME_ENV, str(tmp_path))
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr("simtelemetry.__main__.run_command", lambda args, config: args.command)
+    monkeypatch.setattr("simtelemetry.__main__.run_command", lambda args, config, problems=(): args.command)
     assert main([]) == "run"

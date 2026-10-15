@@ -37,12 +37,18 @@ def setup_logging(log_dir: Path | None, verbose: bool = False, lap_debug: bool =
     root.addHandler(console)
 
     if log_dir is not None:
-        log_dir.mkdir(parents=True, exist_ok=True)
-        file_handler = logging.handlers.RotatingFileHandler(
-            log_dir / "hub.log", maxBytes=5 * 1024 * 1024, backupCount=5, encoding="utf-8")
-        file_handler.setFormatter(logging.Formatter(_FORMAT))
-        setattr(file_handler, _MARK, True)
-        root.addHandler(file_handler)
+        try:
+            log_dir.mkdir(parents=True, exist_ok=True)
+            file_handler = logging.handlers.RotatingFileHandler(
+                log_dir / "hub.log", maxBytes=5 * 1024 * 1024, backupCount=5, encoding="utf-8")
+        except OSError as exc:           # never stop the hub over its log file: carry on with the console only
+            logging.getLogger(__name__).warning("Can't write the log file in %s (%s); logging to the console only",
+                                                log_dir, exc)
+            log_dir = None
+        else:
+            file_handler.setFormatter(logging.Formatter(_FORMAT))
+            setattr(file_handler, _MARK, True)
+            root.addHandler(file_handler)
 
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 

@@ -5,10 +5,12 @@ hub.toml stays the place for technical settings (ports, recorder, map); these ar
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import logging
 import os
 import re
+import zipfile
 from pathlib import Path
 
 from pydantic import BaseModel, Field, ValidationError, ValidationInfo, field_validator, model_validator
@@ -137,3 +139,38 @@ def apply_settings(config: AppConfig, s: CafeSettings) -> None:
     config.owner.open_hour, config.owner.close_hour = s.open_hour, s.close_hour
     config.cafe.wifi_ssid, config.cafe.wifi_password = s.wifi_ssid, s.wifi_password
     config.cafe.wifi_security = s.wifi_security
+
+
+def recover_damaged_settings(store: SettingsStore, backups_dir: Path, now: dt.datetime) -> str | None:
+    """At start-up: when settings.json is damaged, put it aside as settings.json.broken-<time> and restore the
+    newest good copy from the backup zips. Returns a plain-English warning for the staff and setup pages,
+    or None when the file was fine (or absent)."""
+    try:
+        store.read()
+        return None
+    except SettingsDamaged as exc:
+        log.error("%s is damaged (%s)", store.path, exc)
+    broken = store.path.with_name(f"{store.path.name}.broken-{now:%Y%m%d-%H%M%S}")
+    try:
+        os.replace(store.path, broken)
+        log.error("Moved the damaged settings to %s", broken)
+    except OSError as move_exc:
+        log.error("Could not move %s aside (%s)", store.path, move_exc)
+        return ("The cafe settings file can't be read and couldn't be moved aside. Restart the PC; "
+                "if this message stays, contact support.")
+    from .backup import PATTERN
+    zips = sorted(backups_dir.glob(PATTERN), reverse=True) if backups_dir.is_dir() else []
+    for z in zips:
+        try:
+            with zipfile.ZipFile(z) as archive:
+                raw = archive.read("settings.json")
+            store.save(CafeSettings.model_validate_json(raw))
+        except (KeyError, OSError, ValueError, ValidationError, zipfile.BadZipFile) as exc:
+            log.warning("No usable settings in %s (%s)", z, exc)
+            continue
+        when = dt.datetime.fromtimestamp(z.stat().st_mtime).strftime("%d %b %H:%M")
+        log.warning("Restored the cafe settings from %s", z)
+        return (f"The cafe settings were damaged, so the hub put back the copy from the backup of {when}. "
+                "Check the setup page in case something changed since then.")
+    return ("The cafe settings were damaged and there was no backup to restore them from. "
+            "Open the setup page and set the hub up again with a new setup code.")

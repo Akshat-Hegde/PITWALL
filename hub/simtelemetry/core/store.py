@@ -10,6 +10,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import logging
+import os
 import sqlite3
 import threading
 from pathlib import Path
@@ -157,6 +158,14 @@ class LapStore:
         self._db = sqlite3.connect(path if path is not None else ":memory:", check_same_thread=False)
         self._db.row_factory = sqlite3.Row
         self._lock = threading.Lock()
+        try:
+            self._migrate()
+        except BaseException:
+            self._db.close()              # a damaged file must not stay open (Windows can't move an open file)
+            raise
+        log.info("Lap database: %s (%d laps)", path or "in memory, not saved", self.count())
+
+    def _migrate(self) -> None:
         with self._lock, self._db:
             self._db.execute("PRAGMA journal_mode=WAL")
             self._db.executescript(_SCHEMA)
@@ -176,7 +185,12 @@ class LapStore:
                     " consent_at INTEGER, created_at INTEGER NOT NULL);"
                     "INSERT INTO drivers SELECT id, name, phone, consent_at, created_at FROM drivers_old;"
                     "DROP TABLE drivers_old;")
-        log.info("Lap database: %s (%d laps)", path or "in memory, not saved", self.count())
+
+    def quick_check(self) -> bool:
+        """SQLite's own consistency check (fast). False when the file is damaged."""
+        with self._lock:
+            rows = self._db.execute("PRAGMA quick_check").fetchall()
+        return [r[0] for r in rows] == ["ok"]
 
     def close(self) -> None:
         with self._lock:
@@ -566,3 +580,29 @@ def _day(ms: int, day_start_hour: int = 0) -> str:
     """Local date (YYYY-MM-DD) of a Unix ms time, with days starting at day_start_hour."""
     when = dt.datetime.fromtimestamp(ms / 1000) - dt.timedelta(hours=day_start_hour)
     return when.date().isoformat()
+
+
+def open_lap_store(path: Path, now: dt.datetime) -> tuple[LapStore, str | None]:
+    """Open laps.db; if it is damaged, move it aside (laps.db.broken-<time>, with its -wal/-shm) and start an empty
+    one. Returns the store and a plain-English warning for the staff and setup pages (None when all is well)."""
+    try:
+        store = LapStore(path)
+        try:
+            healthy = store.quick_check()
+        except sqlite3.DatabaseError:
+            healthy = False
+        if healthy:
+            return store, None
+        store.close()
+        log.error("Lap database %s failed its consistency check", path)
+    except sqlite3.DatabaseError as exc:
+        log.error("Lap database %s can't be opened (%s)", path, exc)
+    broken = f"{path.name}.broken-{now:%Y%m%d-%H%M%S}"
+    for suffix in ("", "-wal", "-shm"):
+        src = path.with_name(path.name + suffix)
+        if src.exists():
+            os.replace(src, path.with_name(broken + suffix))
+    log.error("Moved the damaged lap database to %s; starting with an empty one", path.with_name(broken))
+    return LapStore(path), ("The lap database was damaged, so the hub put it aside and started with an empty one: "
+                            "lap times, drivers and history are missing. To get them back, restore the latest "
+                            "backup (see \"Restore a backup\" in the setup guide).")

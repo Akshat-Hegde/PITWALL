@@ -6,6 +6,7 @@ from simtelemetry.__main__ import main
 from simtelemetry.config import ConfigError, load_config
 
 from f1_helpers import DOCS
+from test_cli import free_port
 
 EXAMPLE = DOCS.parent / "config" / "hub.example.toml"
 
@@ -70,14 +71,16 @@ def test_free_form_tables_still_accept_any_key(tmp_path):
     assert config.track_names == {7: "Silverstone GP"}
 
 
-def test_cli_exits_with_clear_message(tmp_path, capsys):
+def test_cli_unknown_key_is_a_warning_not_a_refusal(tmp_path, capsys):
+    """K1: unknown keys never stop the hub; they are logged (console and hub.log) and ignored."""
     path = write(tmp_path, "[recorder]\nenabled = true\n")
-    code = main(["listen", "--config", str(path), "--data-dir", str(tmp_path), "--duration", "0.1"])
-    assert code == 2
+    code = main(["listen", "--config", str(path), "--data-dir", str(tmp_path), "--port", str(free_port()),
+                 "--duration", "0.1"])
+    assert code == 0
     err = capsys.readouterr().err
-    assert f"{path} [recorder]: unknown key 'enabled' (did you mean enabled_in_run / enabled_in_listen?)" in err
-    assert "Traceback" not in err
-    assert not (tmp_path / "logs").exists()  # failed before anything started
+    expected = f"{path} [recorder]: unknown key 'enabled' (did you mean enabled_in_run / enabled_in_listen?) (line 2)"
+    assert expected in err and "Traceback" not in err
+    assert expected in (tmp_path / "logs" / "hub.log").read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize("text,expected", [
@@ -91,10 +94,11 @@ def test_toml_syntax_error_names_file_line_and_column(tmp_path, text, expected):
     assert error_for(path) == f"Invalid config file {path}:\n  {path} {expected}"
 
 
-def test_cli_toml_syntax_error_exits_cleanly(tmp_path, capsys):
+def test_cli_toml_syntax_error_starts_with_defaults(tmp_path, capsys):
     path = write(tmp_path, "[recorder]\nenabled_in_run = tru\n")
-    code = main(["run", "--config", str(path), "--data-dir", str(tmp_path), "--duration", "0.1"])
-    assert code == 2
+    code = main(["listen", "--config", str(path), "--data-dir", str(tmp_path), "--port", str(free_port()),
+                 "--duration", "0.1"])
+    assert code == 0
     err = capsys.readouterr().err
     assert f"{path} line 2, column 18: TOML syntax error: Invalid value" in err
     assert "Traceback" not in err
@@ -112,3 +116,66 @@ def test_recordings_directory_option(tmp_path, monkeypatch):
 def test_floor_above_warning_rejected(tmp_path):
     path = write(tmp_path, "[recorder]\nwarn_free_gb = 2\nstop_free_gb = 3\n")
     assert f"{path} [recorder]: 'stop_free_gb' Value error, must not be above warn_free_gb (2)" in error_for(path)
+
+
+# --- K1: load_config_safe never refuses -------------------------------------------------------------------
+
+from simtelemetry.config import load_config_safe  # noqa: E402
+
+
+def test_safe_unknown_key_is_ignored_and_the_rest_applies(tmp_path):
+    path = write(tmp_path, "[network]\nhttp_port = 8123\nupd_port = 20778\n")
+    config, problems = load_config_safe(path)
+    assert config.network.http_port == 8123 and config.network.udp_port == 20777
+    (p,) = problems
+    assert p.message == ("Your settings file (hub.toml) has a setting the hub doesn't know on line 3: 'upd_port' "
+                         "(did you mean udp_port?). It was ignored.")
+    assert f"{path} [network]: unknown key 'upd_port' (did you mean udp_port?) (line 3)" == p.detail
+
+
+def test_safe_bad_value_uses_that_default_and_keeps_the_rest(tmp_path):
+    path = write(tmp_path, 'data_dir = "D:/cafe"\n[network]\nudp_port = "twenty"\nhttp_port = 8123\n')
+    config, problems = load_config_safe(path)
+    assert config.data_dir == Path("D:/cafe")                 # a custom data folder is never lost to a typo
+    assert config.network.http_port == 8123 and config.network.udp_port == 20777
+    (p,) = problems
+    assert p.message.startswith("Your settings file (hub.toml) has a mistake on line 3: 'udp_port' ")
+    assert p.message.endswith("The hub started with the default for that setting.")
+
+
+def test_safe_syntax_error_starts_with_defaults_and_names_the_line(tmp_path):
+    path = write(tmp_path, "[network]\nhttp_port = 8123\n[recorder]\nenabled_in_run = tru\n")
+    config, problems = load_config_safe(path)
+    assert config.network.http_port == 8000
+    (p,) = problems
+    assert p.message == ("Your settings file (hub.toml) has a mistake on line 4: Invalid value. "
+                         "The hub started with default settings.")
+    assert "line 4, column 18: TOML syntax error" in p.detail
+
+
+def test_safe_several_problems_and_rig_entries(tmp_path):
+    path = write(tmp_path, '[[rigs]]\nip = "10.0.0.1"\n\n[[rigs]]\nip = "10.0.0.2"\nnmae = "Rig B"\n'
+                           '[[rigs]]\nname = "no address"\n[owner]\nopen_hour = 20\nclose_hour = 10\n'
+                           '[track_names]\nabc = "x"\n7 = "Silverstone GP"\n')
+    config, problems = load_config_safe(path)
+    assert [r.ip for r in config.rigs] == ["10.0.0.1", "10.0.0.2"]
+    assert config.owner.close_hour == 22 and config.track_names == {7: "Silverstone GP"}
+    text = "\n".join(p.message for p in problems)
+    assert "line 6: 'nmae' (did you mean name?)" in text
+    assert "'ip' in [[rigs]] #3 is missing" in text
+    assert "line 11: 'close_hour' must be after open_hour (20)" in text
+    assert "line 13: 'abc' input should be a valid integer" in text
+
+
+def test_safe_missing_or_unreadable_file(tmp_path, monkeypatch):
+    monkeypatch.setenv("PITWALL_HOME", str(tmp_path))
+    config, problems = load_config_safe(None)
+    assert problems == [] and config.data_dir == tmp_path / "data"
+    bad = tmp_path / "hub.toml"
+    bad.write_bytes(b"\xff\xfe\x00garbage")
+    config, problems = load_config_safe(bad)
+    assert config.network.http_port == 8000 and "could not be read" in problems[0].message
+
+
+def test_example_config_has_no_problems():
+    assert load_config_safe(EXAMPLE)[1] == []

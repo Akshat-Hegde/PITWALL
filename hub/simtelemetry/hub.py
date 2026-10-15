@@ -66,6 +66,9 @@ class Hub:
         self.competitions = Competitions(self.drivers.store, config.data_dir, config.leaderboard.day_start_hour)
         # Other programs listening on the telemetry port on a specific address (see net/udp.py).
         self.port_shadows: list[str] = []
+        # Problems found at start-up (hub.toml, settings.json, laps.db): staff and setup pages only, never the TV.
+        self.startup_warnings: list[dict[str, Any]] = []
+        self.udp_busy: str | None = None    # set while another program holds the telemetry port (retried)
         self._session_top_kph: dict[str, int] = {}             # top speed per rig in the staff session
         self.demo = None                                        # DemoDirector in `run --demo`
         self.started_at = time.monotonic()
@@ -386,6 +389,16 @@ class Hub:
                     log.info("%s", line)
 
     # --- views -----------------------------------------------------------------------
+
+    def add_startup_warning(self, code: str, message: str) -> None:
+        self.startup_warnings.append({"code": code, "rig_id": None, "message": message})
+
+    def admin_warnings(self) -> list[dict[str, Any]]:
+        """Start-up and port problems for the staff Health tab and /setup. Never sent to the TV."""
+        warnings = list(self.startup_warnings)
+        if self.udp_busy:
+            warnings.append({"code": "udp_port_busy", "rig_id": None, "message": self.udp_busy})
+        return warnings
 
     def _active_formats(self, now: float) -> dict[str, str]:
         return {

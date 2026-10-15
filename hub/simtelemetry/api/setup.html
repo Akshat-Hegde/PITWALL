@@ -85,6 +85,11 @@
 </header>
 
 <main>
+  <section class="panel" id="warnings-panel" style="border-left-color: var(--warn)" hidden>
+    <div class="title">Needs attention</div>
+    <ul class="list" id="warnings"></ul>
+  </section>
+
   <section class="panel" id="code-panel" hidden>
     <div class="title">Setup code</div>
     <label for="code">Enter the setup code shown at the end of the installer</label>
@@ -210,6 +215,9 @@
     $("product").textContent = s.product;
     document.title = "Setup " + s.product;
     $("code-panel").hidden = !s.needs_code;
+    const warnings = s.warnings || [];
+    $("warnings-panel").hidden = warnings.length === 0;
+    $("warnings").replaceChildren(...warnings.map((w) => { const li = document.createElement("li"); li.className = "warn"; li.textContent = w.message; return li; }));
     // Once set up, the PINs are never sent back: blank means "keep the current PIN".
     $("owner-pin").required = !s.has_settings;
     $("owner-pin-label").textContent = s.has_settings ? "Owner PIN (leave blank to keep the current PIN)" : "Owner PIN (4 to 8 digits)";

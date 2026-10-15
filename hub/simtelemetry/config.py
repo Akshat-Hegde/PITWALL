@@ -5,6 +5,7 @@ from __future__ import annotations
 import difflib
 import re
 import tomllib
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, get_args, get_origin
 
@@ -17,8 +18,16 @@ class ConfigError(Exception):
     """Invalid config file; the message is meant to be shown to the user as-is."""
 
 
+@dataclass(frozen=True)
+class ConfigProblem:
+    """A mistake in hub.toml that the hub worked around (load_config_safe)."""
+    message: str          # plain English, for the staff and setup pages
+    detail: str           # file, section, key and line, for the log
+
+
 class _Section(BaseModel):
-    # Unknown keys are errors: a misspelt or outdated key must not be silently ignored.
+    # Unknown keys are reported: a misspelt or outdated key must not be silently ignored
+    # (load_config raises; load_config_safe ignores the key and warns).
     model_config = ConfigDict(extra="forbid")
 
 
@@ -210,6 +219,147 @@ def load_config(path: Path | None = None) -> AppConfig:
     except ValidationError as exc:
         problems = "\n".join(f"  {_describe(path, err)}" for err in exc.errors())
         raise ConfigError(f"Invalid config file {path}:\n{problems}") from None
+
+
+_FILE = "Your settings file (hub.toml)"
+_MAX_FIXES = 50
+
+
+def load_config_safe(path: Path | None = None) -> tuple[AppConfig, list[ConfigProblem]]:
+    """Like load_config, but never fails: the hub must start whatever is in hub.toml.
+
+    - A file that can't be read or parsed: all defaults, one problem.
+    - An unknown key: ignored, one problem.
+    - A bad value: that key is left out (its default is used), one problem; the rest of the file still applies,
+      so e.g. a custom data_dir is kept when an unrelated key is wrong.
+    """
+    if path is None:
+        path = paths.config_path()
+        if not path.exists():
+            return _anchored(AppConfig()), []
+    try:
+        text = path.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError) as exc:
+        return _anchored(AppConfig()), [ConfigProblem(
+            f"{_FILE} could not be read ({exc.__class__.__name__}). The hub started with default settings.",
+            f"Could not read config file {path}: {exc}")]
+    try:
+        data = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as exc:
+        line, msg = _syntax_line(exc)
+        where = f" on line {line}" if line else ""
+        return _anchored(AppConfig()), [ConfigProblem(
+            f"{_FILE} has a mistake{where}: {msg}. The hub started with default settings.",
+            f"Invalid config file {_describe_syntax_error(path, exc)}")]
+    problems: list[ConfigProblem] = []
+    for _ in range(_MAX_FIXES):
+        try:
+            return _anchored(AppConfig.model_validate(data)), problems
+        except ValidationError as exc:
+            err = exc.errors()[0]
+            loc = tuple(err["loc"])
+            if not _remove(data, loc):
+                break
+            problems.append(_problem(path, text, err))
+    problems.append(ConfigProblem(f"{_FILE} has mistakes the hub could not work around. "
+                                  "The hub started with default settings.",
+                                  f"Invalid config file {path}: falling back to all defaults"))
+    return _anchored(AppConfig()), problems
+
+
+def _syntax_line(exc: tomllib.TOMLDecodeError) -> tuple[int | None, str]:
+    line = getattr(exc, "lineno", None)
+    msg = getattr(exc, "msg", None) or str(exc)
+    m = _TOML_POSITION.match(str(exc))
+    if m:
+        line, msg = int(m["line"]), m["msg"]
+    elif str(exc).endswith(" (at end of document)"):
+        msg = str(exc).removesuffix(" (at end of document)") + " at the end of the file"
+    return line, msg
+
+
+def _remove(data: Any, loc: tuple) -> bool:
+    """Delete the value at loc (or the nearest enclosing key/item that exists). False when nothing could go."""
+    for depth in range(len(loc), 0, -1):
+        parent, ok = data, True
+        for part in loc[:depth - 1]:
+            try:
+                parent = parent[part]
+            except (KeyError, IndexError, TypeError):
+                ok = False
+                break
+        if not ok:
+            continue
+        try:
+            del parent[loc[depth - 1]]
+            return True
+        except (KeyError, IndexError, TypeError):
+            continue
+    return False
+
+
+def _plain(msg: str) -> str:
+    msg = msg.removeprefix("Value error, ")
+    if msg == "Field required":
+        return "is missing"
+    return msg[:1].lower() + msg[1:]
+
+
+def _problem(path: Path, text: str, err: dict[str, Any]) -> ConfigProblem:
+    loc = tuple(err["loc"])
+    detail = _describe(path, err)
+    if loc and loc[-1] == "[key]":          # a bad key in a free-form table, e.g. [track_names]
+        loc = loc[:-1]
+    line = _line_of(text, loc)
+    where = f" on line {line}" if line else ""
+    key = loc[-1] if loc else "?"
+    section = _section_label(loc).strip()
+    in_section = f" in {section}" if section and not line else ""     # the line number says where; less jargon
+    detail += f" (line {line})" if line else ""
+    if err["type"] == "extra_forbidden":
+        model = _section_model(loc)
+        hints = _suggest(str(key), list(model.model_fields)) if model else []
+        hint = f" (did you mean {' / '.join(hints)}?)" if hints else ""
+        return ConfigProblem(f"{_FILE} has a setting the hub doesn't know{where}: '{key}'{in_section}{hint}. "
+                             "It was ignored.", detail)
+    return ConfigProblem(f"{_FILE} has a mistake{where}: '{key}'{in_section} {_plain(err['msg'])}. "
+                         "The hub started with the default for that setting.", detail)
+
+
+_HEADER = re.compile(r"^\s*(\[\[?)\s*([^\]]+?)\s*\]\]?\s*(#.*)?$")
+_KEY = re.compile(r"""^\s*(?:"([^"]+)"|'([^']+)'|([A-Za-z0-9_-]+))\s*=""")
+
+
+def _line_of(text: str, loc: tuple) -> int | None:
+    """Best-effort line number of the key at loc in the TOML text (1-based)."""
+    if not loc:
+        return None
+    *section, key = loc
+    want_index = None
+    if section and isinstance(section[-1], int):
+        want_index, section = section[-1], section[:-1]
+    target = ".".join(str(p) for p in section)
+    current, index, counts = "", None, {}
+    lines = text.splitlines()
+    for n, line in enumerate(lines, 1):
+        h = _HEADER.match(line)
+        if h:
+            current = h[2].replace(" ", "")
+            if h[1] == "[[":
+                counts[current] = counts.get(current, -1) + 1
+                index = counts[current]
+            else:
+                index = None
+            continue
+        k = _KEY.match(line)
+        if k and current == target and (want_index is None or index == want_index)                 and (k[1] or k[2] or k[3]) == str(key):
+            return n
+    whole = ".".join(str(p) for p in loc if not isinstance(p, int))
+    for n, line in enumerate(lines, 1):             # an unknown or bad section: point at its header
+        h = _HEADER.match(line)
+        if h and h[2].replace(" ", "") == whole:
+            return n
+    return None
 
 
 def _anchored(config: AppConfig) -> AppConfig:
