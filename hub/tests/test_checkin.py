@@ -69,7 +69,7 @@ async def test_busy_rig_is_409_and_leaks_no_name(tmp_path):
     assert hub.drivers.get(RIG).name == "Maya"
 
 
-async def test_idle_takeover_after_120_s_makes_the_previous_card(tmp_path):
+async def test_idle_takeover_after_5_minutes_makes_the_previous_card(tmp_path):
     hub = make_hub(tmp_path)
     await feed(hub, [session(2025, UID), participants(2025, UID, b"Akshat")])
     client = TestClient(create_app(staff_ready(hub), dashboard_dir=tmp_path / "none"), headers=STAFF)
@@ -83,7 +83,11 @@ async def test_idle_takeover_after_120_s_makes_the_previous_card(tmp_path):
     hub.health.on_packet(RIG, "motion", now - 60, True)      # driving a minute ago: still busy
     assert post(client, code, "Kofi").status_code == 409
     hub.health._rigs[RIG].last_driving = None
-    hub.health.on_packet(RIG, "motion", now - 130, True)     # driving 130 s ago, the pause since is idle
+    hub.health.on_packet(RIG, "motion", now - 240, True)     # 4 minutes in the pause menu: still busy (K7)
+    hub.health.on_packet(RIG, "session", now - 1, False)
+    assert post(client, code, "Kofi").status_code == 409
+    hub.health._rigs[RIG].last_driving = None
+    hub.health.on_packet(RIG, "motion", now - 310, True)     # driving 310 s ago, the pause since is idle
     hub.health.on_packet(RIG, "session", now - 1, False)
 
     r = post(client, code, "Kofi")
@@ -94,7 +98,7 @@ async def test_idle_takeover_after_120_s_makes_the_previous_card(tmp_path):
     hub.laps.store.close()
 
 
-def make_idle(hub, seconds=130):
+def make_idle(hub, seconds=310):
     """The rig last drove this many seconds ago and is in the menus now."""
     now = time.monotonic()
     hub.health.on_packet(RIG, "motion", now - seconds, True)
@@ -125,7 +129,7 @@ async def test_an_idle_staff_session_stays_busy_and_cannot_be_taken_over(tmp_pat
     hub.drivers.assign(RIG, "Booked")
     hub.drivers._clock = time.time
     make_idle(hub, seconds=500)                             # nobody has driven for over 8 minutes
-    assert hub.checkin.idle_s(RIG, hub.drivers.get(RIG)) >= 120
+    assert hub.checkin.idle_s(RIG, hub.drivers.get(RIG)) >= 300
     anon = client.get(f"/api/checkin/{code}").json()
     assert anon == {"rig_name": "Rig 1", "state": "busy", "laps": 0}
     r = post(client, code, "Kofi")

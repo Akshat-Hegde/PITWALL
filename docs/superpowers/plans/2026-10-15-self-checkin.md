@@ -38,6 +38,8 @@
     check-in (tracked through the registered check-in secrets: rig_id + started_at). Sessions started by staff
     (paid bookings) can never be taken over from a phone, however idle; staff end those. A check-in POST against
     an idle staff session is 409 like any busy rig.
+  - **Amendment (2026-10-16): 5 minutes.** `CHECKIN_TAKEOVER_IDLE_S` is now 300 s, not 120 s: with K7 (pause and
+    gaps) a guest sitting in the pause menu for a couple of minutes must not be taken over.
   - Returns `{"rig_name", "driver", "secret", "status_url"}`. The secret is random and stored in memory with the session (rig_id, started_at).
   - Rate limit: at most 10 check-in POSTs per minute per client IP, else 429.
 - **C3. Status.** `GET /api/checkin/<code>?secret=...`:

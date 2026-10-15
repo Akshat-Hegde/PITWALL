@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-CHECKIN_TAKEOVER_IDLE_S = 120.0      # a check-in session not DRIVING this long can be replaced by a new check-in
+CHECKIN_TAKEOVER_IDLE_S = 300.0      # a check-in session not DRIVING this long (5 min: longer than a pause-menu break) can be replaced
 RATE_LIMIT = 10                      # check-in POSTs per client per minute
 RATE_WINDOW_S = 60.0
 ENDED_KEEP_S = 2 * 3600.0            # an ended session's card link stays available this long

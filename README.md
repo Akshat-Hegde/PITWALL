@@ -376,8 +376,8 @@ Details:
 - **Busy rigs:** if someone is already driving, the page says "Someone is driving"; a second check-in is
   refused, so a guest can't take over a rig by scanning it.
 - **Idle takeover (check-in sessions only):** if a session that a guest started from their phone has not been
-  driving for 2 minutes (nobody on track), the sticker shows "This rig looks free" and a new check-in replaces it;
-  the earlier driver still gets their card. Sessions staff started (paid bookings) are never taken over from a
+  driving for 5 minutes (nobody on track, so a guest taking a short break in the pause menu keeps the rig), the
+  sticker shows "This rig looks free" and a new check-in replaces it; the earlier driver still gets their card. Sessions staff started (paid bookings) are never taken over from a
   phone, however idle: the page says "Someone is driving" and staff end them.
 - **Bad names:** names are checked against a built-in list of slurs and swear words (English and common
   Hindi, with look-alike spellings). Add your own words under `[checkin] blocked_words = ["word", ...]` in
