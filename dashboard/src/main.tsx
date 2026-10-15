@@ -11,6 +11,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { CardPage } from "./card/CardPage";
 import { chooseSource } from "./data/sources";
+import { keepScreenAwake } from "./data/wakelock";
 import { displayFromQuery } from "./map/geometry";
 import { DashboardStore } from "./state/store";
 import { viewModeFromQuery } from "./views";
@@ -28,11 +29,11 @@ if (cardPath) {
   const { kind, source } = chooseSource(query, import.meta.env.DEV);
   const store = new DashboardStore(kind);
   source(store);
+  keepScreenAwake();
 
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
       <App store={store} mapDisplay={displayFromQuery(query)} viewMode={viewModeFromQuery(query)}
-           demo={query.get("demo") === "1"}
            layout={location.pathname.startsWith("/portrait") || query.get("layout") === "portrait" ? "portrait" : "tv"} />
     </StrictMode>,
   );

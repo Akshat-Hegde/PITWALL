@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { formatLapTime } from "../format";
+import { hubNow } from "../state/hubclock";
 import type { DashboardState } from "../state/reducer";
 import { Tab } from "./Motifs";
 import { Qr, WifiQr } from "./Qr";
@@ -10,13 +11,13 @@ export const CARD_QR_MS = 30_000;
 /** Lower-left card with a QR code to the story card that was just made (30 s, not full screen), and the cafe's
  *  "Join our Wi-Fi" QR beside it when a guest network is set (SSID as text, never the password). */
 export function CardQr({ state }: { state: DashboardState }) {
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(() => hubNow());
   const latest = state.cards[state.cards.length - 1];
   const showing = latest && state.features.sharing && now - latest.at < CARD_QR_MS ? latest : null;
   useEffect(() => {
     if (!latest) return;
-    setNow(Date.now());
-    const timer = setInterval(() => setNow(Date.now()), 1000);
+    setNow(hubNow());
+    const timer = setInterval(() => setNow(hubNow()), 1000);
     return () => clearInterval(timer);
   }, [latest]);
   if (!showing) return null;

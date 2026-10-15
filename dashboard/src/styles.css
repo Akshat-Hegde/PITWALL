@@ -2418,56 +2418,6 @@ html:has(.cardpage) {
   font-weight: 600;
 }
 
-/* Tournament preview (static, demo only) */
-.bracket {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: var(--s6);
-}
-
-.bracket__rounds {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--s7);
-  min-height: 0;
-}
-
-.bracket__round {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-around;
-  gap: var(--s4);
-}
-
-.bracket__match {
-  display: flex;
-  flex-direction: column;
-  background: var(--panel);
-  border-left: 3px solid var(--brand-accent);
-}
-
-.bracket__row {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--s4);
-  padding: var(--s3) var(--s5);
-  color: var(--text-2);
-  font-weight: 700;
-}
-
-.bracket__row + .bracket__row {
-  border-top: var(--hairline);
-}
-
-.bracket__row.is-winner {
-  color: var(--text);
-}
-
-.bracket__name {
-  font-stretch: 112%;
-  text-transform: uppercase;
-}
-
 /* Event branding in the header */
 .header__event {
   display: inline-flex;
@@ -2481,18 +2431,6 @@ html:has(.cardpage) {
   height: 1.6rem;
   max-width: 8rem;
   object-fit: contain;
-}
-
-.bracket__round {
-  justify-content: flex-start;
-}
-
-.bracket__matches {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  justify-content: space-around;
-  gap: var(--s4);
 }
 
 /* attract: kinetic type only in the empty top of the hero, never behind the text below */
@@ -2921,6 +2859,12 @@ html:has(.tvstage) {
 .multi--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .multi--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); }
 .multi--6 { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); }
+.multi--8 { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); }
+.multi--12 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  gap: calc(var(--gutter) * 0.6);
+}
 
 .tile {
   --hero: 2rem;
@@ -2940,6 +2884,23 @@ html:has(.tvstage) {
 .multi--1 .tile { --hero: 3.2rem; --big: 10rem; --wheel: 8rem; --pedal-h: 8rem; padding: 28px 36px; }
 .multi--2 .tile { --hero: 2.4rem; --big: 7rem; --wheel: 6.4rem; --pedal-h: 6.4rem; padding: 24px 28px; }
 .multi--6 .tile { --hero: 1.5rem; --big: 3.2rem; --wheel: 4.4rem; --pedal-h: 3.4rem; gap: 10px; padding: 14px 16px; }
+.multi--8 .tile { --hero: 1.25rem; --big: 2.6rem; --wheel: 3.6rem; --pedal-h: 3rem; gap: 8px; padding: 12px 14px; }
+.multi--12 .tile { --hero: 1.05rem; --big: 2.1rem; --wheel: 2.8rem; --pedal-h: 2.4rem; gap: 6px; padding: 8px 12px; }
+
+.multi--8 .tile__head,
+.multi--12 .tile__head { gap: 10px; }
+
+.multi--8 .tile__name,
+.multi--12 .tile__name { font-size: 1.1rem; }
+
+.multi--8 .tile__body,
+.multi--12 .tile__body { gap: 12px; }
+
+.multi--8 .tile__drive,
+.multi--12 .tile__drive { gap: 8px; }
+
+.multi--8 .tile__ctl,
+.multi--12 .tile__ctl { gap: 12px; }
 
 .tile__head {
   display: flex;

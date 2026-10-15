@@ -14,6 +14,8 @@ dashboard/dist/
 
 # Runtime data (SQLite, track outlines, logs, recordings)
 data/
+# ...but the dashboard's data sources are code (they were missing from git because of the line above)
+!dashboard/src/data/
 recordings/
 /backups/
 *.f1rec

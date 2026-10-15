@@ -217,6 +217,11 @@ async def test_rig_info_and_colours(tmp_path):
     assert infos[RIG_C]["name"] == "Rig 3" and infos[RIG_C]["colour"] == PALETTE[2]
 
 
+def test_palette_has_twelve_distinct_colours():
+    # The TV's MULTIVIEW shows up to 12 rigs: each gets its own colour.
+    assert len(PALETTE) == 12 and len({c.lower() for c in PALETTE}) == 12
+
+
 async def test_status_warnings(tmp_path):
     hub = make_hub(tmp_path)
     await feed(hub, driving_rig(RIG_A, fmt=2025) + driving_rig(RIG_B, fmt=2026))

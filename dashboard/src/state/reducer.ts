@@ -24,6 +24,7 @@ import {
   type StoryLap,
 } from "../schema";
 import { softenColour } from "../colour";
+import { hubNow } from "./hubclock";
 
 export type LinkState = "connecting" | "live" | "reconnecting" | "version_mismatch";
 
@@ -313,9 +314,9 @@ function momentEvent(state: DashboardState, moment: unknown): DashboardState {
     lap_ms?: number } | null;
   if (!m || (m.kind !== "record" && m.kind !== "now_driving") || !m.rig_id) return state;
   const event: PitEvent = m.kind === "record"
-    ? { at: m.at ?? Date.now(), rig_id: m.rig_id, driver: m.driver ?? null, label: "NEW RECORD",
+    ? { at: m.at ?? hubNow(), rig_id: m.rig_id, driver: m.driver ?? null, label: "NEW RECORD",
         value: m.lap_ms != null ? fmtLap(m.lap_ms) : "", tone: "p" }
-    : { at: m.at ?? Date.now(), rig_id: m.rig_id, driver: m.driver ?? null,
+    : { at: m.at ?? hubNow(), rig_id: m.rig_id, driver: m.driver ?? null,
         label: `NOW DRIVING · ${(m.rig_name ?? "").toUpperCase()}`, value: "", tone: "w" };
   // A record lap also logged "fastest lap today" when it completed: the record line replaces it.
   const rest = state.pitEvents.filter((e) => !(m.kind === "record" && e.rig_id === m.rig_id && e.tone === "p"

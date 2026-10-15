@@ -36,7 +36,7 @@ export interface MockOptions {
   frameHz: number;
   /** Earlier drivers already on the leaderboard (tests the layout with many entries). */
   pastDrivers: number;
-  /** Rigs that drive (1-10). */
+  /** Rigs that drive (1-12). */
   rigs: number;
   /** Every rig stays in the menu: nobody drives (attract mode). */
   idle: boolean;
@@ -69,13 +69,13 @@ export const DEFAULT_MOCK_OPTIONS: MockOptions = {
 };
 
 const MOCK_QUEUE = [{ id: 1, name: "Jordan P" }, { id: 2, name: "Office party (4)" }, { id: 3, name: "Sam W" }];
-const BOOKED_MIN = [20, 7, 15, 20, 45, 30, 20, 15, 30, 20]; // rig 2 is nearly out of time
+const BOOKED_MIN = [20, 7, 15, 20, 45, 30, 20, 15, 30, 20, 25, 40]; // rig 2 is nearly out of time
 
 const RIG_DRIVERS = ["Apex_Hunter", "LateBraker77", "Sofia_K", "TurboTom", "Mika H", "DRS_Daisy", "Kerb Crusher",
-  "Rae", "Big Ben", "Quali Queen"];
+  "Rae", "Big Ben", "Quali Queen", "Nina V", "Pitlane Pete"];
 const RIG_COLOURS = ["#36C5F0", "#FF8A3D", "#F15BB5", "#5B8CFF", "#2EC4B6", "#FF6B6B", "#C0C9D2", "#FFB3C6",
-  "#8D99AE", "#D4A373"];
-const RIG_PACES = [0.995, 0.982, 0.99, 0.986, 0.978, 0.992, 0.975, 0.984, 0.98, 0.988];
+  "#8D99AE", "#D4A373", "#FFFFFF", "#9C6644"];
+const RIG_PACES = [0.995, 0.982, 0.99, 0.986, 0.978, 0.992, 0.975, 0.984, 0.98, 0.988, 0.983, 0.991];
 
 const TRACK_KEY = "F1:900";
 const TRACK_NAME = "Practice circuit";
@@ -188,7 +188,7 @@ export class MockHub {
     this.startedAt = clock();
     this.rng = new Rng(options.seed);
     this.outlineSent = !options.outlineLate;
-    const driving = Math.max(1, Math.min(10, options.rigs));
+    const driving = Math.max(1, Math.min(12, options.rigs));
     const specs: RigSpec[] = [];
     for (let i = 0; i < driving; i++) {
       const n = i + 1;
@@ -632,7 +632,7 @@ export class MockHub {
       best: rig.best,
       booking: rig.spec.offline || !rig.spec.driver ? null : {
         driver: rig.spec.driver, started_at: this.startedAt,
-        ends_at: this.startedAt + BOOKED_MIN[(Number(rig.spec.info.rig_id.split("-")[1]) - 1) % 10]! * 60_000,
+        ends_at: this.startedAt + BOOKED_MIN[(Number(rig.spec.info.rig_id.split("-")[1]) - 1) % BOOKED_MIN.length]! * 60_000,
       },
     };
     if (rig.spec.offline) {
@@ -794,7 +794,7 @@ export function mockOptionsFromQuery(query: URLSearchParams): MockOptions {
     recorder: recorder === "recording" || recorder === "low" || recorder === "stopped" ? recorder : "off",
     offlineRig: query.get("offline") !== "0",
     pastDrivers: Math.max(0, Math.min(40, Math.floor(Number(query.get("board") ?? 0) || 0))),
-    rigs: Math.max(1, Math.min(10, Math.floor(Number(query.get("rigs") ?? 2) || 2))),
+    rigs: Math.max(1, Math.min(12, Math.floor(Number(query.get("rigs") ?? 2) || 2))),
     idle: query.get("idle") === "1",
     podiumEveryMs: Math.max(0, Number(query.get("podium") ?? 0) || 0) * 1000,
     event: query.get("event") === "1",

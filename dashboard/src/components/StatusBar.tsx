@@ -1,13 +1,7 @@
 import { useEffect, useState } from "react";
+import { hubNow } from "../state/hubclock";
 import type { DashboardState } from "../state/reducer";
 import { SlashMark } from "./Motifs";
-
-const LINK_TEXT: Record<DashboardState["link"], string> = {
-  connecting: "Connecting to hub",
-  live: "Live",
-  reconnecting: "Reconnecting to hub",
-  version_mismatch: "Version mismatch",
-};
 
 interface Props {
   state: DashboardState;
@@ -16,7 +10,8 @@ interface Props {
 
 /**
  * Thin header: cafe left, link and clock right (the track is in the map's corner). Technical warnings (ports, addresses)
- * never show on the TV: they are on the staff page's Health tab and in the hub log.
+ * never show on the TV: they are on the staff page's Health tab and in the hub log. Neither does the connection:
+ * the dashboard reconnects by itself and shows the waiting or attract screen while the hub is quiet.
  */
 export function StatusBar({ state }: Props) {
   const event = state.features.events ? state.competition.event : null;
@@ -35,9 +30,7 @@ export function StatusBar({ state }: Props) {
         </div>
         <div className="header__session" />
         <div className="header__right">
-          <span className={`header__link link--${state.link}`}>
-            {state.source === "mock" && state.link === "live" ? "Mock data" : LINK_TEXT[state.link]}
-          </span>
+          <span className="header__link link--live">{state.source === "mock" ? "Mock data" : "Live"}</span>
           <Clock />
         </div>
         <SlashMark className="header__slash" />
@@ -47,9 +40,9 @@ export function StatusBar({ state }: Props) {
 }
 
 function Clock() {
-  const [now, setNow] = useState(() => new Date());
+  const [now, setNow] = useState(() => new Date(hubNow()));
   useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 10_000);
+    const timer = setInterval(() => setNow(new Date(hubNow())), 10_000);
     return () => clearInterval(timer);
   }, []);
   return (
