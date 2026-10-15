@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import re
+import time
 import zipfile
 from pathlib import Path
 
@@ -83,22 +84,38 @@ class SettingsDamaged(Exception):
     """settings.json exists but can't be read or doesn't make sense."""
 
 
+class SettingsUnreadable(SettingsDamaged):
+    """settings.json exists but the disk wouldn't give it to us (locked by another program, I/O error).
+    The file itself may be fine, so it is never moved aside for this."""
+
+
+READ_TRIES = 3
+READ_RETRY_S = 0.5
+
+
 class SettingsStore:
     def __init__(self, data_dir: Path) -> None:
         self.path = data_dir / "settings.json"
         self.branding_dir = data_dir / "branding"
 
-    def read(self) -> CafeSettings | None:
-        """The saved settings, None when there are none yet. Raises SettingsDamaged when the file can't be used.
+    def read(self, tries: int = READ_TRIES) -> CafeSettings | None:
+        """The saved settings, None when there are none yet. Raises SettingsDamaged when the file doesn't make
+        sense, SettingsUnreadable when it couldn't be read (tried `tries` times, a virus scanner or backup tool
+        may hold it for a moment).
 
         PINs saved in plain text by older versions are hashed and the file is rewritten at once.
         """
-        try:
-            text = self.path.read_text(encoding="utf-8")
-        except FileNotFoundError:
-            return None
-        except OSError as exc:
-            raise SettingsDamaged(str(exc)) from exc
+        for attempt in range(1, tries + 1):
+            try:
+                text = self.path.read_text(encoding="utf-8")
+                break
+            except FileNotFoundError:
+                return None
+            except OSError as exc:
+                if attempt >= tries:
+                    raise SettingsUnreadable(str(exc)) from exc
+                log.warning("Could not read %s (%s); trying again", self.path, exc)
+                time.sleep(READ_RETRY_S)
         try:
             raw = json.loads(text)
             s = CafeSettings.model_validate(raw)
@@ -148,6 +165,12 @@ def recover_damaged_settings(store: SettingsStore, backups_dir: Path, now: dt.da
     try:
         store.read()
         return None
+    except SettingsUnreadable as exc:
+        log.error("Could not read %s (%s); starting without the cafe settings, the file is left as it is",
+                  store.path, exc)
+        return ("The cafe settings file couldn't be read just now (another program may be using it). "
+                "The hub started without the cafe's settings. Restart the hub to try again; "
+                "if this message stays, contact support.")
     except SettingsDamaged as exc:
         log.error("%s is damaged (%s)", store.path, exc)
     broken = store.path.with_name(f"{store.path.name}.broken-{now:%Y%m%d-%H%M%S}")
@@ -173,4 +196,5 @@ def recover_damaged_settings(store: SettingsStore, backups_dir: Path, now: dt.da
         return (f"The cafe settings were damaged, so the hub put back the copy from the backup of {when}. "
                 "Check the setup page in case something changed since then.")
     return ("The cafe settings were damaged and there was no backup to restore them from. "
-            "Open the setup page and set the hub up again with a new setup code.")
+            "Open the setup page and set the hub up again with a new setup code: "
+            "use 'Show setup code' in the Start menu.")

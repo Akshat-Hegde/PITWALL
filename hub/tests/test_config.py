@@ -164,7 +164,7 @@ def test_safe_several_problems_and_rig_entries(tmp_path):
     assert "line 6: 'nmae' (did you mean name?)" in text
     assert "'ip' in [[rigs]] #3 is missing" in text
     assert "line 11: 'close_hour' must be after open_hour (20)" in text
-    assert "line 13: 'abc' input should be a valid integer" in text
+    assert "line 13: 'abc' should be a whole number" in text
 
 
 def test_safe_missing_or_unreadable_file(tmp_path, monkeypatch):
@@ -179,3 +179,33 @@ def test_safe_missing_or_unreadable_file(tmp_path, monkeypatch):
 
 def test_example_config_has_no_problems():
     assert load_config_safe(EXAMPLE)[1] == []
+
+
+@pytest.mark.parametrize("line, phrase", [
+    ("[network]\nudp_port = \"twenty\"\n", "'udp_port' should be a whole number"),
+    ("[network]\nudp_port = 70000\n", "'udp_port' should be 65535 or less"),
+    ("[leaderboard]\nday_start_hour = -1\n", "'day_start_hour' should be 0 or more"),
+    ("[dashboard]\nframe_hz = 50\n", "'frame_hz' should be 20 or less"),
+    ("[recorder]\nenabled_in_run = \"maybe\"\n", "'enabled_in_run' should be true or false"),
+    ("[cafe]\nname = 12\n", "'name' should be text in quotes"),
+])
+def test_safe_mistakes_are_described_in_plain_words(tmp_path, line, phrase):
+    _, problems = load_config_safe(write(tmp_path, line))
+    (p,) = problems
+    assert f"on line 2: {phrase}. The hub started with the default" in p.message
+    assert "Input should" not in p.message and "valid integer" not in p.message
+
+
+def test_pins_written_as_numbers_are_read_as_text(tmp_path):
+    config, problems = load_config_safe(write(tmp_path, "[owner]\npin = 2468\n[staff]\npin = 1357\n"))
+    assert problems == [] and config.owner.pin == "2468" and config.staff.pin == "1357"
+    _, problems = load_config_safe(write(tmp_path, "[owner]\npin = true\n"))
+    assert "'pin' should be text in quotes" in problems[0].message
+
+
+def test_problems_say_which_key_they_touch(tmp_path):
+    _, problems = load_config_safe(write(tmp_path, "data_dir = 5\n[backup]\nkeep = 0\n"))
+    assert [p.loc for p in problems] == [("data_dir",), ("backup", "keep")]
+    assert problems[0].touches(("data_dir",)) and not problems[1].touches(("data_dir",))
+    _, problems = load_config_safe(write(tmp_path, "[network\n"))
+    assert problems[0].whole_file and problems[0].touches(("data_dir",))

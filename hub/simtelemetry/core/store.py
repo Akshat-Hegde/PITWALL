@@ -16,6 +16,7 @@ import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from ..startup import StartError
 from .laps import LapRecord
 
 if TYPE_CHECKING:
@@ -582,27 +583,78 @@ def _day(ms: int, day_start_hour: int = 0) -> str:
     return when.date().isoformat()
 
 
-def open_lap_store(path: Path, now: dt.datetime) -> tuple[LapStore, str | None]:
+class LapStoreUnavailable(StartError):
+    """laps.db can't be used right now, but isn't damaged (locked, disk full, no access): never moved aside."""
+
+
+def _unavailable(path: Path, exc: BaseException) -> LapStoreUnavailable:
+    return LapStoreUnavailable(f"The lap database is in use by another program or the disk is full: {exc}. "
+                               f"Close other programs and free some disk space, then restart the PC. ({path})")
+
+
+def _damaged_on_disk(path: Path) -> bool:
+    """A fresh connection's verdict: True only for real damage (not a database, malformed, failed quick_check).
+    Can't-tell errors (locked, disk full, no access) say False."""
+    try:
+        con = sqlite3.connect(path)
+        try:
+            rows = con.execute("PRAGMA quick_check").fetchall()
+        finally:
+            con.close()
+    except sqlite3.OperationalError:
+        return False
+    except sqlite3.DatabaseError:
+        return True
+    return [r[0] for r in rows] != ["ok"]
+
+
+def open_lap_store(path: Path, now: dt.datetime, check: bool = True) -> tuple[LapStore, str | None]:
     """Open laps.db; if it is damaged, move it aside (laps.db.broken-<time>, with its -wal/-shm) and start an empty
-    one. Returns the store and a plain-English warning for the staff and setup pages (None when all is well)."""
+    one. Returns the store and a plain-English warning for the staff and setup pages (None when all is well).
+
+    check: also run SQLite's quick_check on a database that opens fine (after an unclean shutdown; it reads the
+    whole file). Opening or migration errors always get a check.
+
+    Only real damage moves the file: "file is not a database", "malformed" or a failed quick_check. A database
+    that is locked, on a full disk or can't be opened raises LapStoreUnavailable (a StartError) instead.
+    """
     try:
         store = LapStore(path)
+    except sqlite3.OperationalError as exc:
+        if not _damaged_on_disk(path):
+            raise _unavailable(path, exc) from exc
+        log.error("Lap database %s can't be opened (%s) and fails its consistency check", path, exc)
+    except sqlite3.DatabaseError as exc:
+        log.error("Lap database %s can't be opened (%s)", path, exc)
+    else:
+        if not check:
+            return store, None
         try:
             healthy = store.quick_check()
+        except sqlite3.OperationalError as exc:
+            store.close()
+            raise _unavailable(path, exc) from exc
         except sqlite3.DatabaseError:
             healthy = False
         if healthy:
             return store, None
         store.close()
         log.error("Lap database %s failed its consistency check", path)
-    except sqlite3.DatabaseError as exc:
-        log.error("Lap database %s can't be opened (%s)", path, exc)
     broken = f"{path.name}.broken-{now:%Y%m%d-%H%M%S}"
     for suffix in ("", "-wal", "-shm"):
         src = path.with_name(path.name + suffix)
         if src.exists():
-            os.replace(src, path.with_name(broken + suffix))
+            try:
+                os.replace(src, path.with_name(broken + suffix))
+            except OSError as exc:
+                raise LapStoreUnavailable(
+                    f"The lap database is damaged and could not be moved aside ({exc}). Close other programs and "
+                    f"restart the PC; if this happens again, contact support. ({path})") from exc
     log.error("Moved the damaged lap database to %s; starting with an empty one", path.with_name(broken))
-    return LapStore(path), ("The lap database was damaged, so the hub put it aside and started with an empty one: "
-                            "lap times, drivers and history are missing. To get them back, restore the latest "
-                            "backup (see \"Restore a backup\" in the setup guide).")
+    try:
+        fresh = LapStore(path)
+    except sqlite3.Error as exc:
+        raise _unavailable(path, exc) from exc
+    return fresh, ("The lap database was damaged, so the hub put it aside and started with an empty one: "
+                   "lap times, drivers and history are missing. To get them back, restore the latest "
+                   "backup (see \"Restore a backup\" in the setup guide).")

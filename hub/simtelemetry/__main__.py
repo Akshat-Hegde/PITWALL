@@ -7,6 +7,7 @@ import asyncio
 import csv
 import datetime as dt
 import io
+import json
 import logging
 import socket
 import sqlite3
@@ -14,6 +15,7 @@ import subprocess
 import sys
 import time
 import traceback
+import urllib.request
 import zipfile
 from pathlib import Path
 
@@ -32,7 +34,8 @@ from .hub import Hub
 from .logging_setup import setup_logging, teardown_logging
 from .net.udp import PortInUseError, UdpListener, bind_socket, port_shadows
 from .core.store import LapStore, open_lap_store
-from .startup import allow_sleep, clear_start_error, keep_awake, write_start_error
+from .startup import (StartError, allow_sleep, clear_running, clear_start_error, keep_awake, mark_running,
+                      unclean_shutdown, write_start_error)
 from .tools.recorder import GB, Recorder
 from .tools.replay import ReplayError, SourceSelection, replay, select_source
 
@@ -201,7 +204,9 @@ def live_handler(hub: Hub, replay_ip: str | None):
     return handle
 
 
-async def run_hub(args: argparse.Namespace, hub: Hub, selection: SourceSelection = SourceSelection()) -> None:
+async def run_hub(args: argparse.Namespace, hub: Hub, selection: SourceSelection = SourceSelection(),
+                  http_sock: socket.socket | None = None) -> None:
+    """http_sock: the HTTP socket, already bound by run_command (before any data work); bound here when None."""
     cmd = args.command
     net = hub.config.network
     is_replay = cmd == "replay"
@@ -211,7 +216,10 @@ async def run_hub(args: argparse.Namespace, hub: Hub, selection: SourceSelection
     print_lines = cmd == "listen" or (is_replay and not args.quiet)
 
     # Bind everything first so a taken port fails before anything starts.
-    http_sock = bind_socket(socket.SOCK_STREAM, net.http_host, net.http_port) if serve_api else None
+    if not serve_api:
+        http_sock = None
+    elif http_sock is None:
+        http_sock = bind_socket(socket.SOCK_STREAM, net.http_host, net.http_port)
     listener = None
     udp_retry = None
     if live:
@@ -297,14 +305,19 @@ def udp_busy_message(port: int) -> str:
 
 async def retry_udp(hub: Hub, listener: UdpListener, every: float | None = None) -> None:
     """Try to bind the telemetry port every `every` seconds until it works; then clear the warning."""
+    logged = False
     while True:
         await asyncio.sleep(UDP_RETRY_S if every is None else every)
         try:
             await listener.start()
         except PortInUseError:
             continue
-        except OSError:
-            log.exception("Could not open the telemetry port")
+        except OSError as exc:
+            if not logged:          # the full details once; every 30 s for hours would bury the log
+                log.exception("Could not open the telemetry port")
+                logged = True
+            else:
+                log.debug("Still can't open the telemetry port: %s", exc)
             continue
         hub.udp_busy = None
         log.info("The telemetry port %d is free now: listening for rigs", listener.port)
@@ -345,6 +358,14 @@ def main(argv: list[str] | None = None) -> int:
     config, problems = load_config_safe(args.config)
     for problem in problems:
         print(f"WARNING: {problem.detail}", file=sys.stderr)
+    blocking = admin_blockers(args, problems)
+    if blocking:
+        print(f"ERROR: the settings file (hub.toml) has a problem, so '{args.command}' won't run on guessed "
+              "settings:", file=sys.stderr)
+        for problem in blocking:
+            print(f"  {problem.detail}", file=sys.stderr)
+        print("Fix the file and try again.", file=sys.stderr)
+        return 2
     config = apply_overrides(config, args)
     if args.command == "save-outline":
         return save_outline(args, config)
@@ -355,6 +376,18 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "restore":
         return restore_command(args, config)
     raise AssertionError(args.command)
+
+
+def admin_blockers(args: argparse.Namespace, problems: list[ConfigProblem]) -> list[ConfigProblem]:
+    """hub.toml problems that would make an admin command act on the wrong folder or port: a file that couldn't be
+    used at all, or a dropped data_dir (or, for backup and restore, a [backup] / [network] key). The hub itself
+    starts anyway (load_config_safe); these commands write or replace data, so they refuse instead."""
+    if args.command not in ("setup-code", "backup", "restore"):
+        return []
+    prefixes: list[tuple] = [("data_dir",)]
+    if args.command in ("backup", "restore"):
+        prefixes += [("backup",), ("network",)]
+    return [p for p in problems if p.touches(*prefixes)]
 
 
 def hub_main(args: argparse.Namespace) -> int:
@@ -374,6 +407,11 @@ def hub_main(args: argparse.Namespace) -> int:
         for problem in problems:
             log.warning("%s", problem.detail)
         return run_command(args, config, problems)
+    except StartError as exc:
+        log.exception("The hub could not start")
+        if args.command == "run":
+            write_start_error(data_dir, str(exc), traceback.format_exc())
+        return 1
     except Exception:
         log.exception("The hub could not start")
         if args.command == "run":
@@ -419,6 +457,33 @@ def backup_command(args: argparse.Namespace, config: AppConfig) -> int:
         return 2
     print(out)
     return 0
+
+
+def answers_as_this_product(host: str, port: int) -> bool:
+    """True when http://host:port/api/health answers and says it is this product (a hub already running)."""
+    host = "127.0.0.1" if host in ("", "0.0.0.0") else host
+    try:
+        with urllib.request.urlopen(f"http://{host}:{port}/api/health", timeout=2) as r:
+            return json.load(r).get("product") == brand.PRODUCT_NAME
+    except Exception:
+        return False
+
+
+def http_port_busy(args: argparse.Namespace, config: AppConfig, exc: PortInUseError) -> int:
+    """The HTTP port is taken. Checked before any data work, so nothing has been touched."""
+    if answers_as_this_product(config.network.http_host, exc.port):
+        message = f"{brand.PRODUCT_NAME} is already running."
+        log.info("%s (port %d answers)", message, exc.port)
+        print(f"\n{message}\n", file=sys.stderr)
+        return 0
+    message = port_in_use_message(exc)
+    log.error("%s (%s)", message.replace("\n", " "), exc.cause)
+    print(f"\nERROR: {message}\n", file=sys.stderr)
+    if args.command == "run":
+        write_start_error(config.data_dir,
+                          f"{brand.PRODUCT_NAME} could not start: another program is already using port "
+                          f"{exc.port}. Restart the PC; if this happens again, contact support.", message)
+    return 2
 
 
 def hub_is_running(port: int) -> bool:
@@ -534,6 +599,23 @@ def prepare_demo(args: argparse.Namespace, config: AppConfig) -> None:
 
 
 def run_command(args: argparse.Namespace, config: AppConfig, problems: list[ConfigProblem] = ()) -> int:
+    # The HTTP port first, before any data work (settings recovery, the lap database): a second copy, or another
+    # program on the port, must not touch the data the running hub has open.
+    http_sock = None
+    if args.command == "run" or (args.command == "replay" and not args.no_api):
+        try:
+            http_sock = bind_socket(socket.SOCK_STREAM, config.network.http_host, config.network.http_port)
+        except PortInUseError as exc:
+            return http_port_busy(args, config, exc)
+    try:
+        return _run_command(args, config, problems, http_sock)
+    finally:
+        if http_sock is not None:
+            http_sock.close()
+
+
+def _run_command(args: argparse.Namespace, config: AppConfig, problems: list[ConfigProblem],
+                 http_sock: socket.socket | None) -> int:
     warnings: list[tuple[str, str]] = [("config", p.message) for p in problems]
     if getattr(args, "demo", False):
         from .tools.seed_demo import DemoTargetError
@@ -561,12 +643,20 @@ def run_command(args: argparse.Namespace, config: AppConfig, problems: list[Conf
                             disk_check_interval_s=rc.disk_check_interval_s)
     # Replays keep their laps in memory unless asked, so old captures don't change the real boards.
     save_laps = args.command != "replay" or args.save_laps
+    # `run` keeps <data>/hub-running while it has the data open; finding it at start means a crash or power cut,
+    # so the lap database gets SQLite's full consistency check (otherwise skipped: it reads the whole file).
+    marked = args.command == "run" and not getattr(args, "demo", False)
     if save_laps:
-        store, damaged = open_lap_store(config.data_dir / "laps.db", dt.datetime.now())
+        unclean = marked and unclean_shutdown(config.data_dir)
+        if unclean:
+            log.warning("The hub did not stop cleanly last time; checking the lap database")
+        store, damaged = open_lap_store(config.data_dir / "laps.db", dt.datetime.now(), check=unclean)
         if damaged:
             warnings.append(("laps_damaged", damaged))
     else:
         store = LapStore(None)
+    if marked:
+        mark_running(config.data_dir)
     from .core.tracks import load_bundled
     bundled = None if getattr(args, "demo", False) else load_bundled()  # the demo circuit is made up
     hub = Hub(config, F1Adapter(config.track_names), registry, recorder, store, bundled,
@@ -587,7 +677,7 @@ def run_command(args: argparse.Namespace, config: AppConfig, problems: list[Conf
     exit_code = 0
     awake = args.command == "run" and not getattr(args, "demo", False) and keep_awake()
     try:
-        asyncio.run(run_hub(args, hub, selection))
+        asyncio.run(run_hub(args, hub, selection, http_sock))
     except PortInUseError as exc:
         message = port_in_use_message(exc)
         log.error("%s (%s)", message.replace("\n", " "), exc.cause)
@@ -607,6 +697,8 @@ def run_command(args: argparse.Namespace, config: AppConfig, problems: list[Conf
             recorder.close()
         store.close()
         registry.save()
+        if marked:
+            clear_running(config.data_dir)
     return exit_code
 
 

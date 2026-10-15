@@ -15,6 +15,12 @@ from pathlib import Path
 log = logging.getLogger(__name__)
 
 START_ERROR_FILE = "last-start-error.txt"
+RUNNING_MARKER = "hub-running"      # present while `run` has the data open; left behind by a crash or power cut
+
+
+class StartError(Exception):
+    """The hub can't start, for a reason that can be said in plain English: str(exc) is the headline for
+    last-start-error.txt (the installer's finish page shows it)."""
 
 # SetThreadExecutionState flags (winbase.h)
 ES_CONTINUOUS = 0x80000000
@@ -32,6 +38,29 @@ def write_start_error(data_dir: Path, headline: str, details: str = "") -> Path 
     except OSError:
         log.exception("Could not write %s", path)
         return None
+
+
+def mark_running(data_dir: Path) -> bool:
+    """Write <data_dir>/hub-running. Returns True when it was already there: the last run didn't stop cleanly."""
+    path = data_dir / RUNNING_MARKER
+    was_there = path.exists()
+    try:
+        data_dir.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"{os.getpid()}\n", encoding="utf-8")
+    except OSError:
+        log.warning("Could not write %s", path)
+    return was_there
+
+
+def unclean_shutdown(data_dir: Path) -> bool:
+    return (data_dir / RUNNING_MARKER).exists()
+
+
+def clear_running(data_dir: Path) -> None:
+    try:
+        (data_dir / RUNNING_MARKER).unlink(missing_ok=True)
+    except OSError:
+        log.warning("Could not delete %s", data_dir / RUNNING_MARKER)
 
 
 def clear_start_error(data_dir: Path) -> None:

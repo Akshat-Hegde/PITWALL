@@ -64,6 +64,7 @@ enabled = false                        # session start and record sounds on the 
 volume = 0.6
 
 [owner]
+# PINs go in quotes ("0123"): a bare number works too, but TOML rejects one that starts with 0.
 pin = ""                               # PIN for /owner (analytics); empty = the page stays locked
 open_hour = 10                         # opening hours, for rig utilisation
 close_hour = 22

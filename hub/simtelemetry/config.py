@@ -23,6 +23,12 @@ class ConfigProblem:
     """A mistake in hub.toml that the hub worked around (load_config_safe)."""
     message: str          # plain English, for the staff and setup pages
     detail: str           # file, section, key and line, for the log
+    loc: tuple = ()       # the key that was dropped, e.g. ("data_dir",) or ("backup", "directory")
+    whole_file: bool = False   # the file couldn't be used at all: every setting is a default
+
+    def touches(self, *prefixes: tuple) -> bool:
+        """True when the whole file fell back to defaults, or the dropped key is (inside) one of `prefixes`."""
+        return self.whole_file or any(self.loc[:len(p)] == p for p in prefixes)
 
 
 class _Section(BaseModel):
@@ -80,14 +86,32 @@ class MapConfig(_Section):
     rotate_deg: float = 0.0
 
 
+def _pin_text(value: Any) -> Any:
+    """pin = 1234 (a TOML number) means the same as pin = "1234". Write PINs in quotes all the same:
+    a number can't start with 0 in TOML (pin = 0123 is a mistake in the file), but "0123" is fine."""
+    if isinstance(value, int) and not isinstance(value, bool):
+        return str(value)
+    return value
+
+
 class StaffConfig(_Section):
     # PIN for the /staff page (setting driver names). Empty = no PIN; anyone on the LAN can change names.
     pin: str = ""
+
+    @field_validator("pin", mode="before")
+    @classmethod
+    def _pin(cls, value: Any) -> Any:
+        return _pin_text(value)
 
 
 class OwnerConfig(_Section):
     # PIN for the /owner analytics page. Empty = the owner page is locked (it shows business figures).
     pin: str = ""
+
+    @field_validator("pin", mode="before")
+    @classmethod
+    def _pin(cls, value: Any) -> Any:
+        return _pin_text(value)
     # Opening hours, for rig utilisation (local hours, close after open).
     open_hour: int = Field(10, ge=0, le=23)
     close_hour: int = Field(22, ge=1, le=24)
@@ -242,7 +266,7 @@ def load_config_safe(path: Path | None = None) -> tuple[AppConfig, list[ConfigPr
     except (OSError, UnicodeDecodeError) as exc:
         return _anchored(AppConfig()), [ConfigProblem(
             f"{_FILE} could not be read ({exc.__class__.__name__}). The hub started with default settings.",
-            f"Could not read config file {path}: {exc}")]
+            f"Could not read config file {path}: {exc}", whole_file=True)]
     try:
         data = tomllib.loads(text)
     except tomllib.TOMLDecodeError as exc:
@@ -250,7 +274,7 @@ def load_config_safe(path: Path | None = None) -> tuple[AppConfig, list[ConfigPr
         where = f" on line {line}" if line else ""
         return _anchored(AppConfig()), [ConfigProblem(
             f"{_FILE} has a mistake{where}: {msg}. The hub started with default settings.",
-            f"Invalid config file {_describe_syntax_error(path, exc)}")]
+            f"Invalid config file {_describe_syntax_error(path, exc)}", whole_file=True)]
     problems: list[ConfigProblem] = []
     for _ in range(_MAX_FIXES):
         try:
@@ -263,7 +287,7 @@ def load_config_safe(path: Path | None = None) -> tuple[AppConfig, list[ConfigPr
             problems.append(_problem(path, text, err))
     problems.append(ConfigProblem(f"{_FILE} has mistakes the hub could not work around. "
                                   "The hub started with default settings.",
-                                  f"Invalid config file {path}: falling back to all defaults"))
+                                  f"Invalid config file {path}: falling back to all defaults", whole_file=True))
     return _anchored(AppConfig()), problems
 
 
@@ -298,10 +322,34 @@ def _remove(data: Any, loc: tuple) -> bool:
     return False
 
 
-def _plain(msg: str) -> str:
-    msg = msg.removeprefix("Value error, ")
-    if msg == "Field required":
-        return "is missing"
+_PLAIN = {
+    "missing": "is missing",
+    "int_parsing": "should be a whole number", "int_type": "should be a whole number",
+    "int_from_float": "should be a whole number",
+    "float_parsing": "should be a number", "float_type": "should be a number",
+    "string_type": "should be text in quotes",
+    "bool_parsing": "should be true or false", "bool_type": "should be true or false",
+    "list_type": "should be a list in square brackets",
+    "dict_type": "should be a section of settings", "model_type": "should be a section of settings",
+    "model_attributes_type": "should be a section of settings",
+    "path_type": "should be a folder path in quotes",
+    "string_too_short": "is too short", "string_too_long": "is too long",
+}
+_LIMITS = {"less_than_equal": ("le", "should be {} or less"), "less_than": ("lt", "should be less than {}"),
+           "greater_than_equal": ("ge", "should be {} or more"), "greater_than": ("gt", "should be more than {}")}
+
+
+def _plain(err: dict[str, Any]) -> str:
+    """A pydantic error as a short plain-English phrase that follows the key's name."""
+    kind = err.get("type", "")
+    if kind in _PLAIN:
+        return _PLAIN[kind]
+    if kind in _LIMITS:
+        name, phrase = _LIMITS[kind]
+        limit = (err.get("ctx") or {}).get(name)
+        if limit is not None:
+            return phrase.format(f"{limit:g}" if isinstance(limit, float) else limit)
+    msg = str(err.get("msg", "")).removeprefix("Value error, ")
     return msg[:1].lower() + msg[1:]
 
 
@@ -321,9 +369,9 @@ def _problem(path: Path, text: str, err: dict[str, Any]) -> ConfigProblem:
         hints = _suggest(str(key), list(model.model_fields)) if model else []
         hint = f" (did you mean {' / '.join(hints)}?)" if hints else ""
         return ConfigProblem(f"{_FILE} has a setting the hub doesn't know{where}: '{key}'{in_section}{hint}. "
-                             "It was ignored.", detail)
-    return ConfigProblem(f"{_FILE} has a mistake{where}: '{key}'{in_section} {_plain(err['msg'])}. "
-                         "The hub started with the default for that setting.", detail)
+                             "It was ignored.", detail, loc=loc)
+    return ConfigProblem(f"{_FILE} has a mistake{where}: '{key}'{in_section} {_plain(err)}. "
+                         "The hub started with the default for that setting.", detail, loc=loc)
 
 
 _HEADER = re.compile(r"^\s*(\[\[?)\s*([^\]]+?)\s*\]\]?\s*(#.*)?$")
@@ -352,7 +400,8 @@ def _line_of(text: str, loc: tuple) -> int | None:
                 index = None
             continue
         k = _KEY.match(line)
-        if k and current == target and (want_index is None or index == want_index)                 and (k[1] or k[2] or k[3]) == str(key):
+        if (k and current == target and (want_index is None or index == want_index)
+                and (k[1] or k[2] or k[3]) == str(key)):
             return n
     whole = ".".join(str(p) for p in loc if not isinstance(p, int))
     for n, line in enumerate(lines, 1):             # an unknown or bad section: point at its header

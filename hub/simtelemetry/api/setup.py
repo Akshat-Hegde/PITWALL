@@ -15,6 +15,7 @@ from pydantic import ValidationError
 
 from .. import brand
 from ..core.feed import lan_address
+from ..core.pins import is_hashed
 from ..core.settings import CafeSettings, SettingsStore, apply_settings
 from ..core.setup_code import SetupCode, SetupLocked
 from .owner import OWNER_PIN_HEADER
@@ -81,6 +82,10 @@ def setup_router(hub: Hub) -> APIRouter:
         guard(request, x_setup_code)
         old = current()
         body = dict(body)
+        for key in ("owner_pin", "staff_pin"):
+            # Only PINs the hub stored itself may be hashes; one sent in would let a copied hash stand in for a PIN.
+            if isinstance(body.get(key), str) and is_hashed(body[key].strip()):
+                raise HTTPException(422, "A PIN is 4 to 8 digits.")
         remove_staff_pin = bool(body.pop("remove_staff_pin", False))
         if old is not None:
             # /api/setup never returns PINs, so the form's PIN fields start empty: blank means "keep the current one".

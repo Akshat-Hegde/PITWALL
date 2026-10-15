@@ -199,6 +199,7 @@ def test_damaged_settings_without_backup_means_setup_mode(tmp_path):
     store.path.write_text("nonsense", encoding="utf-8")
     message = recover_damaged_settings(store, tmp_path / "no-backups", NOW)
     assert "no backup" in message and "setup page" in message
+    assert "use 'Show setup code' in the Start menu" in message
     assert store.read() is None and (tmp_path / "settings.json.broken-20261015-093000").exists()
 
 
@@ -331,3 +332,208 @@ def test_saving_setup_again_clears_the_damaged_settings_warning(tmp_path):
     body = {"name": "Lap Lab", "owner_pin": "2468", "staff_pin": "", "open_hour": 10, "close_hour": 22}
     r = client.post("/api/setup", json=body, headers={"X-Setup-Code": code})
     assert r.status_code == 200 and [w["code"] for w in r.json()["warnings"]] == ["laps_damaged"]
+
+
+def test_hash_shaped_pins_from_the_setup_form_are_refused(tmp_path):
+    from simtelemetry.core.pins import hash_pin
+    from simtelemetry.core.setup_code import SetupCode
+    code = SetupCode(tmp_path).new()
+    client = TestClient(create_app(make_hub(tmp_path), dashboard_dir=tmp_path / "none"))
+    stolen = hash_pin("9999")
+    for field in ("owner_pin", "staff_pin"):
+        body = {"name": "Lap Lab", "owner_pin": "2468", "staff_pin": "1357", "open_hour": 10, "close_hour": 22,
+                field: stolen}
+        r = client.post("/api/setup", json=body, headers={"X-Setup-Code": code})
+        assert r.status_code == 422 and r.json()["detail"] == "A PIN is 4 to 8 digits."
+    assert SettingsStore(tmp_path).read() is None
+    body = {"name": "Lap Lab", "owner_pin": "2468", "staff_pin": "1357", "open_hour": 10, "close_hour": 22}
+    assert client.post("/api/setup", json=body, headers={"X-Setup-Code": code}).status_code == 200
+    r = client.post("/api/setup", json={**body, "owner_pin": stolen}, headers={"X-Owner-Pin": "2468"})
+    assert r.status_code == 422
+    assert verify_pin("2468", SettingsStore(tmp_path).read().owner_pin)
+
+
+# --- settings.json that can't be read (not damaged) ---------------------------------------------------------
+
+def test_unreadable_settings_are_retried_and_never_moved_aside(tmp_path, monkeypatch):
+    from simtelemetry.core import settings as settings_mod
+    sleeps = []
+    monkeypatch.setattr(settings_mod.time, "sleep", sleeps.append)
+    store = SettingsStore(tmp_path)
+    store.path.mkdir()                          # reading it fails with an OSError, like a file another program locks
+    message = recover_damaged_settings(store, tmp_path / "backups", NOW)
+    assert message.startswith("The cafe settings file couldn't be read just now")
+    assert sleeps == [settings_mod.READ_RETRY_S] * (settings_mod.READ_TRIES - 1)
+    assert store.path.is_dir() and not list(tmp_path.glob("settings.json.broken-*"))
+
+
+def test_settings_read_succeeds_on_a_retry(tmp_path, monkeypatch):
+    from pathlib import Path
+    from simtelemetry.core import settings as settings_mod
+    monkeypatch.setattr(settings_mod.time, "sleep", lambda s: None)
+    store = SettingsStore(tmp_path)
+    store.save(_settings())
+    real, calls = Path.read_text, []
+
+    def flaky(self, *a, **k):
+        calls.append(self)
+        if len(calls) == 1:
+            raise PermissionError("in use")
+        return real(self, *a, **k)
+    monkeypatch.setattr(Path, "read_text", flaky)
+    assert recover_damaged_settings(store, tmp_path, NOW) is None and len(calls) == 2
+
+
+# --- laps.db: only real damage moves it -------------------------------------------------------------------
+
+def test_locked_lap_database_is_not_moved_and_stops_with_a_plain_error(tmp_path, monkeypatch):
+    from simtelemetry.core import store as store_mod
+    LapStore(tmp_path / "laps.db").close()
+
+    def locked(path):
+        raise sqlite3.OperationalError("database is locked")
+    monkeypatch.setattr(store_mod, "LapStore", locked)
+    with pytest.raises(store_mod.LapStoreUnavailable, match="in use by another program or the disk is full"):
+        open_lap_store(tmp_path / "laps.db", NOW)
+    assert not list(tmp_path.glob("laps.db.broken-*"))
+    code = cli.main(["run", "--data-dir", str(tmp_path), *ports(), "--duration", "0.5"])
+    assert code == 1
+    first = (tmp_path / START_ERROR_FILE).read_text(encoding="utf-8").splitlines()[0]
+    assert first.startswith("The lap database is in use by another program or the disk is full: database is locked")
+    assert not list(tmp_path.glob("laps.db.broken-*"))
+
+
+def test_a_quick_check_that_cannot_run_is_not_damage(tmp_path, monkeypatch):
+    from simtelemetry.core import store as store_mod
+    LapStore(tmp_path / "laps.db").close()
+
+    def busy(self):
+        raise sqlite3.OperationalError("disk I/O error")
+    monkeypatch.setattr(store_mod.LapStore, "quick_check", busy)
+    with pytest.raises(store_mod.LapStoreUnavailable):
+        open_lap_store(tmp_path / "laps.db", NOW)
+    assert not list(tmp_path.glob("laps.db.broken-*"))
+
+
+def test_damaged_lap_database_that_cannot_be_moved_gives_a_plain_error(tmp_path, monkeypatch):
+    from simtelemetry.core import store as store_mod
+    (tmp_path / "laps.db").write_bytes(b"garbage" * 100)
+
+    def refuse(src, dst):
+        raise PermissionError("in use")
+    monkeypatch.setattr(store_mod.os, "replace", refuse)
+    with pytest.raises(store_mod.LapStoreUnavailable, match="damaged and could not be moved aside"):
+        open_lap_store(tmp_path / "laps.db", NOW)
+
+
+def test_quick_check_runs_only_after_an_unclean_shutdown(tmp_path, monkeypatch):
+    from simtelemetry.core import store as store_mod
+    real, checks = store_mod.LapStore.quick_check, []
+
+    def counting(self):
+        checks.append(self.path)
+        return real(self)
+    monkeypatch.setattr(store_mod.LapStore, "quick_check", counting)
+    seen = {}
+
+    def during():
+        seen["marker"] = (tmp_path / startup.RUNNING_MARKER).exists()
+    code, _ = run_hub_briefly(["run", "--data-dir", str(tmp_path), *ports()], delay=0.8, duration="1.5",
+                              during=during)
+    assert code == 0 and checks == [] and seen["marker"]
+    assert not (tmp_path / startup.RUNNING_MARKER).exists()          # a clean stop removes it
+    (tmp_path / startup.RUNNING_MARKER).write_text("1234\n", encoding="utf-8")     # as left by a power cut
+    code, _ = run_hub_briefly(["run", "--data-dir", str(tmp_path), *ports()], delay=0.5, duration="1")
+    assert code == 0 and checks == [tmp_path / "laps.db"]
+    assert not (tmp_path / startup.RUNNING_MARKER).exists()
+
+
+# --- HTTP port busy: checked before any data work -------------------------------------------------------------
+
+def test_busy_http_port_is_found_before_any_data_is_touched(tmp_path):
+    (tmp_path / "settings.json").write_text("{", encoding="utf-8")
+    (tmp_path / "laps.db").write_bytes(b"garbage" * 100)
+    blocker = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    blocker.bind(("0.0.0.0", 0))
+    blocker.listen()
+    try:
+        code = cli.main(["run", "--port", str(free_port()), "--http-port", str(blocker.getsockname()[1]),
+                         "--data-dir", str(tmp_path), "--duration", "1"])
+    finally:
+        blocker.close()
+    assert code == 2
+    assert (tmp_path / "settings.json").read_text(encoding="utf-8") == "{"
+    assert not list(tmp_path.glob("*.broken-*")) and not (tmp_path / startup.RUNNING_MARKER).exists()
+
+
+def test_second_copy_says_it_is_already_running(tmp_path, capsys):
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    from simtelemetry import brand
+
+    class Health(BaseHTTPRequestHandler):
+        def do_GET(self):
+            body = json.dumps({"product": brand.PRODUCT_NAME, "rigs": []}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *a):
+            pass
+
+    class Exclusive(HTTPServer):
+        allow_reuse_address = False         # SO_REUSEADDR on Windows would let the hub bind the port as well
+    server = Exclusive(("0.0.0.0", 0), Health)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        code = cli.main(["run", "--port", str(free_port()), "--http-port", str(server.server_address[1]),
+                         "--data-dir", str(tmp_path), "--duration", "1"])
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert code == 0
+    assert f"{brand.PRODUCT_NAME} is already running." in capsys.readouterr().err
+    assert not (tmp_path / START_ERROR_FILE).exists()
+
+
+def test_health_says_which_product_it_is(tmp_path):
+    from simtelemetry import brand
+    assert make_hub(tmp_path).health_snapshot()["product"] == brand.PRODUCT_NAME
+
+
+# --- admin commands and a broken hub.toml -------------------------------------------------------------------
+
+def test_admin_commands_refuse_when_hub_toml_is_unusable(tmp_path, capsys):
+    config = tmp_path / "hub.toml"
+    config.write_text("[network\n", encoding="utf-8")
+    for argv in (["backup"], ["setup-code"], ["restore", str(tmp_path / "x.zip")]):
+        assert cli.main([*argv, "--config", str(config)]) == 2
+        assert "won't run on guessed settings" in capsys.readouterr().err
+    config.write_text("data_dir = 5\n", encoding="utf-8")
+    assert cli.main(["setup-code", "--config", str(config)]) == 2
+    config.write_text(f'data_dir = "{(tmp_path / "data").as_posix()}"\n[sounds]\nvolum = 1\n', encoding="utf-8")
+    assert cli.main(["setup-code", "--config", str(config)]) == 0        # an unrelated mistake doesn't matter
+    assert (tmp_path / "data").is_dir()
+
+
+def test_udp_retry_logs_the_traceback_once(tmp_path, caplog):
+    import asyncio
+    import logging
+    hub = make_hub(tmp_path)
+    hub.udp_busy = "busy"
+
+    class Listener:
+        port = free_port()
+        tries = 0
+
+        async def start(self):
+            Listener.tries += 1
+            if Listener.tries < 4:
+                raise OSError("network is down")
+    caplog.set_level(logging.DEBUG, logger="simtelemetry")
+    asyncio.run(cli.retry_udp(hub, Listener(), every=0))
+    errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
+    assert len(errors) == 1 and errors[0].exc_info is not None
+    assert len([r for r in caplog.records if "Still can't open the telemetry port" in r.getMessage()]) == 2
+    assert hub.udp_busy is None

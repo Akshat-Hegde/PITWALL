@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from . import paths
+from . import brand, paths
 from .config import AppConfig
 from .core.adapter import Checked, GameAdapter
 from .core.health import HealthMonitor, RigState
@@ -433,6 +433,7 @@ class Hub:
                 "drops": dict(h.drops) if h else {},
             })
         return {
+            "product": brand.PRODUCT_NAME,      # lets a second copy see that this one is already running
             "game": self.adapter.game,
             "uptime_s": round(now - self.started_at, 1),
             "udp_port": self.config.network.udp_port,
