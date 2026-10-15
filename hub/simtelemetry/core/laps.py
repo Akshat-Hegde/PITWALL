@@ -514,6 +514,30 @@ class LapBook:
         for track_key in {r.track_key for r in gone}:
             self._bump_board(track_key)
 
+    def move_rig(self, old_rig_id: str, new_rig_id: str, since_ms: int) -> None:
+        """A rig got a new address ("same rig as…"): its open session's laps move to the new rig id, here and
+        in the store, so the session's card and check-in page still see them."""
+        moved = [r for r in self.laps if r.rig_id == old_rig_id and r.completed_at >= since_ms]
+        old_key, new_key = f"rig:{old_rig_id}", f"rig:{new_rig_id}"
+        for record in moved:
+            record.rig_id = new_rig_id
+        for key in [k for k in self._analyses if k[2] == old_key]:
+            entry = self._analyses.pop(key)
+            if entry["completed_at"] >= since_ms:
+                new = (key[0], key[1], new_key)
+                if new not in self._analyses or entry["lap_ms"] < self._analyses[new]["lap_ms"]:
+                    self._analyses[new] = {**entry, "driver_key": new_key, "rig_id": new_rig_id}
+            else:
+                self._analyses[key] = entry
+        self.rigs.pop(old_rig_id, None)
+        if self.store is not None:
+            self.store.move_laps(old_rig_id, new_rig_id, since_ms)
+        self._lap_version += 1
+        self.analysis_version += 1
+        self._rebuild_bests()
+        for track_key in {r.track_key for r in moved}:
+            self._bump_board(track_key)
+
     def _rebuild_bests(self) -> None:
         self._session.clear()
         self._personal.clear()

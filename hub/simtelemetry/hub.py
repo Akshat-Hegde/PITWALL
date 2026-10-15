@@ -500,10 +500,13 @@ class Hub:
             raise RigError("Choose a different rig.")
         if self.health.state(old_ip, time.monotonic()) is not RigState.NO_DATA:
             raise RigError(f"{old.name} is still sending data, so it is a different PC.")
+        session = self.drivers.get(old_ip)
         try:
             self.drivers.move(old_ip, new_ip)
         except DriverError as exc:
             raise RigError(str(exc)) from None
+        if session is not None:
+            self.laps.move_rig(old_ip, new_ip, session.started_at)   # the card and check-in page keep its laps
         self.checkin.move(old_ip, new_ip)
         if old_ip in self._session_top_kph:
             self._session_top_kph[new_ip] = self._session_top_kph.pop(old_ip)

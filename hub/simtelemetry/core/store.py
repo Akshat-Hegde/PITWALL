@@ -282,6 +282,19 @@ class LapStore:
             self._db.execute("UPDATE driver_sessions SET rig_id = ? WHERE rig_id = ? AND ended_at IS NULL",
                              (new_rig_id, old_rig_id))
 
+    def move_laps(self, old_rig_id: str, new_rig_id: str, since_ms: int) -> None:
+        """The open session's laps move with a rig that got a new address. A nameless rig's laps are keyed by
+        the rig ("rig:<address>"), so that key moves too (also in head to head, unless the new key has its own)."""
+        old_key, new_key = f"rig:{old_rig_id}", f"rig:{new_rig_id}"
+        with self._lock, self._db:
+            self._db.execute(
+                "UPDATE laps SET rig_id = ?, driver_key = CASE WHEN driver_key = ? THEN ? ELSE driver_key END"
+                " WHERE rig_id = ? AND completed_at >= ?", (new_rig_id, old_key, new_key, old_rig_id, since_ms))
+            self._db.execute("UPDATE OR IGNORE lap_analyses SET driver_key = ?,"
+                             " data = json_set(data, '$.driver_key', ?, '$.rig_id', ?)"
+                             " WHERE driver_key = ? AND completed_at >= ?",
+                             (new_key, new_key, new_rig_id, old_key, since_ms))
+
     def current_driver_sessions(self) -> dict[str, Assignment]:
         from .drivers import Assignment
         with self._lock:

@@ -222,6 +222,50 @@ async def test_same_rig_as_moves_name_colour_number_code_and_session(tmp_path):
     assert json.loads((tmp_path / "checkin.json").read_text()) == {NEW: old_code}
 
 
+def lap_on(hub, rig_id, n, lap_ms, driver):
+    from simtelemetry.core.laps import LapCompleted, LapContext, LiveLap
+    ctx = LapContext(rig_name="Rig 1", driver=driver, track_key="F1:7", track_name="Silverstone", session_id="s",
+                     position=(0.0, 0.0), track_length_m=4800.0, driver_id=hub.drivers.driver_id(rig_id))
+    hub.laps.update(rig_id, ctx, LiveLap(n + 1, 5.0, 100, True, 0, None, None, lap_ms), [
+        LapCompleted(n, 0.0, lap_ms, (30000, 33000, lap_ms - 63000), True, False, "test")])
+
+
+async def test_same_rig_as_mid_session_keeps_the_laps_before_and_after(tmp_path):
+    hub, client, owner = set_up(tmp_path)
+    await feed_from(hub, driving_rig(OLD))
+    session = hub.drivers.assign(OLD, "Maya", minutes=30)
+    secret = hub.checkin.register(OLD, session)
+    lap_on(hub, OLD, 2, 96000, "Maya")
+    silence(hub, OLD)
+    await feed_from(hub, driving_rig(NEW))
+    assert client.post(f"/api/setup/rigs/{NEW}/same-as", json={"old": OLD}, headers=owner).status_code == 200
+    lap_on(hub, NEW, 3, 95000, "Maya")
+    rec = hub.checkin.lookup(NEW, secret)
+    assert [r.lap_number for r in hub.checkin.laps(rec)] == [2, 3]
+    rows = hub.laps.store._db.execute("SELECT rig_id FROM laps ORDER BY id").fetchall()
+    assert [r["rig_id"] for r in rows] == [NEW, NEW]
+    card = hub.end_session(NEW)
+    assert card["laps"] == 2 and card["best_ms"] == 95000
+
+
+async def test_same_rig_as_moves_a_nameless_rigs_lap_key(tmp_path):
+    hub, client, owner = set_up(tmp_path)
+    await feed_from(hub, driving_rig(OLD))
+    early = hub.laps.store._db.execute("SELECT COUNT(*) FROM laps").fetchone()[0]
+    lap_on(hub, OLD, 1, 97000, None)                                  # before the session: stays on OLD
+    hub.laps.laps[-1].completed_at -= 10_000
+    hub.laps.store._db.execute("UPDATE laps SET completed_at = completed_at - 10000")
+    session = hub.drivers.assign(OLD, "Maya")
+    lap_on(hub, OLD, 2, 96000, None)
+    silence(hub, OLD)
+    await feed_from(hub, driving_rig(NEW))
+    hub.merge_rig(OLD, NEW)
+    assert [(r.rig_id, r.driver_key) for r in hub.laps.laps] == [(OLD, f"rig:{OLD}"), (NEW, f"rig:{NEW}")]
+    rows = hub.laps.store._db.execute("SELECT rig_id, driver_key FROM laps ORDER BY id").fetchall()
+    assert [tuple(r) for r in rows][early:] == [(OLD, f"rig:{OLD}"), (NEW, f"rig:{NEW}")]
+    assert session.started_at <= hub.laps.laps[-1].completed_at
+
+
 async def test_same_rig_as_is_refused_when_the_old_rig_still_sends_or_both_have_sessions(tmp_path):
     hub, client, owner = set_up(tmp_path)
     await feed_from(hub, driving_rig(OLD) + driving_rig(NEW))
