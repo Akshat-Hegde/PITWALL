@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { AnalysisView, chooseDuel } from "./components/Analysis";
 import { AttractView, PortraitView } from "./components/Attract";
 import { CardQr } from "./components/CardQr";
-import { BracketPreview, TeamsView } from "./components/Competition";
+import { TeamsView } from "./components/Competition";
 import { BattlePopups, MomentLayer } from "./components/Moments";
 import { KineticType } from "./components/Motifs";
 import { MultiviewPage } from "./components/Live";
@@ -83,13 +83,11 @@ interface Props {
   viewMode?: ViewMode;
   /** "portrait": the entrance-screen layout (/portrait). */
   layout?: "tv" | "portrait";
-  /** Demo mode (?demo=1): adds the tournament preview to the rotation. */
-  demo?: boolean;
 }
 
 const VIEW_NAME: Record<string, string> = {
   live: "Live", multi: "Multiview", board: "Leaderboard", analysis: "Head to head", attract: "Welcome",
-  teams: "Teams", bracket: "Hotlap cup",
+  teams: "Teams",
 };
 
 /** How long the wipe overlay stays mounted (its CSS animation is 420 ms). */
@@ -121,7 +119,7 @@ function ViewWipe({ view }: { view: string }) {
   );
 }
 
-export function App({ store, mapDisplay = null, viewMode = "auto", layout = "tv", demo = false }: Props) {
+export function App({ store, mapDisplay = null, viewMode = "auto", layout = "tv" }: Props) {
   const state = useDashboard(store);
   useBranding(state.cafe.branding);
   useEffect(() => {
@@ -136,7 +134,6 @@ export function App({ store, mapDisplay = null, viewMode = "auto", layout = "tv"
     analysis: f.head_to_head && chooseDuel(state, store.laps, trackKey) !== null,
     attract: f.attract,
     teams: f.events && state.competition.event !== null,
-    bracket: demo,
   };
   const event = f.events ? state.competition.event : null;
   useEventAccent(event?.accent ?? null);
@@ -147,11 +144,8 @@ export function App({ store, mapDisplay = null, viewMode = "auto", layout = "tv"
   if (state.link === "version_mismatch") {
     return (
       <div className="fullscreen-message" role="alert">
-        <h1>Dashboard and hub versions don't match</h1>
-        <p>
-          The hub sends schema version {state.receivedVersion}; this dashboard reads version 1. Update the hub or
-          the dashboard so both match, then reload this page.
-        </p>
+        <h1>Updating the screen</h1>
+        <p>The hub has been updated. This screen reloads itself in a moment.</p>
       </div>
     );
   }
@@ -185,7 +179,6 @@ export function App({ store, mapDisplay = null, viewMode = "auto", layout = "tv"
         {view === "analysis" && <AnalysisView store={store} state={state} trackKey={trackKey} />}
         {view === "attract" && <AttractView state={state} />}
         {view === "teams" && <TeamsView state={state} />}
-        {view === "bracket" && <BracketPreview />}
       </div>
       {wipe && <ViewWipe key={`wipe:${wipe}`} view={wipe} />}
       {view !== "attract" && <BattlePopups state={state} trackKey={trackKey} />}

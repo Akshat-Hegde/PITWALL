@@ -68,6 +68,11 @@ export function AttractView({ state }: { state: DashboardState }) {
   );
 }
 
+/** A rig's name for the TV: never its id, which is its network address. */
+export function rigName(state: DashboardState, rigId: string): string {
+  return state.rigs.find((r) => r.rig_id === rigId)?.name ?? "Rig";
+}
+
 /** /portrait: for a vertical screen at the entrance (1080 x 1920). */
 export function PortraitView({ state }: { state: DashboardState }) {
   const name = state.cafe.name || "Live timing";
@@ -88,7 +93,8 @@ export function PortraitView({ state }: { state: DashboardState }) {
       <footer className="portrait__foot">
         <Tab left="On track now" right={String(anyDriving.length)} />
         <span className="t2">
-          {anyDriving.length ? anyDriving.map((f) => f.driver ?? f.rig_id).join(" · ") : "Rigs are free: ask at the desk"}
+          {anyDriving.length ? anyDriving.map((f) => f.driver ?? rigName(state, f.rig_id)).join(" · ")
+            : "Rigs are free: ask at the desk"}
         </span>
       </footer>
     </main>

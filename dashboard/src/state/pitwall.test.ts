@@ -111,4 +111,14 @@ describe("session story", () => {
     expect(c.names.map((n) => n.text)).toEqual(["AKKI"]);
     expect(Math.min(...c.dots.map((d) => d.x))).toBeGreaterThan(48);
   });
+
+  test("a lap without a driver is labelled with the rig's name, never its id (an address)", () => {
+    const now = 1_000_000_000;
+    const laps: StoryLap[] = [
+      { rig_id: "192.168.1.21", driver: null, lap_ms: 88_000, valid: true, out_lap: false, completed_at: now - 60_000 },
+    ];
+    expect(storyChart(laps, now, () => "#fff", []).names[0]!.text).toBe("RIG");
+    const named = storyChart(laps, now, () => "#fff", [], null, 8, (id) => (id === "192.168.1.21" ? "Rig 1" : "?"));
+    expect(named.names[0]!.text).toBe("RIG 1");
+  });
 });

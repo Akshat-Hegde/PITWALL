@@ -171,12 +171,16 @@ function Delta({ store, rigId }: { store: DashboardStore; rigId: string }) {
 
 // --- MULTIVIEW -------------------------------------------------------------------------------------------
 
+/** MULTIVIEW shows at most this many tiles (a 4 x 3 grid). */
+export const MULTIVIEW_MAX = 12;
+
+/** Grid for n tiles: 1, 2 side by side, 2 x 2, 3 x 2, 4 x 2 or 4 x 3 (the CSS class multi--<cells>). */
 export function multiviewGrid(n: number): string {
-  return n <= 1 ? "1" : n === 2 ? "2" : n <= 4 ? "4" : "6";
+  return n <= 1 ? "1" : n === 2 ? "2" : n <= 4 ? "4" : n <= 6 ? "6" : n <= 8 ? "8" : "12";
 }
 
 export function MultiviewPage({ store, state, trackKey }: { store: DashboardStore; state: DashboardState; trackKey: string | null }) {
-  const rigs = activeRigs(state);
+  const rigs = activeRigs(state).slice(0, MULTIVIEW_MAX);
   return (
     <main className={`multi multi--${multiviewGrid(rigs.length)}`}>
       {rigs.map((rig) => (

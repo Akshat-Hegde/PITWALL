@@ -32,6 +32,13 @@ describe("TV pages", () => {
     expect(chooseView("auto", "live", "teams", IDLE_AFTER_MS * 2, ALL).view).toBe("teams");
   });
 
+  test("no tournament preview: attract rotates welcome, board and teams only", () => {
+    expect(viewModeFromQuery(new URLSearchParams("view=bracket"))).toBe("auto");
+    const seen = new Set<string>();
+    for (let t = 0; t < 200_000; t += 1_000) seen.add(chooseView("auto", "live", null, IDLE_AFTER_MS + t, ALL).view);
+    expect([...seen].sort()).toEqual(["attract", "board", "teams"]);
+  });
+
   test("the newer of the staff choice and a key press on the TV PC wins", () => {
     expect(currentPage(TV, null)).toBe("live");
     expect(currentPage(TV, { page: "multi", at: 2000 })).toBe("multi");

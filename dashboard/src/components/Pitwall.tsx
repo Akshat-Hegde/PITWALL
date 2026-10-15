@@ -5,6 +5,7 @@ import {
   CHART, deltaTo, driverKey, fmtLap, fmtPred, headlineSize, headlines, predictedPosition, refFromMinis,
   refFromTrace, storyChart, towerRows, type Headline, type Rating, type RefLap, type TowerRow,
 } from "../state/pitwall";
+import { hubNow } from "../state/hubclock";
 import type { DashboardState } from "../state/reducer";
 import type { DashboardStore } from "../state/store";
 import { PitwallLogo } from "./Brand";
@@ -29,9 +30,9 @@ function tyreColour(t: number): string {
 }
 
 function useClock(): string {
-  const [now, setNow] = useState(() => new Date());
+  const [now, setNow] = useState(() => new Date(hubNow()));
   useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 1000);
+    const id = setInterval(() => setNow(new Date(hubNow())), 1000);
     return () => clearInterval(id);
   }, []);
   return [now.getHours(), now.getMinutes(), now.getSeconds()].map((v) => String(v).padStart(2, "0")).join(":");
@@ -415,7 +416,9 @@ function Story({ state, trackKey, solo, focusKey, recordMs, pbMs }: {
   const refs = [];
   if (recordMs != null) refs.push({ ms: recordMs, label: `REC ${fmtLap(recordMs)}`, colour: COL.p });
   if (solo && pbMs != null) refs.push({ ms: pbMs, label: `PB ${fmtLap(pbMs)}`, colour: COL.g });
-  const c = storyChart(laps, Date.now(), (l) => colours.get(l.rig_id) ?? "#5A5E68", refs, solo ? focusKey : null);
+  const names = new Map(state.rigs.map((r) => [r.rig_id, r.name]));
+  const c = storyChart(laps, hubNow(), (l) => colours.get(l.rig_id) ?? "#5A5E68", refs, solo ? focusKey : null, 8,
+                       (rigId) => names.get(rigId) ?? "Rig");
   return (
     <section className="pw-story">
       <div className="pw-colhead pw-colhead--small">

@@ -1,10 +1,11 @@
 import { formatDelta, formatLapTime } from "../format";
 import type { Challenge, ChallengeWinnerMoment } from "../schema";
+import { hubNow } from "../state/hubclock";
 import type { DashboardState } from "../state/reducer";
 import { Avatar, KineticType, StripeBundle, Tab } from "./Motifs";
 
-/** "3 days left", "Ends today", "Starts in 2 days". */
-export function challengeWhen(c: Challenge, now = Date.now()): string {
+/** "3 days left", "Ends today", "Starts in 2 days". `now` is hub time, like the challenge's dates. */
+export function challengeWhen(c: Challenge, now = hubNow()): string {
   const day = 24 * 3600_000;
   if (c.state === "upcoming") {
     const d = Math.ceil((c.starts_at - now) / day);
@@ -132,48 +133,6 @@ export function TeamsView({ state }: { state: DashboardState }) {
           </li>
         ))}
       </ol>
-    </main>
-  );
-}
-
-// ---- Tournament: a static preview only (not implemented) -------------------------------------------
-
-const BRACKET = [
-  [["Maya R", "1:27.671"], ["Sam W", "1:29.402"]], [["Kofi_GT", "1:28.120"], ["Leni", "1:28.905"]],
-  [["Rosa V", "1:28.477"], ["Diego M", "1:28.938"]], [["Hana K", "1:28.505"], ["Ollie P", "1:28.732"]],
-];
-
-/** Visual preview of a future tournament mode, with made-up names; demo only. */
-export function BracketPreview() {
-  const semis = [[BRACKET[0]![0]!, BRACKET[1]![0]!], [BRACKET[2]![0]!, BRACKET[3]![0]!]];
-  const final = [semis[0]![0]!, semis[1]![0]!];
-  return (
-    <main className="bracket">
-      <StripeBundle corner="top-right" />
-      <header className="viewhead">
-        <h1 className="viewhead__title">Hotlap cup</h1>
-        <Tab left="Preview" right="Coming soon" />
-        <span className="viewhead__sub t3">Sample bracket with made-up names: tournament mode isn't available yet</span>
-      </header>
-      <div className="bracket__rounds">
-        {[["Quarter-finals", BRACKET], ["Semi-finals", semis], ["Final", [final]]].map(([title, pairs]) => (
-          <section key={title as string} className="bracket__round">
-            <span className="label">{title as string}</span>
-            <div className="bracket__matches">
-            {(pairs as string[][][]).map((pair, i) => (
-              <div key={i} className="bracket__match cutcard">
-                {pair.map(([name, time], k) => (
-                  <div key={k} className={`bracket__row${k === 0 ? " is-winner" : ""}`}>
-                    <span className="bracket__name">{name}</span>
-                    <span className={k === 0 ? "c-purple" : "t2"}>{time}</span>
-                  </div>
-                ))}
-              </div>
-            ))}
-            </div>
-          </section>
-        ))}
-      </div>
     </main>
   );
 }

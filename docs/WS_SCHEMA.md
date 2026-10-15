@@ -28,7 +28,7 @@ day or week starts, the hub sends one `leaderboard` message per period.
 | Encoding | One JSON object per text frame, UTF-8. |
 | Frame rate | `frame` messages at a fixed rate, 15 Hz by default (configurable 10–20 Hz). |
 | On connect | The hub sends a `snapshot` first, then live messages. |
-| Reconnect | Clients reconnect with backoff (e.g. 0.5 s doubling to 5 s). Every (re)connect starts with a fresh `snapshot` that **replaces** all client state. |
+| Reconnect | Clients reconnect with backoff (e.g. 0.5 s doubling to 5 s). Every (re)connect starts with a fresh `snapshot` that **replaces** all client state. The TV also reconnects when no message arrives for 3 s (the hub sends a `status` every second), and after 10 s without frames shows every rig as no-data. |
 
 ## 2. Envelope and versioning
 
@@ -50,7 +50,8 @@ Compatibility rules:
 - **Additive changes stay in v1:** new optional fields, new enum values, new message types. Clients
   **must ignore** unknown fields and unknown `type`s, and treat unknown enum values as "other/unknown".
 - **Breaking changes bump `v`:** removing or renaming a field, changing a type or unit. A client that receives
-  a `v` it doesn't support shows "Dashboard and hub versions don't match" and doesn't render data.
+  a `v` it doesn't support doesn't render data; the TV shows "Updating the screen" and reloads itself (at most
+  once a minute) to fetch the dashboard that matches the hub.
 
 ## 3. Message types
 
@@ -87,6 +88,10 @@ Compatibility rules:
 }
 ```
 
+- `hub.version`: the hub's app version. When a new snapshot (after a reconnect) carries a different version, or
+  a message carries a schema `v` the dashboard can't read, the TV reloads itself (at most once a minute) to
+  pick up the matching dashboard. The TV also takes its clock from the messages' `ts` (hub time), not from the
+  TV PC's own clock.
 - `hub.udp_port`, `hub.lan_address` *(added in v1, optional)*: where games should send telemetry (this PC's
   network address, `null` if unknown); shown on the dashboard's waiting screen.
 - `hub.features` *(added in v1, optional)*: `[features]` from the hub config, e.g.

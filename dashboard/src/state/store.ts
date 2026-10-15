@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import type { HubMessage } from "../schema";
+import { hubClock } from "./hubclock";
 import { applyMessage, initialState, type DashboardState, type LinkState } from "./reducer";
 import { LapShareTracker } from "./lapshare";
 import { LapTraceTracker } from "./laptrace";
@@ -36,6 +37,7 @@ export class DashboardStore {
   };
 
   dispatch(msg: HubMessage, now = performance.now()): void {
+    hubClock.observe(msg.ts);
     if (msg.type === "snapshot") {
       this.trails.clear();
       this.paths.clear();
@@ -85,6 +87,16 @@ export class DashboardStore {
   shiftMoment(at: number): void {
     if (this.state.moments[0]?.at !== at) return;
     this.state = { ...this.state, moments: this.state.moments.slice(1) };
+    this.emit();
+  }
+
+  /** The hub has gone quiet: show every rig as no-data (waiting or attract screen), not frozen cars. The next
+   *  snapshot brings them back. */
+  dropFrames(): void {
+    if (Object.keys(this.state.frames).length === 0 && this.state.comparison === null) return;
+    this.trails.clear();
+    this.gTrail.clear();
+    this.state = { ...this.state, frames: {}, comparison: null };
     this.emit();
   }
 

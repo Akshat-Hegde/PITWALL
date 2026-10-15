@@ -212,7 +212,8 @@ const BG = "#0B0C0F";
  * their best valid lap, hollow dots on invalid laps; dashed reference lines (record, PB); NOW at the right.
  */
 export function storyChart(laps: readonly StoryLap[], now: number, colourOf: (l: StoryLap) => string,
-                           refs: readonly ChartRef[], onlyKey: string | null = null, maxDrivers = 8): StoryChart {
+                           refs: readonly ChartRef[], onlyKey: string | null = null, maxDrivers = 8,
+                           rigName: (rigId: string) => string = () => "Rig"): StoryChart {
   const { L, R, T, B } = CHART;
   // Only laps inside the window: older ones would sit (and be labelled) left of the chart.
   const shown = laps.filter((l) => !l.out_lap && l.completed_at >= now - 47 * 60_000
@@ -248,7 +249,7 @@ export function storyChart(laps: readonly StoryLap[], now: number, colourOf: (l:
     }
     const last = pts.at(-1)!;
     const nearNow = last.x > R - 90;
-    names.push({ x: nearNow ? last.x - 12 : last.x + 10, y: last.y, text: (last.l.driver ?? last.l.rig_id).toUpperCase(), colour, right: nearNow });
+    names.push({ x: nearNow ? last.x - 12 : last.x + 10, y: last.y, text: (last.l.driver ?? rigName(last.l.rig_id)).toUpperCase(), colour, right: nearNow });
   }
   // Name labels at the line ends: nudge apart so they never sit on top of each other.
   names.sort((a, b) => a.y - b.y);
