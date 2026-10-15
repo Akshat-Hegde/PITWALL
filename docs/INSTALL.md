@@ -1,93 +1,170 @@
 # Installing Pitwall at a cafe
 
-For the person setting the hub up. The hub is one PC on the cafe network that every rig sends telemetry to; the TV, the staff page and the owner page all come from it.
+For the person setting the cafe up. One PC in the cafe is the **hub**: every rig sends its telemetry to it, and the TV, the staff page, the owner page and the guests' phones all get their pages from it.
+
+**Only one hub per cafe.** Install the hub on one PC only. Any other PC that drives a TV gets the "TV only" install (below), which points at that hub.
 
 ## What the hub PC needs
 
 | | |
 |---|---|
 | Windows | 10 or 11, 64-bit |
-| CPU / RAM | 2 cores, 4 GB (6 to 10 rigs is comfortable) |
-| Disk | 2 GB free (the app is about 100 MB; laps and backups grow slowly) |
-| Network | Wired Ethernet on the same LAN as the rigs and phones |
-| Always on | Yes: it starts by itself when the PC starts, even before anyone signs in |
+| CPU / RAM | 2 cores, 4 GB (6 to 12 rigs is comfortable) |
+| Disk | 2 GB free (the program is about 100 MB; laps and backups grow slowly) |
+| Network | A cable (Ethernet) to the same router as the rigs |
+| Always on | Yes: the hub starts by itself when the PC starts, even before anyone signs in |
 | Internet | Not needed |
 
 The hub PC can also drive the TV (a browser in full screen), so one small PC is enough.
 
-## Reserve the hub's IP address
+## 1. Reserve the addresses in your router
 
-Rigs are told the hub's IP address in the game's settings, so it must never change. In the router's admin page, find "DHCP reservation" (or "static lease") and give the hub PC's address to its network card permanently. Write the address down.
+Every rig is told the hub's network address in the game's settings, and the check-in stickers point at it, so the hub's address must never change. The rigs' addresses should not change either: the hub tells rigs apart by their address.
 
-## Run the installer
+In the router's admin page, find **DHCP reservation** (some routers call it "static lease" or "address reservation") and reserve the current address of:
 
-1. Run `Pitwall-Setup-<version>.exe` as administrator (right-click, Run as administrator).
-2. Choose whether the TV page should open when this PC signs in.
-3. On the last page, **keep the setup code**. It is shown once, in large type: write it down or photograph it. It is also in the install log (`%TEMP%\Setup Log *.txt`), and later you can run `Pitwall.exe setup-code` in `C:\Program Files\Pitwall` to see it again, as long as setup is not finished.
-4. Leave "Open the setup page" ticked and click Finish.
+- the hub PC;
+- every rig PC.
 
-The installer opens the firewall for the hub, starts it, and sets it to start with the PC.
+Write the hub's address down. The setup page also shows it.
 
-## Set the cafe up (`/setup`)
+**If the hub's address changes anyway**, the staff page and the setup page show a red message: "This PC's network address changed from A to B. On every rig set UDP IP Address to B, and reprint the check-in stickers." Do that, press **OK, done**, and reserve the address in the router. (The TV never shows this.)
 
-The setup page asks for the code from the last page, then the cafe name, tagline, logo, colour, opening hours and the owner and staff PINs. Optionally add a guest Wi-Fi (name, password, security); the TV shows it as a "Join our Wi-Fi" QR so customers can reach their story cards. Use a guest network, not the cafe's main one. Once saved, the code stops working and the owner PIN protects the page. The page is at `http://localhost:8000/setup` on the hub, or `http://<hub IP>:8000/setup` from another device.
+**If a rig's address changes**, it shows up as a new rig. On the setup page, choose **Same rig as…** on the new one and pick its old entry. See [RIG_SETUP.md](RIG_SETUP.md).
 
-## Check-in stickers
+## 2. Run the installer
 
-Open Staff (`http://<hub IP>:8000/staff`) and choose **Check-in QR**: it opens a printable A4 sheet with one QR sticker per rig. Print it, cut the stickers out and stick one on each rig, where the driver can see it. Guests scan it with their phone (on the cafe Wi-Fi) to put their name on the rig. If you press **New code** for a rig, its old sticker stops working: reprint and replace it. Reprint too if you add a rig.
+1. Double-click `Pitwall-Setup-<version>.exe`.
+2. **"Windows protected your PC"** (a blue window) may appear. It appears because the installer isn't signed with a paid certificate yet, not because something is wrong. Click **More info**, then **Run anyway**.
+3. Windows then asks "Do you want to allow this app to make changes to your device?" and may show **Publisher: Unknown**. Click **Yes**.
+4. Choose **Hub PC**.
+5. Leave **Keep this PC awake (recommended for the hub and TV PC)** ticked. It stops Windows from putting the PC or its screen to sleep when plugged in, so rigs, the TV and phones always reach the hub.
+6. Tick **Open the TV page when this PC signs in** if this PC also drives the TV.
+7. On the last page, **keep the setup code**. It is shown once, in large type: write it down or photograph it. If you lose it, use the Start-menu shortcut **Pitwall Show setup code** (as long as setup is not finished).
+8. Leave **Open the setup page** ticked and click **Finish**.
 
-## Point the rigs at the hub
+The installer lets the hub through Windows Firewall, starts it, and sets it to start with the PC.
 
-Each rig sends UDP telemetry to the hub's IP address on port 20777. See [RIG_SETUP.md](RIG_SETUP.md) for the in-game settings.
+If the last page says **The hub has not started**, it shows the reason when it knows it. Restart the PC; if it still doesn't start, send the logs (Start menu, **Pitwall Open logs folder**) to support.
+
+## 3. Antivirus
+
+Windows Security normally lets Pitwall run. If it (or another antivirus) blocks or deletes it:
+
+- **Windows Security:** open Windows Security, **Virus & threat protection**, **Manage settings**, **Add or remove exclusions**, **Add an exclusion**, **Folder**, and choose `C:\Program Files\Pitwall`.
+- **Other antivirus with its own firewall** (Norton, McAfee, Quick Heal and others): allow Pitwall in its firewall, or allow these two ports coming in: **TCP 8000** (the pages) and **UDP 20777** (telemetry from the rigs). Without that, rigs and phones can't reach the hub even though Windows Firewall lets them.
+
+## 4. Set the cafe up (`/setup`)
+
+The setup page opens after the install, or open `http://localhost:8000/setup` on the hub PC (or the Start-menu shortcut **Pitwall Setup**). It asks for the setup code, then:
+
+- the cafe name, tagline, logo and colour;
+- the **opening hours**. A cafe open past midnight can close up to 06:00 the next day, shown as "closes at 02:00 (next day)"; laps until then count for the day the cafe opened;
+- the **owner PIN** (opens the owner and setup pages);
+- the **staff PIN** (opens the staff page). It is required. It may be the same as the owner PIN;
+- optionally the **guest Wi-Fi** (name and password): the TV shows it as a "Join our Wi-Fi" QR next to the card QR codes.
+
+Once saved, the setup code stops working and the owner PIN protects the setup page. To change anything later, open the setup page again: leave a PIN box blank to keep the current PIN.
+
+**Sessions end by themselves.** At closing time every open session is ended and the driver's card is made. A timed session also ends once its time is up and the car hasn't been on track for 5 minutes. The staff page then says "Ended automatically at closing time" or "Ended automatically: time was up".
+
+## 5. Guest Wi-Fi: test it from a phone
+
+Guests' phones must be on a Wi-Fi that can reach this PC: your main cafe Wi-Fi, or a guest network with "client/guest isolation" (sometimes "AP isolation") turned off. Otherwise guests can't check in or open their cards.
+
+To check: on the setup page (or the staff page's **Health** tab), find **Test from your phone**. Join the guest Wi-Fi on a phone and scan the QR code with its camera. The phone should say "Your phone can reach Pitwall. Check-in and cards will work.", and the setup page then shows "A phone reached the hub at 14:02".
+
+If the page doesn't open on a phone on the guest Wi-Fi, guests can't use check-in or cards: use the main Wi-Fi or turn off isolation in the router.
+
+## 6. Point the rigs at the hub
+
+On every rig, in F1 25: Game Options › Settings › UDP Telemetry Settings: UDP Telemetry **On**, UDP Broadcast Mode **Off**, UDP IP Address = **the hub's address** (shown on the setup page), UDP Port **20777**, UDP Send Rate **20Hz**, UDP Format **2025**. Your Telemetry may stay Restricted. A rig on the hub PC also uses the hub's address, not 127.0.0.1. Details, SimHub and troubleshooting: [RIG_SETUP.md](RIG_SETUP.md).
+
+Then name the rigs on the setup page (drive on one: it says **Moving now**).
+
+## 7. Check-in stickers
+
+Open the staff page (`http://<hub address>:8000/staff`) and choose **Check-in QR**: a printable A4 sheet with one QR sticker per rig. Print it, cut the stickers out and stick one on each rig where the driver can see it. Guests scan it with their phone to put their name on the rig.
+
+Reprint the stickers when you add a rig, when you press **New code** for a rig (its old sticker stops working), and when the hub's address changes.
+
+## 8. The TV
+
+**TV on the hub PC:** tick "Open the TV page when this PC signs in" in the installer, or use the **Pitwall TV** shortcut. Alt+F4 closes it. While the hub is starting, the TV shows "Starting up" and switches to the TV page by itself.
+
+**TV on another PC:** run the same installer on that PC and choose **This PC only shows the TV (the hub runs on another PC)**. Type the hub's address. It installs only the TV shortcut (and opens the TV when the PC signs in); nothing else.
+
+**Coming back after a power cut.** The hub starts by itself, even before anyone signs in, but the TV page only opens once someone signs in to Windows. For a PC that drives a TV, set Windows to sign in automatically:
+
+1. Press Windows+R, type `netplwiz` and press Enter.
+2. Untick **Users must enter a user name and password to use this computer** and click OK. (If you don't see that box: Settings, Accounts, Sign-in options, turn off "For improved security, only allow Windows Hello sign-in", then try again.)
+3. Type the account's password twice.
+
+Use this only on a PC that stays in the cafe. If the PC's BIOS has "Restore on AC power loss", set it to **Power On** too.
+
+## Start-menu shortcuts (hub PC)
+
+| Shortcut | What it does |
+|---|---|
+| Pitwall TV | Opens the TV page full screen. |
+| Pitwall Staff / Owner / Setup | Open those pages in the browser. |
+| Pitwall Show setup code | Shows the one-time setup code (until setup is done). Asks for administrator rights. |
+| Pitwall Reset owner PIN | Forgot the owner PIN? Makes a new setup code so you can choose a new owner PIN on the setup page. Laps, rigs and settings are kept. Asks for administrator rights; close the window to cancel. |
+| Pitwall Open backups folder | Opens the folder the backups go to. |
+| Pitwall Open logs folder | Opens the logs, for sending to support. |
 
 ## Backups
 
-Every night the hub saves a zip of the laps, settings, branding and config in `C:\ProgramData\Pitwall\backups` and keeps the last 14. Backups contain the owner and staff PINs and the guest Wi-Fi password, so keep the backup drive safe. If the hub PC was off at the backup hour, it makes one a couple of minutes after it next starts. To keep them off the hub PC, open `C:\ProgramData\Pitwall\config\hub.toml` (the installer puts a commented starter file there; remove the `#` in front of `directory` under `[backup]`) and point it at a folder on a USB stick (for example `directory = "E:/Pitwall backups"`), then restart the hub.
+Every night (04:00) the hub saves a zip with the laps, settings, rig names, check-in codes and logos, and keeps the last 14. If the hub PC was off at that time, it makes one a couple of minutes after it next starts.
 
-To restore, the hub must stay stopped, but its start-up task starts it again within a minute if it is only ended. So disable the task first:
+**Choose where backups go** on the owner page, **Backups** card. A USB stick that stays plugged in is best, so the backups survive if the PC breaks: type its folder, for example `E:\Backups`, and press **Use this folder**. **Back up now** makes one straight away. Network folders and mapped drives (like `Z:`) aren't supported: the hub runs in the background and can't see them.
 
-1. Task Scheduler, right-click "Pitwall Hub", **Disable**, then right-click it again, **End**. Or, in an administrator command prompt:
+When a backup fails, the owner page says why in plain words (for example "The USB stick isn't plugged in"). When the last good backup is more than 2 days old, the owner page and the staff Health tab say "Last backup: 5 days ago. Check the backup folder or USB stick."
 
-        schtasks /Change /TN "Pitwall Hub" /Disable
-        schtasks /End /TN "Pitwall Hub"
+Backups contain the guest Wi-Fi password, and backups made before version 0.5.0 also contain the owner and staff PINs as plain text, so keep the backup stick safe.
 
-2. Restore:
+## Restoring a backup
 
-        "C:\Program Files\Pitwall\Pitwall.exe" restore "C:\ProgramData\Pitwall\backups\<the zip>"
+Restoring puts the laps, settings, rigs and logos back as they were at that backup. Do it on the hub PC, when nobody is driving:
 
-   The restore is refused while the hub is running, and warns if the task is still enabled.
+1. Stop the hub so it doesn't start again by itself: open **Task Scheduler**, click **Task Scheduler Library**, right-click **Pitwall Hub**, **Disable**, then right-click it again, **End**.
+2. Open the Start menu, type `cmd`, right-click **Command Prompt**, **Run as administrator**, and type (with the name of the zip you want; the newest has the latest date in its name):
 
-3. Start the hub again: Task Scheduler, right-click "Pitwall Hub", **Enable**, then **Run**. Or:
+        "C:\Program Files\Pitwall\Pitwall.exe" restore "E:\Backups\pitwall-20261015-0400.zip"
 
-        schtasks /Change /TN "Pitwall Hub" /Enable
-        schtasks /Run /TN "Pitwall Hub"
+   It refuses while the hub is still running.
+3. Start the hub again: in Task Scheduler, right-click **Pitwall Hub**, **Enable**, then **Run**.
+
+The lap database it replaced is kept next to the restored one, ending in `.before-restore`.
 
 ## Forgot the owner PIN?
 
-On the hub PC, in an administrator command prompt:
+Use the Start-menu shortcut **Pitwall Reset owner PIN** on the hub PC. It opens setup again and shows a new setup code. Open the setup page, enter the code and choose a new owner PIN. Everything else is kept, and the hub doesn't need a restart. This only works on the hub PC itself, which is the point.
 
-    "C:\Program Files\Pitwall\Pitwall.exe" setup-code --reset
+Wrong PINs: after five wrong PINs a device is locked out for a minute; after repeated lock-outs, for 15 minutes, and the owner page shows "Someone tried wrong PINs 15 times at 21:40".
 
-It opens setup again (everything else is kept) and prints a new setup code. Open `http://localhost:8000/setup`, enter the code and choose a new owner PIN. The hub does not need a restart. This only works from the hub PC itself, which is the point.
+## Upgrading
 
-Editing `/setup` later: leave the PIN fields blank to keep the current PINs, or tick "Remove the staff PIN".
+Run the newer installer on the hub PC, **when nobody is driving**: the hub restarts during the install. The cafe's data and setup are kept, and the last page says "Already set up: use your owner PIN." Upgrade the TV-only PCs too (choose "This PC only shows the TV" again); they keep working in the meantime, and the TV reloads itself when the hub has been upgraded.
+
+**No going back below 0.5.0.** Version 0.5.0 stores PINs in a form older versions can't read. If you need to go back to an older version, uninstall, install the older version and restore a backup made before the upgrade.
+
+## Uninstalling
+
+Settings, Apps, Pitwall, Uninstall. It removes the program, the firewall rules and the start-up task, but **keeps the cafe's data** in `C:\ProgramData\Pitwall`. Reinstalling picks it up again. Delete that folder by hand only if you want to start from nothing (copy a backup somewhere safe first).
 
 ## Where things live
 
 | | |
 |---|---|
 | Program | `C:\Program Files\Pitwall` |
-| Cafe data (laps, settings, logo, logs) | `C:\ProgramData\Pitwall\data` |
-| Config (commented starter file, edit to change ports, backup folder and so on) | `C:\ProgramData\Pitwall\config\hub.toml` |
-| Backups | `C:\ProgramData\Pitwall\backups` |
-| Log | `C:\ProgramData\Pitwall\data\logs\hub.log` |
+| Cafe data (laps, settings, logos) | `C:\ProgramData\Pitwall\data` |
+| Logs | `C:\ProgramData\Pitwall\data\logs` (Start menu: Pitwall Open logs folder) |
+| Backups | The folder chosen on the owner page; otherwise `C:\ProgramData\Pitwall\backups` |
+| Technical settings (ports and such; not needed for normal use) | `C:\ProgramData\Pitwall\config\hub.toml` |
 | Start-up task | Task Scheduler, "Pitwall Hub" |
 
-## Upgrading and uninstalling
-
-Run a newer installer over the old one: the cafe's data and setup are kept, and the last page says "Already set up".
-
-Uninstalling (Settings, Apps) removes the program, the firewall rules and the start-up task, but **keeps `C:\ProgramData\Pitwall`**. Reinstalling picks it up again. Delete that folder by hand only if you want to start from nothing.
+Everything an owner changes is on the setup, owner and staff pages. `hub.toml` holds technical settings only (ports, recording, feature switches). If it ever has a mistake, the hub still starts with the standard settings and the staff and setup pages say which line is wrong.
 
 ## Renaming the product
 

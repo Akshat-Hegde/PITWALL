@@ -4,7 +4,7 @@ Live broadcast timing for sim racing cafes: a local LAN telemetry hub and TV das
 
 Status: milestone 1 is feature-complete and awaiting its end-to-end test on real devices
 ([docs/TEST_PLAN.md](docs/TEST_PLAN.md)). The hub receives F1 25 telemetry from every rig on the LAN, tracks
-laps, sectors and bests, stores laps in SQLite, and serves the TV dashboard (race view, leaderboard view,
+laps, sectors and bests, stores laps in SQLite, and serves the TV dashboard (LIVE, MULTIVIEW,
 attract mode) with a live WebSocket feed. Lap tracking was built from the UDP spec; what it assumes about the
 real game is listed in [docs/LAP_ASSUMPTIONS.md](docs/LAP_ASSUMPTIONS.md), to be confirmed in that test.
 
@@ -13,7 +13,7 @@ real game is listed in [docs/LAP_ASSUMPTIONS.md](docs/LAP_ASSUMPTIONS.md), to be
 ```powershell
 python -m venv .venv
 .venv\Scripts\python -m pip install -e ".[dev]"
-copy config\hub.example.toml config\hub.toml   # optional: edit cafe name, rig names, port
+copy config\hub.example.toml config\hub.toml   # optional: technical settings (ports, recorder, feature switches)
 ```
 
 ## Commands
@@ -91,8 +91,8 @@ The dashboard reads only the WebSocket messages described in [docs/WS_SCHEMA.md]
 Data source: `?source=mock` (default in `npm run dev`) or `?source=ws` (default when served by the hub; in dev
 it is proxied to a hub on `localhost:8000`). `run` serves `dashboard/dist` at `http://<hub>:8000/` (configurable
 with `[dashboard] directory`), and the feed rate with `[dashboard] frame_hz` (10–20, default 15). The steering
-wheel graphic turns with `[dashboard] steering_wheel_rotation_deg` (lock-to-lock, default 360). Until lap
-tracking exists, the hub sends `null` lap fields and no track outline; the map then draws the path driven so far.
+wheel graphic turns with `[dashboard] steering_wheel_rotation_deg` (lock-to-lock, default 360). Until a track
+has an outline, the map draws the path driven so far.
 
 `?map=flipx,flipz,rotN` (any combination) overrides the map orientation, for matching the in-game minimap
 during testing; the active setting is shown on the map.
@@ -103,11 +103,11 @@ Mock options, combined in the URL, e.g. `http://localhost:5173/?outline=late&mis
 |---|---|
 | `speed=N` | Run the simulation N times faster (e.g. `speed=8` to reach a leaderboard quickly). |
 | `outline=late` | No track outline until the first valid lap: trail-only map. |
-| `mismatch=1` | Rig 2 reports UDP format 2026: format warning. |
-| `recorder=recording\|low\|stopped` | Recorder status / low-disk warnings in the status bar. |
+| `mismatch=1` | Rig 2 reports UDP format 2026 (a warning in the feed; the TV never shows warnings). |
+| `recorder=recording\|low\|stopped` | Recorder status / low-disk warnings in the feed (not shown on the TV). |
 | `offline=0` | Hide the configured-but-offline Rig 3. |
 | `board=N` | Add N earlier drivers to the leaderboard (e.g. `board=8` for a full board of 10, `board=12` to see paging). |
-| `rigs=N` | Number of driving rigs, 1–10 (default 2). |
+| `rigs=N` | Number of driving rigs, 1–12 (default 2). |
 | `idle=1` | Every rig stays in the menu: shows attract mode. |
 
 **TV pages.** The TV is drawn on a fixed 1920 x 1080 canvas scaled to the screen (letterboxed if the shape
@@ -129,7 +129,8 @@ specified in [docs/DESIGN.md](docs/DESIGN.md).
   - **Session story**: every lap of the last hour per driver against the clock, best laps ringed, invalid
     laps hollow, today's record as a dashed line; and **Moments**: the last five personal bests, records,
     invalid laps and new drivers.
-- **MULTIVIEW:** one tile per active rig (1 full screen, 2 side by side, 3-4 in a 2 x 2 grid, 5-6 in 3 x 2):
+- **MULTIVIEW:** one tile per active rig, up to 12 (1 full screen, 2 side by side, 3-4 in a 2 x 2 grid, 5-6 in
+  3 x 2, 7-8 in 4 x 2, 9-12 in 4 x 3):
   name, speed and gear, steering wheel, pedal bars, a small map with only that car, lap time and delta.
 - **Welcome and leaderboard (attract mode):** the cafe name, today's top 10 and the track record holder;
   today, this week and all time side by side.
@@ -170,8 +171,32 @@ cafe name, track record holder, today's top 10 and who's on track.
 Browsers only play sound after someone has clicked the page once; on a kiosk PC start Chrome or Edge with
 `--autoplay-policy=no-user-gesture-required` so it works unattended.
 
-**Features:** every optional feature can be switched off in `[features]` (moments, battles, podium, attract,
-portrait, head_to_head, onboard); see `config/hub.example.toml`.
+**Features:** every optional feature can be switched off in `[features]` in `hub.toml` (all on by default; see
+`config/hub.example.toml`):
+
+| Flag | What it switches |
+|---|---|
+| `moments` | "Now driving" and "record broken" full-screen moments on the TV |
+| `battles` | Battle pop-ups on the TV |
+| `podium` | Podium screen (hourly and on staff command) |
+| `attract` | Attract mode with nobody driving |
+| `portrait` | `/portrait` layout for a vertical screen |
+| `head_to_head` | Head to head view |
+| `onboard` | The MULTIVIEW page (off = LIVE only) |
+| `sharing` | Story cards and every QR code (cards, podium, Wi-Fi) |
+| `challenges` | Weekly challenges |
+| `events` | Corporate events with teams |
+| `owner` | The `/owner` page |
+| `race_podium` | Race podium and race cards (needs `sharing`) |
+| `self_checkin` | Guests put their own name on a rig from a QR sticker |
+| `auto_end_sessions` | Sessions end at closing time, and timed sessions once over time and off track for 5 minutes |
+| `backup_warning` | Owner page and staff Health warn when the last backup is over 2 days old |
+
+**The TV looks after itself.** If the feed goes quiet for 3 seconds the TV reconnects; after 10 seconds it shows
+the waiting or attract screen rather than frozen cars. When the hub is upgraded the TV reloads itself (at most
+once a minute), so nobody has to touch the TV PC. It keeps the screen awake where the browser allows it, and
+uses the hub's clock, not its own. The TV shows the same screens around the clock, and never shows addresses,
+warnings or other technical messages: those are on the staff page's Health tab.
 
 Mock options for demos: `?moment=now_driving|record|podium&momentAfter=5` shows that moment after 5 s;
 `?podium=60` adds a podium every 60 s of simulated time.
@@ -195,8 +220,10 @@ Options (run from a terminal in `tools\windows`, or put them in a shortcut):
 "Start TV.cmd" -RemoveStartOnLogin
 ```
 
-For a TV PC that should come back by itself after a power cut, also set Windows to sign in automatically
-(or use a dedicated local account) and set the BIOS to power on after AC loss.
+The installer sets this up for you (the **Pitwall TV** shortcut, and "This PC only shows the TV" for a second
+TV PC); while the hub is starting the TV shows a local "Starting up" page and switches over by itself. For a
+TV PC that should come back by itself after a power cut, also set Windows to sign in automatically (`netplwiz`,
+see [docs/INSTALL.md](docs/INSTALL.md)) and set the BIOS to power on after AC loss.
 
 ## First-run setup
 
@@ -209,18 +236,24 @@ Before setup is done, `/setup` needs the one-time setup code. The installer make
 Open `http://<hub>:8000/staff` on a phone or tablet. Tabs (a link like `/staff#queue` opens one):
 
 - **Rigs:** start a session for a walk-in name, the next person in the queue, or a driver profile, with a
-  session time (10–60 min or no timer). The TV shows "8 min left" next to the driver; from 5 minutes left the
-  staff page shows **Extend?** (+5 / +10). **End session** frees the rig. Starting a session shows **Now
-  driving** on the TV.
-- **Queue:** names waiting for a rig, in order; the TV shows the first few as **Next up** (names only).
+  session time (10–60 min or no timer). Names are up to 16 characters (what the TV fits). The time left is on
+  the staff page only (the TV doesn't show it); from 5 minutes left the staff page shows **Extend?** (+5 / +10).
+  **End session** asks first, then frees the rig and makes the driver's card ("No card this time: no clean lap
+  was completed." when there was none). Starting a session shows **Now driving** on the TV. Starting a name
+  that is already driving or on today's board asks "Same person?", so one person's laps stay on one line.
+- **Queue:** names waiting for a rig, in order; the TV's attract screen shows the first few as **Next up**
+  (names only).
 - **Drivers:** profiles keyed by phone number. Search by name or the last 4 digits, or create one: the phone
   number is only stored after the driver agrees (the consent checkbox is required). Quick profiles made at
   events have a name only. A profile shows visits, best
   lap per track and the improvement since the last visit. **Delete profile** removes the profile, its phone
   number, its sessions and all its laps (they leave the leaderboards too).
 - **Health:** technical diagnostics, for staff only: warnings (another program on the telemetry port, a rig
-  sending nothing, a wrong UDP format, low disk), each rig's address, state and packet rate, and the UDP IP
-  and port to enter in the games. None of this is ever shown on the TV; it is also in the hub log.
+  sending nothing with a checklist of its game settings, a wrong UDP Format, the hub's address changed, an old
+  backup, low disk), each rig's address, state (On track, In menu, No data, Wrong game settings) and packet
+  rate, the game settings to enter on every rig (see [docs/RIG_SETUP.md](docs/RIG_SETUP.md)), and the **Test
+  from your phone** QR. A paused or spectating game counts as In menu, not driving. None of this is
+  ever shown on the TV; it is also in the hub log.
 - **Show podium** (top right) puts today's top three on the TV.
 
 Laps are saved under the session's driver, else the game's player name, else the rig name; changing the
@@ -259,16 +292,15 @@ On `/staff`, the **Compete** tab:
   profile, never by matching a typed name, and upload the company logo and team logos (PNG, JPEG or WebP,
   up to 512 KB; stored in `data\logos\`). The team score is the average of each team's best N drivers' best
   laps since the event started. While the event runs the TV uses the company colour, shows the company next to
-  the cafe name and adds the **Teams** view (key `6`) to the rotation. **End event** goes back to normal.
-- **Tournaments** are not built yet. Demo mode shows a static preview screen ("Hotlap cup", made-up names).
+  the cafe name and adds the **Teams** board to attract mode; **Show teams** on `/staff` puts it on the TV. **End event** goes back to normal.
 
 `[features] challenges` and `[features] events` switch these off.
 
 ## Owner analytics
 
-`http://<hub>:8000/owner` (its own PIN: `[owner] pin`; the page stays locked until one is set) shows, for the
+`http://<hub>:8000/owner` (the owner PIN, chosen on the setup page) shows, for the
 last 7, 30 or 90 days: driving hours and sessions per day, rig utilisation (session time over the opening
-hours `[owner] open_hour`–`close_hour`, per rig per day), a peak-hours heatmap (average rigs in use by
+hours from the setup page, per rig per day), a peak-hours heatmap (average rigs in use by
 weekday and hour), new vs returning drivers, popular tracks and the busiest days. **Daily / Sessions / Laps
 CSV** download the figures. Everything comes from the hub's own database; nothing leaves the PC.
 A bookmark like `/owner#pin=1234` unlocks it on the owner's own device (the part after `#` never reaches the
@@ -291,14 +323,16 @@ from a command prompt. When a backup fails the owner page says why in plain word
 owner page and the staff Health tab show "Last backup: 5 days ago. Check the backup folder or USB stick."
 (`[features] backup_warning = true`; never on the TV). `[backup] enabled = false` switches the nightly job off.
 
-To restore, stop the hub, then run `Pitwall.exe restore <zip>` (refused while the hub is running) and start the hub again.
+To restore, stop the hub, then run `Pitwall.exe restore <zip>` (refused while the hub is running) and start the hub
+again; [docs/INSTALL.md](docs/INSTALL.md) has the step-by-step version. Network folders and mapped drives can't be
+chosen: the hub runs in the background and can't see them.
 
 ## Demo mode
 
 `http://<hub or dev server>/?source=mock&demo=1` runs a busy cafe without any rig: six simulated drivers, a
 full leaderboard with Pro and Open boards, a weekly challenge, a corporate event with four teams, a podium
 every three minutes and a scripted loop of moments (now driving, a story card QR, a record, a challenge
-winner), plus the tournament preview in the rotation. `/card/demo` shows a sample story card.
+winner). `/card/demo` shows a sample story card.
 
 **The whole product, one command** (no rigs, no game):
 
@@ -308,10 +342,10 @@ python -m simtelemetry run --demo
 
 This re-seeds `data-demo\` with 60 days of a busy cafe (sessions, laps, driver profiles, a weekly challenge, a
 queue) and starts the hub on it with six **simulated rigs** that send real F1 25 packets through the hub's
-normal pipeline: live cars on the map, laps, records, head to head, booking timers and story cards all work as
+normal pipeline: live cars on the map, laps, records, head to head, session timers and story cards all work as
 they would in the cafe. Open the TV at `http://localhost:8000/`, the staff page at `/staff`, and the owner page
-at `/owner` (PIN `0000` unless `[owner] pin` is set; the staff page uses the same PIN unless `[staff] pin` is set). It doesn't listen for real rigs, so stop the normal hub
-first (or give the demo another `--http-port`).
+at `/owner` (PIN `0000` for both unless `--owner-pin` is given). It doesn't listen for real rigs, so stop the
+normal hub first (or give the demo another `--http-port`).
 
 **Demo director (for filming):** on `/staff` in demo mode, press **Director** (top right) for buttons that put
 each moment on the TV now: now driving, record (today or all time, Pro or Open), battle, podium, challenge
@@ -325,8 +359,9 @@ winner and a story card QR (from a real session with a clean lap, so give the ri
 Guests can put their own name on a rig without staff. Each rig has its own QR sticker (print them from
 **Staff -> Check-in QR**, see below). The flow on the guest's phone:
 
-1. Scan the sticker on the rig (the phone must be on the cafe Wi-Fi). The page shows the rig and asks for a name.
-2. Type a name and tap **Start**. The rig shows **Now driving** on the TV and the leaderboard, exactly as if
+1. Scan the sticker on the rig (the phone must be on a Wi-Fi that reaches the hub, see below). The page shows the
+   rig and asks for a name.
+2. Type a name (up to 16 characters) and tap **Start**. The rig shows **Now driving** on the TV and the leaderboard, exactly as if
    staff had started the session; laps count for that name.
 3. The phone shows the laps and best lap so far. **I'm done** ends the session and the **story card** opens on
    the same phone (**Save for Instagram story**). If staff end the session, the phone shows the card link
@@ -334,6 +369,10 @@ Guests can put their own name on a rig without staff. Each rig has its own QR st
 
 Details:
 
+- **Guest Wi-Fi:** guests' phones must be on a Wi-Fi that can reach the hub PC: the main cafe Wi-Fi, or a guest
+  network with "client/guest isolation" turned off. To check, scan **Test from your phone** on `/setup` or the
+  staff Health tab with a phone on that Wi-Fi: it opens `/hello`, which says "Your phone can reach Pitwall.
+  Check-in and cards will work.", and `/setup` then shows "A phone reached the hub at 14:02".
 - **Busy rigs:** if someone is already driving, the page says "Someone is driving"; a second check-in is
   refused, so a guest can't take over a rig by scanning it.
 - **Idle takeover (check-in sessions only):** if a session that a guest started from their phone has not been
@@ -359,8 +398,9 @@ the track map, in the cafe's branding.
 - The TV shows a QR code to the card for 30 seconds; the staff page shows one too, after **End session**.
 - The card page (`http://<hub>:8000/card/<code>`) draws the 1080×1920 image on the phone: **Save image**, or
   **Share on WhatsApp** (opens WhatsApp with a message and the card's link).
-- **Phones must be on the cafe's network (Wi-Fi) to open the card**, and so must anyone the link is sent to,
-  until there is a cloud version. Saving the image and posting it works from anywhere.
+- **Phones must be on the cafe's network (Wi-Fi) to open the card**, and so must anyone the link is sent to.
+  Saving the image and posting it works from anywhere. On an iPhone, **Save for Instagram story** shows the
+  picture full screen: press and hold it, then tap Save to Photos.
 - `/card/demo` shows a sample card without a hub. `[features] sharing = false` turns cards off.
 
 **Privacy:** phone numbers, names and lap times stay in `data\laps.db` on the hub PC; nothing is sent
@@ -384,7 +424,8 @@ qualifying and Time Trial never make a race result.
   **Save for Instagram story** (1080x1920) and a hint to post it from the gallery.
 - **Phones must be on the cafe Wi-Fi** to open a card. In `/setup` the owner can add an optional guest
   Wi-Fi (name, password, security). The TV then shows a "Join our Wi-Fi" QR beside the card QR codes, with
-  the network name only; the password is never shown as text. Use a guest network, not the cafe's main one.
+  the network name only; the password is never shown as text. Use a network that reaches the hub: the main
+  Wi-Fi, or a guest network with client isolation off (check it with **Test from your phone**).
 - **Feature flags:** `[features] race_podium = false` turns the podium and race cards off; `sharing = false`
   turns off every QR code (cards, podium and Wi-Fi).
 - **Demo:** on `/staff` in demo mode, the Director has a **Race podium** button (`POST /api/staff/demo/race`) that
@@ -431,9 +472,11 @@ Double-clicking `Pitwall.exe` (no arguments) starts the hub, same as `run`.
 
 ## Docs
 
-- [docs/INSTALL.md](docs/INSTALL.md): installing the hub at a cafe (requirements, setup code, backups, restore).
+- [docs/INSTALL.md](docs/INSTALL.md): installing at a cafe (the Windows warning, antivirus, router, setup, guest
+  Wi-Fi, TV PCs, backups, restore, upgrading).
 - [docs/INSTALL-TEST.md](docs/INSTALL-TEST.md): the steps to test the installer on a spare PC or VM.
-- [docs/RIG_SETUP.md](docs/RIG_SETUP.md): in-game UDP settings for each rig.
+- [docs/RIG_SETUP.md](docs/RIG_SETUP.md): in-game telemetry settings for each rig, SimHub, and what to do when a rig
+  doesn't show up.
 - [docs/TEST_PLAN.md](docs/TEST_PLAN.md): firewall setup and the end-to-end test checklist (2 PCs, 2 copies of F1 25).
 - [docs/WS_SCHEMA.md](docs/WS_SCHEMA.md): hub → dashboard WebSocket message format (v1, frozen).
 - [docs/LAP_ASSUMPTIONS.md](docs/LAP_ASSUMPTIONS.md): what lap tracking assumes about the game, and how to

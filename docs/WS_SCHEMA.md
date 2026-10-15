@@ -93,10 +93,12 @@ Compatibility rules:
   pick up the matching dashboard. The TV also takes its clock from the messages' `ts` (hub time), not from the
   TV PC's own clock.
 - `hub.udp_port`, `hub.lan_address` *(added in v1, optional)*: where games should send telemetry (this PC's
-  network address, `null` if unknown); shown on the dashboard's waiting screen.
+  network address, `null` if unknown). For staff tools; the TV never displays addresses (the staff and setup
+  pages show the address to enter on every rig).
 - `hub.features` *(added in v1, optional)*: `[features]` from the hub config, e.g.
   `{ "moments": true, "battles": true, "podium": true, "attract": true, "portrait": true, "head_to_head": true,
-  "onboard": true }`. A feature that is `false` is not shown. Missing keys mean on.
+  "onboard": true }`. A feature that is `false` is not shown. Missing keys mean on. Hub-only switches
+  (`auto_end_sessions`, `backup_warning`) are left out.
 - `hub.moments` *(added in v1, optional)*: `{ "battle_margin_ms": 300 }`, the gap under which two best laps
   make a battle pop-up.
 - `hub.sounds` *(added in v1, optional)*: `{ "enabled": false, "volume": 0.6 }`.
@@ -152,7 +154,7 @@ Conventions: times are integer **milliseconds**; distances **metres**; speed **k
 | `rig_id` | string | Stable, opaque ID. Clients must not parse it (today it's derived from the source IP). |
 | `name` | string | Config name, else auto name ("Rig 1"). |
 | `colour` | string | Config colour, else assigned by the hub from a fixed palette in order of discovery. |
-| `address` | string | Source IP, shown on the status bar. |
+| `address` | string | Source IP. For staff tools only: the TV never displays it (it labels rigs by `name`). |
 | `game` | string | Adapter name, e.g. `"F1"`. |
 | `data_format` | string \| null | Wire format the rig sends, e.g. `"2025"`. |
 | `format_supported` | bool | `false` if the adapter can't decode that format (packets are dropped). |
@@ -164,7 +166,7 @@ Conventions: times are integer **milliseconds**; distances **metres**; speed **k
 | `format_mismatch` | bool | Active rigs send different `data_format`s. |
 | `formats` | object | `rig_id → data_format` for active rigs. |
 | `recorder` | object \| null | `null` = recording disabled. Else `{ "state": "recording" \| "low_disk_warning" \| "stopped", "message": string \| null, "free_gb": number \| null }`. |
-| `warnings` | array | `[{ "code": string, "message": string, "rig_id": string \| null }]`, human-readable, for the status bar. Codes in v1: `format_mismatch`, `format_unsupported`, `size_mismatch`, `recorder_low_disk`, `recorder_stopped`, `port_shadowed` (added: another program on the hub PC listens on the telemetry port at a specific address, e.g. wheel software on 127.0.0.1, and takes the packets sent there). |
+| `warnings` | array | `[{ "code": string, "message": string, "rig_id": string \| null }]`, human-readable, for staff tools; the TV never displays them (staff see them on `/staff`, Health tab). Codes in v1: `format_mismatch`, `format_unsupported`, `size_mismatch`, `recorder_low_disk`, `recorder_stopped`, `port_shadowed` (added: another program on the hub PC listens on the telemetry port at a specific address, e.g. wheel software on 127.0.0.1, and takes the packets sent there). |
 
 ### SessionInfo
 
@@ -196,7 +198,7 @@ Conventions: times are integer **milliseconds**; distances **metres**; speed **k
 | `lap` | LiveLap \| null | The lap in progress; `null` when not driving. |
 | `best` | BestLap \| null | This rig's best valid lap on the current track in this hub session. |
 | `personal_best` | BestLap \| null | *(Added in v1, optional.)* The current driver's fastest valid lap on this track ever, from the lap database. Laps are stored under the staff-assigned name, else the game's player name, else the rig name. |
-| `booking` | object \| null | *(Added in v1, optional.)* The staff session on the rig: `{ "driver", "started_at", "ends_at" }` (Unix ms; `ends_at` null = no timer). The TV shows the time left. |
+| `booking` | object \| null | *(Added in v1, optional.)* The staff session on the rig: `{ "driver", "started_at", "ends_at" }` (Unix ms; `ends_at` null = no timer). For staff tools and future use: the TV does not show the time left. |
 | `car` | CarDetail \| null | *(Added in v1, optional.)* Car systems, tyres, brakes, damage, g-forces and slides; see below. |
 
 ### CarDetail *(added in v1, optional)*

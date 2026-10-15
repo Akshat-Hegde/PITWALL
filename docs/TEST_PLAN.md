@@ -9,7 +9,7 @@ order and tick each box. Note anything unexpected next to the box; that note mat
 
 | Device | Role |
 |---|---|
-| **Hub PC** | Runs the hub **and** F1 25 as **Rig 1** (sends telemetry to `127.0.0.1`). |
+| **Hub PC** | Runs the hub **and** F1 25 as **Rig 1** (sends telemetry to the hub PC's own network address, not `127.0.0.1`). |
 | **Second PC** | F1 25 as **Rig 2** (sends telemetry to the hub PC over the LAN). |
 | **Dashboard screen** | A phone, tablet or laptop browser, or a TV / second monitor. Both games run full screen, so a separate device is easiest. |
 
@@ -30,7 +30,7 @@ Open PowerShell in the project folder (`cd "X:\SIM TELEMETRY APP"`).
       .venv\Scripts\python -m pip install -e ".[dev]"
       .venv\Scripts\python -m pytest
       ```
-      The last line says about `408 passed`. If anything fails, stop and send the output.
+      The last line says `passed` with no failures. If anything fails, stop and send the output.
 - [ ] Build the dashboard (needs Node.js 20+):
       ```powershell
       cd dashboard
@@ -38,8 +38,11 @@ Open PowerShell in the project folder (`cd "X:\SIM TELEMETRY APP"`).
       npm run build
       cd ..
       ```
-- [ ] Config: `Copy-Item config\hub.example.toml config\hub.toml`, then `notepad config\hub.toml`. Set
-      `[cafe] name` if you like. Leave `[map]` and `[staff] pin` as they are for now.
+- [ ] Config: `Copy-Item config\hub.example.toml config\hub.toml`. Leave it as it is for now (the cafe name,
+      PINs and opening hours are chosen on the setup page; `[map]` comes in Part F).
+- [ ] Setup: start the hub once (`.venv\Scripts\python -m simtelemetry run`), open `http://localhost:8000/setup`,
+      enter the setup code from the hub window, and choose a cafe name, opening hours, an owner PIN and a staff
+      PIN. Stop the hub with **Ctrl+C**.
 - [ ] Free space: `Get-PSDrive -PSProvider FileSystem`. At least 10 GB free on the drive with `data\`
       (recording uses about 0.75 GB per rig per hour), and some free on C:.
 - [ ] Fresh start: if a `data\` folder exists from earlier experiments, rename it (e.g. `data-old`).
@@ -62,16 +65,19 @@ Open PowerShell in the project folder (`cd "X:\SIM TELEMETRY APP"`).
 
 ## Part B: Game settings on both PCs
 
-F1 25 → Settings → **Telemetry Settings**:
+In F1 25: **Game Options › Settings › UDP Telemetry Settings** (the same on both PCs, see
+[RIG_SETUP.md](RIG_SETUP.md)):
 
-| Setting | Hub PC (Rig 1) | Second PC (Rig 2) |
-|---|---|---|
-| UDP Telemetry | On | On |
-| UDP Broadcast Mode | Off | Off |
-| UDP IP Address | **127.0.0.1** | **hub PC's IP** |
-| UDP Port | 20777 | 20777 |
-| UDP Send Rate | 60Hz | 60Hz |
-| UDP Format | **2025** | **2025** (must match) |
+| Setting | Both PCs (Rig 1 and Rig 2) |
+|---|---|
+| UDP Telemetry | On |
+| UDP Broadcast Mode | Off |
+| UDP IP Address | **the hub PC's IP** (also on the hub PC itself, not 127.0.0.1) |
+| UDP Port | 20777 |
+| UDP Send Rate | 20Hz |
+| UDP Format | **2025** |
+
+Your Telemetry may stay Restricted.
 
 - [ ] Both settings done. Both go into **Time Trial on the same track**: `______________`
 
@@ -79,7 +85,7 @@ F1 25 → Settings → **Telemetry Settings**:
 
 On the hub PC: `.venv\Scripts\python -m simtelemetry listen --no-record`. Both drivers drive.
 
-- [ ] `New rig detected: 127.0.0.1 (this PC) -> Rig 1` and `New rig detected: <second PC IP> -> Rig 2`.
+- [ ] `New rig detected: <hub PC IP> (this PC) -> Rig 1` and `New rig detected: <second PC IP> -> Rig 2`.
 - [ ] Two status lines per second, both `fmt=2025`, both `driving` on track and `in_menu_paused` when paused.
 - [ ] The 10 s summary shows `drops: none` for both rigs, and no
       `WARNING: rigs are sending different packet formats`.
@@ -101,8 +107,10 @@ The log shows `Dashboard on http://localhost:8000/`, `Lap debug log: data\logs\l
 
 On the dashboard screen, open `http://<hub PC IP>:8000/` (F11 for full screen).
 
-- [ ] **Status bar:** cafe name, Rig 1 and Rig 2 `On track` with `F1 2025` and the track, `Live`, no warnings.
-- [ ] **Timing strip:** two rows with each game's player name, tyre, running lap clock, speed and gear.
+- [ ] **TV:** cafe name and both drivers on the LIVE page. The TV never shows addresses, warnings or connection
+      text; the staff page's **Health** tab shows Rig 1 and Rig 2 **On track** and no warnings.
+- [ ] **Today's board and focus card:** each game's player name; the focus card shows the running lap,
+      speed and gear of the hottest lap (MULTIVIEW, key `2`, shows both rigs' speed, gear and lap time).
 - [ ] **Map:** two numbered dots in different colours with fading trails; a faint line of the path driven
       builds up the track shape.
 - [ ] **Smoothness:** at normal viewing distance both dots glide without jumps or stutter. Notes:
@@ -111,12 +119,13 @@ On the dashboard screen, open `http://<hub PC IP>:8000/` (F11 for full screen).
       mirrored or rotated, reload with `?map=` until it matches: `?map=flipz`, `?map=flipx`,
       `?map=flipx,flipz`, `?map=rot90`, `?map=flipz,rot90`, … (any of `flipx`, `flipz`, `rotN`; the active
       setting shows in orange on the map). **Matching value:** `______________`
-- [ ] **Views:** on a keyboard, `2` = leaderboard view, `1` = race view, `0` = auto. On a phone use
-      `?view=board` / `?view=race` / no `view` for auto.
-- [ ] **Attract mode:** both drivers go to the menu. After about 10 s the screen shows `Attract mode` and
-      alternates the leaderboard view (20 s) and race view (10 s). Back on track, it returns to the race view.
-- [ ] **Reconnect** (if the screen is a separate device): turn its network off for ~10 s and back on:
-      `Reconnecting to hub`, then `Live` again, without a reload.
+- [ ] **Pages:** on the TV PC's keyboard, `1` = LIVE, `2` = MULTIVIEW; or choose the page on `/staff` (Rigs tab,
+      **TV** panel). On a phone use `?view=live` / `?view=multi` / `?view=board` / `?view=attract`.
+- [ ] **Attract mode:** both drivers go to the menu. After about 60 s the TV shows the welcome and leaderboard
+      screens. Back on track, it returns to the page.
+- [ ] **Reconnect** (if the screen is a separate device): turn its network off for ~15 s and back on. No
+      connection text appears; after about 10 s the cars leave the screen (waiting or attract screen), and once
+      the network is back the live cars return by themselves, without a reload.
 
 ## Part E: Laps (both drivers, hub still running)
 
@@ -146,10 +155,10 @@ On the dashboard, check:
       green otherwise. `PB` in the row shows that driver's best ever on this track.
 - [ ] **Track outline:** after the first clean lap from either rig, the faint path is replaced by the solid
       track with the start/finish line and two sector marks in the right places.
-- [ ] **Head-to-head (Δ column):** once both rigs have a clean lap, each row shows the live gap to the other
-      rig's best lap at the same point on track: green when ahead, red when behind. It matches who is
-      actually quicker.
-- [ ] **Leaderboards** ("Fastest today" and the leaderboard view) list both drivers, fastest first, with
+- [ ] **Live delta:** once both rigs have a clean lap, the focus card shows the live gap to today's record at
+      the same point on track. It matches who is actually quicker. On `/staff`, **Show head to head** shows
+      the two drivers' mini-sectors and speed traces.
+- [ ] **Leaderboards** (today's board on LIVE and the attract leaderboard) list both drivers, fastest first, with
       correct gaps.
 - [ ] **Hub window:** with `--lap-debug`, each line crossing logs `lap_started`, `session_history_update`
       and `lap_completed ... source=session_history` for that rig. Note any `lap_data_fallback` or
@@ -158,16 +167,17 @@ On the dashboard, check:
 **Staff page.** On a phone, open `http://<hub PC IP>:8000/staff`.
 
 - [ ] Both rigs are listed under **Rigs** with "Laps now saved as <game name> (name from the game)".
-- [ ] Type a walk-in name for Rig 2, choose **10 min**, **Start session**: the TV shows **Now driving**, then
-      "10 min left" under the name. Driver 2's next lap is saved under that name; earlier laps keep the game
-      name.
-- [ ] **Queue** tab: add two names. The TV's bottom strip shows them as **Next up**.
+- [ ] Type a walk-in name for Rig 2, choose **10 min**, **Start session**: the TV shows **Now driving** with the
+      name (no timer on the TV; the time left is on the staff page). Driver 2's next lap is saved under that
+      name; earlier laps keep the game name.
+- [ ] **Queue** tab: add two names. The TV's attract screen shows them as **Next up**.
 - [ ] **Drivers** tab: create a profile with your own phone number. Without ticking the consent box you get
       an error; with it the profile is created. Search for it by the last 4 digits.
 - [ ] On the profile, **Use for the next free rig**, then on **Rigs** press the ★ name on Rig 1 with
       **5 min**: the rig card shows "5 minutes left. Extend?"; **+5 min** makes it 10.
 - [ ] Drive a lap, then open the profile again: the visit and the best lap are listed.
-- [ ] **End session** on both rigs: the names go back to the game's names.
+- [ ] **End session** on both rigs: it asks "End <name>'s session on Rig 1? Their card will be made now." first;
+      then the names go back to the game's names.
 - [ ] **End session** on a rig whose driver set a clean lap: the staff page shows a QR code and the TV shows one
       bottom left for 30 seconds. Scan it with a phone on the same Wi-Fi: the card opens with the best lap,
       top speed and the mini-sector map. **Save image** downloads it; **Share on WhatsApp** opens WhatsApp.
@@ -175,10 +185,9 @@ On the dashboard, check:
       The TV's leaderboard view shows it; a Pro lap puts the driver on it.
 - [ ] Start a corporate event (any name, company colour blue, best N = 1), add two teams with one driver each,
       upload any PNG as the logo. Add drivers by searching their profile, or with **Add walk-in** (quick profile).
-      Start a session for that driver from the profile (★ on the Rigs tab) so their laps count for the team. The TV turns blue, shows the company next to the cafe name and the
-      **Teams** view (key `6`). After a lap from each driver the teams are ranked. **End event**.
-- [ ] Set `[owner] pin = "0000"` in `config\hub.toml`, restart the hub, open `/owner` and enter it: today's
-      sessions and laps appear; **Daily CSV** downloads a file.
+      Start a session for that driver from the profile (★ on the Rigs tab) so their laps count for the team. The TV turns blue and shows the company next to the cafe name;
+      **Show teams** on `/staff` puts the team board on the TV. After a lap from each driver the teams are ranked. **End event**.
+- [ ] Open `/owner` and enter the owner PIN: today's sessions and laps appear; **Daily CSV** downloads a file.
 - [ ] At the end of the test: **Delete profile** on your test profile; its laps disappear from the boards.
 - [ ] If both games use the same generic player name, laps from both rigs merge into one leaderboard entry
       until names are set on `/staff`. Note whether that happened (A14).
@@ -195,11 +204,12 @@ On the dashboard, check:
 - [ ] On `/staff` press **Show podium**: today's top three for about 10 seconds.
 - [ ] When both drivers' best laps are within 0.3 s, a **Battle** pop-up appears bottom right.
 - [ ] Open `http://192.168.1.64:8000/portrait` on a phone held upright: cafe name, track record, top 10.
-- [ ] Press `5` on the TV PC: the welcome screen. Press `0` to go back to auto.
+- [ ] Open the TV with `?view=attract`: the welcome screen. Remove it to go back to normal.
 
 ## Part E3: LAN race, podium and race card (both rigs)
 
-- [ ] Optional: in `/setup` add a guest Wi-Fi name and password; a phone on that network can join via the TV QR.
+- [ ] Optional: in `/setup` add a guest Wi-Fi name and password; a phone on that network can join via the TV QR
+      (the network must reach the hub PC: see Part H, phone test).
 - [ ] The hub from Part B is still running and recording (`.venv\Scripts\python -m simtelemetry run --record
       --lap-debug` holds UDP 20777), so do not start `listen` or a second hub. That recording is the regression
       fixture for Final Classification: keep the `.f1rec` from this race in `data\recordings\` (note its name:
@@ -244,14 +254,13 @@ On the dashboard, check:
       flip_z = true
       rotate_deg = 90
       ```
-- [ ] Optional: set `[staff] pin = "1234"` too.
 - [ ] Start the hub again: `.venv\Scripts\python -m simtelemetry run --record --lap-debug` (a new recording
       and lap debug log; note the names: `______________________`).
 - [ ] The dashboard reconnects by itself (remove `?map=` from its address). The **leaderboards still show
       both drivers' laps** with the same names; a name set on `/staff` is still set; the map is drawn the
       right way round and the outline is there straight away.
 - [ ] Both finish the lap they were on: recorded normally, no burst of old laps (A9).
-- [ ] If you set a PIN: `/staff` asks for it; a wrong PIN shows `Wrong PIN.`, the right one opens the page.
+- [ ] `/staff` asks for the staff PIN; a wrong PIN shows `Wrong PIN.`, the right one opens the page.
 - [ ] Both change to **another track** (new Time Trial session): one `reset reason=session_changed` per rig
       in the hub window (A10); the dashboard follows; the new track's boards start empty.
 - [ ] Stop the hub with **Ctrl+C**.
@@ -263,20 +272,132 @@ On the dashboard, check:
 - [ ] Send: everything in `data\recordings\` and `data\logs\`, this checklist with your notes, both drivers'
       in-game times, and the matching `[map]` value.
 
+## Part H: Commercial checks (version 0.5.0)
+
+These check the behaviour added for cafes. Use the installed hub (docs/INSTALL-TEST.md) or the hub from source.
+The installer's own checks are in [INSTALL-TEST.md](INSTALL-TEST.md), step 11.
+
+**Sessions end automatically (U2)**
+
+- [ ] On `/setup`, set the closing time to the next full hour (or the next hour that is a few minutes away).
+      Start a staff session on Rig 1 and a phone check-in on Rig 2, and drive a clean lap on each. At closing
+      time both end by themselves; the staff page says "Ended automatically at closing time", and the TV and
+      staff page show the card QR codes.
+- [ ] Start a **10 min** session and keep driving past 10 minutes: it is not ended while the car is on track.
+      Go to the menu: about 5 minutes later it ends with "Ended automatically: time was up".
+- [ ] A session with no timer and a phone check-in session are not ended for being long; only at closing time.
+- [ ] Optional, overnight: leave a session open and switch the hub PC off before closing time. Start it the next
+      day: the session ends straight away, with a card if there was a clean lap.
+- [ ] With `[features] auto_end_sessions = false` in `hub.toml` (restart the hub), nothing ends by itself.
+
+**Staff PIN (U3)**
+
+- [ ] On a fresh setup, saving `/setup` without a staff PIN is refused: "Choose a staff PIN (4 to 8 digits). It
+      may be the same as the owner PIN."
+- [ ] Optional, with a backup or data folder from before 0.5.0 that has no staff PIN: the staff page accepts the
+      owner PIN and shows the red "Set a staff PIN on the setup page" banner until one is set.
+- [ ] Type a wrong PIN on `/staff` five times: that device is locked out for a minute. Do it three times within
+      an hour: locked out for 15 minutes, and the owner page shows "Someone tried wrong PINs 15 times at …".
+
+**Phone test and guest Wi-Fi (U4)**
+
+- [ ] On `/setup`, scan **Test from your phone** with a phone on the guest Wi-Fi: the phone says "Your phone can
+      reach Pitwall. Check-in and cards will work.", and `/setup` shows "A phone reached the hub at <time>".
+      The staff page's Health tab has the same QR.
+- [ ] If you have a guest network with client isolation on: the page doesn't open on a phone on it. Note what
+      the router calls the isolation setting.
+
+**Hub address change (K4)**
+
+- [ ] Give the hub PC a different address (change its reservation in the router and restart the PC, or switch it
+      to another network port). The staff page and `/setup` show "This PC's network address changed from A to
+      B. On every rig set UDP IP Address to B, and reprint the check-in stickers. …". The TV shows nothing about
+      it. **OK, done** removes it. The check-in sticker sheet shows the new address. Put the address back after.
+- [ ] Unplug the hub PC's network cable and open the sticker sheet on the hub PC: it warns that the address is
+      missing. Plug it back in.
+
+**Rigs (K5, K6)**
+
+- [ ] On `/setup`, drive on Rig 2: it says **Moving now**. Rename it (a 17th character can't be typed); the TV
+      shows the new name.
+- [ ] Set Rig 2's UDP Format to 2024 (or anything but 2025): the rig shows **Wrong game settings** on the staff
+      Health tab, not "In menu". Set it back to 2025.
+- [ ] From a PC that has never sent telemetry, send in the wrong format: no new rig appears; the Health tab says
+      "A PC at <address> is sending telemetry in the wrong format: set UDP Format to 2025."
+- [ ] Give Rig 2's PC a new address: it shows up as a new rig. On `/setup` choose **Same rig as…** and its old
+      entry: the name, colour, number and check-in sticker move over, and the old entry is gone.
+- [ ] **Forget** a rig that no longer exists: it leaves `/setup`, the staff page and the sticker sheet.
+- [ ] During opening hours, switch Rig 2's game off for over 10 minutes: the Health tab shows "On Rig 2 check:
+      UDP Telemetry On · UDP IP Address = <hub address> · Port 20777 · Format 2025, then drive out of the
+      garage." once that day.
+
+**Pause, replay and spectating (K7)**
+
+- [ ] In a single-player **Time Trial**, pause the game for 20 s: within a few seconds the Health tab shows Rig 1
+      **In menu**, not On track, and the rig no longer counts as driving (with every rig paused, the TV goes to
+      attract mode after 60 s). Unpause and drive on: **On track** again, and the lap continues normally.
+- [ ] Watch a replay (instant replay, or the replay after a session): the rig does not count as driving. Note
+      what the Health tab shows.
+- [ ] In the LAN race, after finishing, spectate the other car: that rig is not driving.
+- [ ] Pull Rig 2's network cable for 10 s while driving, then plug it back in: the car comes back on the TV with
+      its laps, bests and trail; no `reset reason=session_changed` in the lap debug log.
+
+**Staff page (K8, K10)**
+
+- [ ] **Remove** in the queue and **×** on a team member ask before removing.
+- [ ] Start a name that is already on today's board: it asks "There's already a <name> today. Same person?"
+      with **Same person** and **Add a letter**.
+- [ ] End a session with no clean lap: "No card this time: no clean lap was completed."
+- [ ] Stop the hub while the staff page is open: "Can't reach the hub …" appears; start the hub: it goes away by
+      itself.
+- [ ] Names longer than 16 characters can't be entered on the staff page or at check-in. "Lauda" is accepted.
+- [ ] On an iPhone, **Save for Instagram story** shows the picture full screen with "Press and hold the
+      picture, then tap Save to Photos".
+
+**Open past midnight (K9)**
+
+- [ ] On `/setup`, the closing time can be 01:00 to 06:00 "(next day)" and the page says "Closes at 02:00 (next
+      day)". If you can test after midnight: with closing at 02:00, a lap at 00:30 is on the same "today" board
+      as the evening's laps, and sessions end at 02:00.
+
+**Backups (K11)**
+
+- [ ] On `/owner`, Backups card: type a folder on a USB stick (for example `E:\Backups`), **Use this folder**,
+      **Back up now**: a zip appears there. It contains the laps, settings, check-in codes and logos.
+- [ ] Unplug the stick and press **Back up now**: "The USB stick isn't plugged in (drive E: not found)."
+- [ ] Type a network folder (`\\server\share`): refused, "Network folders aren't supported …".
+- [ ] Restore that backup by following [INSTALL.md](INSTALL.md), "Restoring a backup": laps, rig names and the
+      logo come back.
+- [ ] Optional: with backups failing for over 2 days, the owner page and the staff Health tab show "Last backup:
+      N days ago. Check the backup folder or USB stick." (never on the TV).
+
+**TV (K12)**
+
+- [ ] Restart the hub with the TV open: the TV comes back by itself, without anyone touching the TV PC.
+- [ ] Upgrade the hub (or run a newer build): the TV reloads itself within a minute.
+- [ ] Set the TV PC's clock 5 minutes wrong: lap times, moments and the session story still look right.
+- [ ] With 7 or more rigs (real or `?source=mock&rigs=9`), MULTIVIEW shows every rig in a grid.
+
+**Start-up problems (K1)**
+
+- [ ] Put a mistake in `hub.toml` (for example `http_port = "abc"`) and restart the hub: it starts; the staff
+      and setup pages say "Your settings file (hub.toml) has a mistake … The hub started with default
+      settings." (with the line number when the file itself can't be read). Fix it and restart: the message is gone.
+
 ## Troubleshooting
 
 | Symptom | Likely cause / fix |
 |---|---|
 | Rig 2 never detected | Wrong UDP IP Address in Rig 2's game; UDP firewall rule missing; network profile Public; PCs on different networks (guest Wi-Fi); a VPN on either PC. |
-| Rig 1 never detected | UDP IP Address must be `127.0.0.1` on the hub PC; UDP Telemetry off. |
+| Rig 1 never detected | UDP IP Address on the hub PC must be the hub PC's network address (not `127.0.0.1`); UDP Telemetry off. |
 | `WARNING: rigs are sending different packet formats` | Set UDP Format to 2025 on both games. |
-| `ERROR: UDP port 20777 is already in use` | Another program (SimHub, another telemetry app, a second hub) holds the port. Close it, or use `--port 20778` and set 20778 in both games. |
+| "Another program is using port 20777 (often SimHub)" | Another program (SimHub, another telemetry app, a second hub) holds the port. Close it, or change that program's port (RIG_SETUP.md, SimHub). The hub keeps the pages running and tries again every 30 s. |
 | `ERROR: HTTP port 8000 is already in use` | Close the other program, or use `--http-port 8001` and use that port in the dashboard address. |
 | `drops: size_mismatch=...` / `unsupported_format=...` | Packet format differs from the spec, or not 2025/2026. Keep the recording and report it. |
 | Stuck on `in_menu_paused` while driving | No Motion packets for that car. Check the `Motion=` rate in the summary; report with the recording. |
 | No `lap_completed` after crossing the line | Look for `session_history_update` and `lap_data_fallback` in the lap debug log; report with the log. |
 | Dashboard says "The dashboard hasn't been built yet" | Run `npm run build` in `dashboard\` (Part A), then reload. |
 | Dashboard page doesn't load on another device | TCP 8000 firewall rule; use the hub PC's IP, not `localhost`. |
-| Dashboard stuck on `Connecting to hub` | `/ws` blocked, e.g. by a proxy or browser extension. Try another browser. |
+| TV stays on the waiting screen while cars are driving | `/ws` blocked, e.g. by a proxy or browser extension. Try another browser. |
 
 Add `-v` for debug logging; the full log is in `data\logs\hub.log`.

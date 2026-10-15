@@ -1,5 +1,9 @@
 # Starter config. Every key is optional; the defaults are shown, and lines starting with # are examples.
-# Installed hub: this file is C:\ProgramData\<product>\config\hub.toml; restart the hub after editing it.
+# Technical settings only: everything an owner changes (cafe name, logo, opening hours, PINs, guest Wi-Fi, rig
+# names, backup folder) is done on the setup and owner pages.
+# Installed hub: this file is C:\ProgramData\<product>\config\hub.toml; edit it as administrator, then restart the
+# hub PC. A mistake here never stops the hub: it starts with the standard settings and the staff and setup pages
+# say which line is wrong.
 # Source checkout: copy to config/hub.toml.
 
 # data_dir = "data"                    # SQLite, track outlines, logs, recordings (relative to the cafe folder)
@@ -12,7 +16,7 @@
 # "--brand-accent" = "#e10600"
 
 [network]
-udp_host = "0.0.0.0"                   # all interfaces: works with Broadcast and direct-IP mode
+udp_host = "0.0.0.0"                   # all network adapters (rigs send to this PC's network address)
 udp_port = 20777                       # must match the UDP port set on every rig
 udp_receive_buffer_bytes = 4194304     # 4 MB socket buffer for bursts
 http_host = "0.0.0.0"
@@ -67,13 +71,15 @@ enabled = false                        # session start and record sounds on the 
 volume = 0.6
 
 [owner]
+# The owner and staff PINs are chosen on the setup page (stored there, hashed); these are only a fallback.
 # PINs go in quotes ("0123"): a bare number works too, but TOML rejects one that starts with 0.
-pin = ""                               # PIN for /owner (analytics); empty = the page stays locked
+pin = ""                               # owner PIN (/owner and /setup)
 open_hour = 10                         # opening hours (set on the setup page): rig utilisation, and
 close_hour = 22                        # sessions end automatically at closing time; 0-6 = after midnight
 
 [staff]
-pin = ""                               # PIN for the /staff page (driver names); empty = no PIN
+pin = ""                               # staff PIN; required (set on the setup page). Until one is set the
+                                       # staff page accepts the owner PIN and asks for a staff PIN
 
 [leaderboard]
 # day_start_hour = 5                   # "today" starts at this hour. Normally leave this out: it is the closing
@@ -91,8 +97,8 @@ enabled = true
 hour = 4                               # local hour of the nightly backup
 keep = 14                              # how many backups to keep
 
-# Rigs are auto-detected by source IP and named "Rig 1", "Rig 2", ...
-# Add entries to give them fixed names / colours.
+# Rigs are detected by their address and named "Rig 1", "Rig 2", ... Rename them on the setup page; a name set
+# there wins over these entries, which are only a fallback.
 # [[rigs]]
 # ip = "192.168.1.21"
 # name = "Rig A"
