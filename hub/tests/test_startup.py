@@ -31,22 +31,37 @@ NOW = dt.datetime(2026, 10, 15, 9, 30, 0)
 OWNER_AS_STAFF = {"X-Staff-Pin": "2468"}
 
 
-def run_hub_briefly(argv, poll_paths=(), delay=1.2, duration="2.5", during=None):
-    """main(["run", ...]) on free ports, fetching the given API paths (with headers) while it runs. The staff pages
-    need a PIN: the hub gets owner PIN 2468 (no staff PIN set, so the owner PIN opens them)."""
+def wait_for_server(port, timeout=10.0):
+    """Poll the hub's /api/health every 0.1 s until it answers (up to `timeout` s); False if it never did."""
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/health", timeout=2):
+                return True
+        except OSError:
+            time.sleep(0.1)
+    return False
+
+
+def run_hub_briefly(argv, poll_paths=(), during=None, duration="15"):
+    """main(["run", ...]) on free ports, fetching the given API paths (with headers) once it answers, then stopping
+    it. The staff pages need a PIN: the hub gets owner PIN 2468 (no staff PIN set, so the owner PIN opens them)."""
     results: dict[str, object] = {}
     if any(p.startswith("/api/staff") for p in poll_paths):
         argv = [*argv, "--owner-pin", "2468"]
 
     def poll():
-        time.sleep(delay)
-        if during:
-            during()
-        port = argv[argv.index("--http-port") + 1]
-        for path in poll_paths:
-            request = urllib.request.Request(f"http://127.0.0.1:{port}{path}", headers=OWNER_AS_STAFF)
-            with urllib.request.urlopen(request, timeout=5) as r:
-                results[path] = json.load(r)
+        try:
+            port = argv[argv.index("--http-port") + 1]
+            assert wait_for_server(port), "the hub never answered"
+            if during:
+                during()
+            for path in poll_paths:
+                request = urllib.request.Request(f"http://127.0.0.1:{port}{path}", headers=OWNER_AS_STAFF)
+                with urllib.request.urlopen(request, timeout=5) as r:
+                    results[path] = json.load(r)
+        finally:
+            cli.request_stop()
     poller = threading.Thread(target=poll)
     poller.start()
     code = cli.main([*argv, "--duration", duration])
@@ -128,7 +143,7 @@ def test_http_port_busy_writes_last_start_error_and_exits_nonzero(tmp_path, caps
 
 def test_clean_start_deletes_last_start_error(tmp_path):
     (tmp_path / START_ERROR_FILE).write_text("old problem\n", encoding="utf-8")
-    code, _ = run_hub_briefly(["run", "--data-dir", str(tmp_path), *ports()], duration="1.5")
+    code, _ = run_hub_briefly(["run", "--data-dir", str(tmp_path), *ports()])
     assert code == 0 and not (tmp_path / START_ERROR_FILE).exists()
 
 
@@ -155,10 +170,11 @@ def test_udp_port_busy_serves_pages_warns_and_retries(tmp_path, monkeypatch):
         with urllib.request.urlopen(request, timeout=5) as r:
             seen["before"] = json.load(r)["warnings"]
         blocker.close()
-        time.sleep(1.0)
+        end = time.monotonic() + 5                      # the hub retries the port every 0.3 s here
+        while time.monotonic() < end and "is free now" not in (tmp_path / "logs" / "hub.log").read_text("utf-8"):
+            time.sleep(0.1)
     code, got = run_hub_briefly(["run", "--port", str(udp_port), "--http-port", str(http_port),
-                                 "--data-dir", str(tmp_path)], ["/api/staff/health", "/api/setup"],
-                                delay=0.8, duration="3", during=during)
+                                 "--data-dir", str(tmp_path)], ["/api/staff/health", "/api/setup"], during=during)
     assert code == 0
     (busy,) = [w for w in seen["before"] if w["code"] == "udp_port_busy"]
     assert busy["message"].startswith(f"Another program is using port {udp_port} (often SimHub). "
@@ -445,12 +461,11 @@ def test_quick_check_runs_only_after_an_unclean_shutdown(tmp_path, monkeypatch):
 
     def during():
         seen["marker"] = (tmp_path / startup.RUNNING_MARKER).exists()
-    code, _ = run_hub_briefly(["run", "--data-dir", str(tmp_path), *ports()], delay=0.8, duration="1.5",
-                              during=during)
+    code, _ = run_hub_briefly(["run", "--data-dir", str(tmp_path), *ports()], during=during)
     assert code == 0 and checks == [] and seen["marker"]
     assert not (tmp_path / startup.RUNNING_MARKER).exists()          # a clean stop removes it
     (tmp_path / startup.RUNNING_MARKER).write_text("1234\n", encoding="utf-8")     # as left by a power cut
-    code, _ = run_hub_briefly(["run", "--data-dir", str(tmp_path), *ports()], delay=0.5, duration="1")
+    code, _ = run_hub_briefly(["run", "--data-dir", str(tmp_path), *ports()])
     assert code == 0 and checks == [tmp_path / "laps.db"]
     assert not (tmp_path / startup.RUNNING_MARKER).exists()
 

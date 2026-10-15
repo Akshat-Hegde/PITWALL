@@ -36,6 +36,7 @@ def hello_router(hub: Hub) -> APIRouter:
     def phone_test() -> dict[str, Any]:
         """Whether a phone has reached /hello (setup polls this while the owner tests). No addresses."""
         t = hub.phone_test
+        t.flush_due()
         return {"reached": t.reached_at is not None,
                 "reached_at": round(t.reached_at * 1000) if t.reached_at is not None else None,
                 "text": t.status_text()}

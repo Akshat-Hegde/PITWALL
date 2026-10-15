@@ -106,7 +106,11 @@ async def test_backup_loop_catches_up_and_survives_any_exception(tmp_path, monke
     monkeypatch.setattr(hub, "run_backup", boom)
     monkeypatch.setattr(hub_mod, "CATCH_UP_DELAY_S", 0.0)
     task = asyncio.create_task(hub.backup_loop())
-    await asyncio.sleep(0.3)
+    for _ in range(500):                                              # until the catch-up ran (<= 5 s)
+        if calls:
+            break
+        await asyncio.sleep(0.01)
+    await asyncio.sleep(0.05)                                         # ...and the loop went on to wait
     assert calls == [1]                                               # no backup yet: one catch-up attempt
     assert not task.done()                                            # ...and the loop is still alive
     task.cancel()

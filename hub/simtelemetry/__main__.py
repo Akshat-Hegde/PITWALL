@@ -13,6 +13,7 @@ import socket
 import sqlite3
 import subprocess
 import sys
+import threading
 import time
 import traceback
 import urllib.request
@@ -43,6 +44,21 @@ log = logging.getLogger("simtelemetry")
 
 HUB_COMMANDS = ("run", "listen", "record", "replay")
 UDP_RETRY_S = 30.0          # while another program holds the telemetry port, try again this often
+
+# Set from another thread to end a --duration run early (tests stop the hub as soon as they have what they need).
+_stop_early = threading.Event()
+
+
+def request_stop() -> None:
+    """End the current --duration run now (thread-safe)."""
+    _stop_early.set()
+
+
+async def wait_duration(seconds: float) -> None:
+    """Sleep `seconds`, or less if request_stop() is called meanwhile."""
+    end = time.monotonic() + seconds
+    while not _stop_early.is_set() and time.monotonic() < end:
+        await asyncio.sleep(min(0.05, max(0.0, end - time.monotonic())))
 
 
 def add_record_flags(p: argparse.ArgumentParser) -> None:
@@ -207,6 +223,7 @@ def live_handler(hub: Hub, replay_ip: str | None):
 async def run_hub(args: argparse.Namespace, hub: Hub, selection: SourceSelection = SourceSelection(),
                   http_sock: socket.socket | None = None) -> None:
     """http_sock: the HTTP socket, already bound by run_command (before any data work); bound here when None."""
+    _stop_early.clear()
     cmd = args.command
     net = hub.config.network
     is_replay = cmd == "replay"
@@ -277,7 +294,7 @@ async def run_hub(args: argparse.Namespace, hub: Hub, selection: SourceSelection
         if is_replay and not args.live and not args.hold:
             await replay_task
         elif args.duration is not None:
-            await asyncio.sleep(args.duration)
+            await wait_duration(args.duration)
         elif server_task is not None:
             await server_task
         else:
@@ -291,6 +308,7 @@ async def run_hub(args: argparse.Namespace, hub: Hub, selection: SourceSelection
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+        hub.phone_test.flush()          # the last /hello visit, if it came within 10 s of the previous write
 
 
 def note_port_shadows(hub: Hub, port: int) -> None:

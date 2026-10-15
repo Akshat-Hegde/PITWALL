@@ -37,9 +37,12 @@ def is_this_pc(client: str | None, own: Iterable[str | None]) -> bool:
         ip = ipaddress.ip_address(client)
     except ValueError:
         return True
+    mapped = getattr(ip, "ipv4_mapped", None)       # "::ffff:192.168.1.10" on a dual-stack socket
+    if mapped is not None:
+        ip = mapped
     if ip.is_loopback or ip.is_unspecified:
         return True
-    return client in {a for a in own if a}
+    return str(ip) in {a for a in own if a}
 
 
 def usable_address(address: str | None) -> bool:
@@ -58,6 +61,7 @@ class PhoneTest:
         self._clock = clock
         self.reached_at: float | None = None      # Unix seconds of the last phone visit
         self._saved_at = 0.0
+        self._pending = False           # a visit not written yet (within 10 s of the last write)
         if path is not None:
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
@@ -77,16 +81,31 @@ class PhoneTest:
         self.reached_at = now
         if first:
             log.info("A phone reached the hub (phone test)")
-        if self._path is not None and now - self._saved_at >= SAVE_EVERY_S:
-            self._saved_at = now
-            try:
-                self._path.parent.mkdir(parents=True, exist_ok=True)
-                tmp = self._path.with_suffix(".tmp")
-                tmp.write_text(json.dumps({"at": round(now * 1000), "from_phone": True}) + "\n", encoding="utf-8")
-                tmp.replace(self._path)
-            except OSError:
-                log.exception("Could not save %s", self._path)
+        self._pending = True
+        self.flush_due()
         return True
+
+    def flush_due(self) -> None:
+        """Save a pending visit once 10 s have passed since the last write."""
+        if self._pending and self._clock() - self._saved_at >= SAVE_EVERY_S:
+            self.flush()
+
+    def flush(self) -> None:
+        """Save the latest visit if it isn't saved yet: called when the 10 s window has passed, from the status
+        views, and when the hub stops, so the last visit is never lost."""
+        if not self._pending or self._path is None or self.reached_at is None:
+            self._pending = False
+            return
+        self._pending = False
+        self._saved_at = self._clock()
+        try:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self._path.with_suffix(".tmp")
+            tmp.write_text(json.dumps({"at": round(self.reached_at * 1000), "from_phone": True}) + "\n",
+                           encoding="utf-8")
+            tmp.replace(self._path)
+        except OSError:
+            log.exception("Could not save %s", self._path)
 
     def status_text(self, today: Callable[[], dt.date] = dt.date.today) -> str:
         if self.reached_at is None:
@@ -97,6 +116,7 @@ class PhoneTest:
 
     def status(self, address: str | None, port: int, qr: Callable[[str], str] | None = None) -> dict[str, Any]:
         """What setup and staff Health show: the test QR (None without a usable address) and the last success."""
+        self.flush_due()
         url = f"http://{address}:{port}/hello" if usable_address(address) else None
         return {"url": url, "svg": qr(url) if qr is not None and url else None,
                 "reached": self.reached_at is not None,

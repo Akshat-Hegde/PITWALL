@@ -41,6 +41,8 @@ AUTO_END_EVERY_S = 15.0      # how often open sessions are checked for auto-end
 AUTO_END_TEXT = {"closing": "Ended automatically at closing time", "overrun": "Ended automatically: time was up"}
 NO_CARD_TEXT = "No card this time: no clean lap was completed."
 
+OWN_ADDRESSES_CACHE_S = 60.0     # how long this PC's own addresses are reused (the phone test)
+
 CATCH_UP_AFTER = dt.timedelta(hours=24)
 CATCH_UP_DELAY_S = 120.0
 
@@ -86,6 +88,7 @@ class Hub:
         self.address_watch = AddressWatch(config.data_dir / ADDRESS_FILE if persist else None, self.hub_address)
         from .core.phone_test import PHONE_TEST_FILE, PhoneTest
         self.phone_test = PhoneTest(config.data_dir / PHONE_TEST_FILE if persist else None)   # /hello visits
+        self._own_addresses: tuple[float, set[str]] | None = None     # (looked up at, addresses), see own_addresses
         self.silent_watch = SilentRigWatch()
         self.wall_clock = dt.datetime.now                       # opening hours (tests replace it)
         # Addresses sending packets the hub can't read that never sent a valid one: ip -> (last seen, format).
@@ -251,7 +254,7 @@ class Hub:
             if target is None:
                 return None
             if current is target:
-                self.drivers.end(ip)
+                self.drivers.end(ip, expected_session=current)   # never a session started after this read
             return self.session_card(ip, target)
 
     # --- automatic end (closing time, overrun) ------------------------------------------------
@@ -565,9 +568,16 @@ class Hub:
         return lan_address(r.ip for r in self.registry.all())
 
     def own_addresses(self) -> set[str]:
-        """Every address of this PC (a visit from one of them is not a phone)."""
+        """Every address of this PC (a visit from one of them is not a phone). Looked up at most once a minute:
+        a phone reloading /hello must not make the hub list its network adapters each time."""
         from .core.feed import _private_addresses
-        return {a for a in (self.hub_address(), *_private_addresses()) if a}
+        now = time.monotonic()
+        cached = self._own_addresses
+        if cached is not None and now - cached[0] < OWN_ADDRESSES_CACHE_S:
+            return cached[1]
+        found = {a for a in (self.hub_address(), *_private_addresses()) if a}
+        self._own_addresses = (now, found)
+        return found
 
     def wrong_sender_warnings(self, now: float | None = None) -> list[dict[str, Any]]:
         now = time.monotonic() if now is None else now

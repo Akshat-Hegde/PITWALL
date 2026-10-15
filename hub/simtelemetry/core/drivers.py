@@ -46,13 +46,61 @@ class Assignment:
                 "ends_at": self.ends_at}
 
 
+ZWNJ, ZWJ = "\u200c", "\u200d"
+# Blank-looking characters that aren't format characters: Hangul fillers, the blank Braille pattern and the
+# combining grapheme joiner. A name made of them would look empty on the TV.
+_BLANKS = frozenset("\u3164\u115f\u1160\uffa0\u2800\u034f")
+_EMOJI_MODIFIERS = range(0x1F3FB, 0x1F400)      # skin tones
+
+
+def _script(c: str) -> str | None:
+    """The script of a letter or combining mark ("DEVANAGARI", "TAMIL"...), from its Unicode name; else None."""
+    if unicodedata.category(c)[0] not in "LM":
+        return None
+    try:
+        return unicodedata.name(c).split(" ", 1)[0]
+    except ValueError:
+        return None
+
+
+def _keep_joiner(prev: str, joiner: str, nxt: str) -> bool:
+    """ZWJ/ZWNJ shape Indic and other non-Latin scripts (the Marathi eyelash "rya" needs the ZWJ): keep one between two
+    characters of the same non-Latin script, and ZWJ inside an emoji sequence (family, flag). Drop it elsewhere."""
+    if not prev or not nxt:
+        return False
+    script = _script(prev)
+    if script is not None and script != "LATIN" and script == _script(nxt):
+        return True
+    if joiner == ZWJ and unicodedata.category(nxt) == "So":
+        return (unicodedata.category(prev) == "So" or prev == "\ufe0f" or ord(prev) in _EMOJI_MODIFIERS)
+    return False
+
+
+def _visible(c: str) -> bool:
+    return unicodedata.category(c)[0] in "LNPS" and c not in _BLANKS
+
+
 def clean_name(value: Any) -> str:
-    # Invisible format characters (zero-width spaces and joiners, right-to-left overrides; Unicode category Cf)
-    # would make two names look the same or flip the TV text: drop them.
-    text = "".join(c for c in str(value or "") if unicodedata.category(c) != "Cf")
-    name = " ".join(text.split())  # trim, collapse whitespace, no newlines/tabs
+    # Invisible format characters (zero-width spaces, right-to-left overrides, byte-order marks; Unicode category
+    # Cf) and blank-looking fillers would make two names look the same or flip the TV text: drop them. Joiners
+    # that shape a non-Latin script or an emoji stay, so a Marathi or Hindi name is kept exactly as typed.
+    text = unicodedata.normalize("NFC", str(value or ""))
+    kept = []
+    for i, c in enumerate(text):
+        if c in _BLANKS:
+            continue
+        if unicodedata.category(c) == "Cf":
+            if c in (ZWJ, ZWNJ) and _keep_joiner(text[i - 1] if i else "", c, text[i + 1:i + 2]):
+                kept.append(c)
+            continue
+        kept.append(c)
+    name = " ".join(unicodedata.normalize("NFC", "".join(kept)).split())  # trim, collapse whitespace, no newlines
     if not name:
+        if str(value or "").strip():
+            raise DriverError("Please type a name.")
         raise DriverError("Enter the driver's name.")
+    if not any(_visible(c) for c in name):
+        raise DriverError("Please type a name.")
     if len(name) > NAME_MAX:
         raise DriverError(f"Names can be at most {NAME_MAX} characters.")
     if any(ord(c) < 32 for c in name):
@@ -131,9 +179,12 @@ class DriverRegistry:
         self._current[rig_id] = updated
         return updated
 
-    def end(self, rig_id: str) -> bool:
-        """End the rig's session; False if there was none."""
+    def end(self, rig_id: str, expected_session: Assignment | None = None) -> bool:
+        """End the rig's session; False if there was none. Given `expected_session`, end it only if it is still
+        the rig's session (a new one started meanwhile is left alone)."""
         if rig_id not in self._current:
+            return False
+        if expected_session is not None and self._current.get(rig_id) is not expected_session:
             return False
         self._store.end_driver_session(rig_id, self._now_ms())
         self._current.pop(rig_id, None)                 # never a KeyError if it was ended meanwhile

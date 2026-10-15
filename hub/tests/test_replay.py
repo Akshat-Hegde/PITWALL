@@ -157,7 +157,11 @@ async def test_replay_rigs_plays_each_copy_as_its_own_rig():
     streams = [[(100.0 + i * 0.01, b"a%d" % i) for i in range(300)], [(50.0 + i * 0.01, b"b%d" % i) for i in range(300)]]
     got: list[tuple[bytes, str]] = []
     task = asyncio.create_task(replay_rigs(streams, lambda data, ip, t: got.append((data, ip)), rigs=3, speed=50))
-    await asyncio.sleep(0.3)
+    want = {"10.30.0.1", "10.30.0.2", "10.30.0.3"}
+    for _ in range(500):                                # until every rig has played a few packets (<= 5 s)
+        if {ip for _, ip in got} == want and all(sum(i == ip for _, i in got) >= 3 for ip in want):
+            break
+        await asyncio.sleep(0.01)
     task.cancel()
     ips = {ip for _, ip in got}
     assert ips == {"10.30.0.1", "10.30.0.2", "10.30.0.3"}

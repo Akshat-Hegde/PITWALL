@@ -18,13 +18,19 @@ def free_port(kind=socket.SOCK_DGRAM) -> int:
         return s.getsockname()[1]
 
 
-def send_later(port: int, packets: list[bytes], delay: float = 0.4, repeat: int = 15, gap: float = 0.1):
+def send_later(port: int, packets: list[bytes], delay: float = 0.4, repeat: int = 15, gap: float = 0.1,
+               until: threading.Event | None = None, timeout: float = 10.0):
+    """Send the packets `repeat` times, `gap` s apart, after `delay` s. Given `until`, keep sending instead until it
+    is set (at most `timeout` s): packets sent before the hub has bound its port are simply lost."""
     def run():
         time.sleep(delay)
+        end = time.monotonic() + timeout
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-            for _ in range(repeat):
+            sent = 0
+            while (not until.is_set() and time.monotonic() < end) if until is not None else sent < repeat:
                 for p in packets:
                     s.sendto(p, ("127.0.0.1", port))
+                sent += 1
                 time.sleep(gap)
     t = threading.Thread(target=run, daemon=True)
     t.start()
@@ -107,18 +113,33 @@ def test_run_serves_health_api(tmp_path):
     import json
     import urllib.request
 
+    from simtelemetry.__main__ import request_stop
+
     udp_port, http_port = free_port(), free_port(socket.SOCK_STREAM)
-    sender = send_later(udp_port, RIG_PACKETS, repeat=10)
+    got_it = threading.Event()
+    sender = send_later(udp_port, RIG_PACKETS, delay=0.0, until=got_it)
     result = {}
 
     def poll():
-        time.sleep(1.2)
-        with urllib.request.urlopen(f"http://127.0.0.1:{http_port}/api/health", timeout=5) as r:
-            result.update(json.load(r))
+        try:
+            end = time.monotonic() + 10                        # until the hub answers and has seen the rig
+            while time.monotonic() < end:
+                try:
+                    with urllib.request.urlopen(f"http://127.0.0.1:{http_port}/api/health", timeout=2) as r:
+                        health = json.load(r)
+                except OSError:
+                    health = None
+                if health and health["rigs"] and health["rigs"][0].get("driver_name"):
+                    result.update(health)
+                    return
+                time.sleep(0.1)
+        finally:
+            got_it.set()
+            request_stop()
     poller = threading.Thread(target=poll)
     poller.start()
     code = main(["run", "--port", str(udp_port), "--http-port", str(http_port),
-                 "--data-dir", str(tmp_path), "--duration", "2.5"])
+                 "--data-dir", str(tmp_path), "--duration", "15"])
     poller.join()
     sender.join()
     assert code == 0

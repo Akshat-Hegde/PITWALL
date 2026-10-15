@@ -168,15 +168,16 @@ def staff_router(hub: Hub) -> APIRouter:
     def start(rig_id: str, body: dict[str, Any] = Body(...)) -> dict[str, Any]:
         """Start a session: {"name"} for a walk-in or {"driver_id"} for a profile, optional "minutes"."""
         rig = find_rig(rig_id)
-        previous = drivers.get(rig.ip)  # replaced by the new session once that is valid
-        try:
-            if body.get("queue_id") is not None:
-                drivers.start_from_queue(int(body["queue_id"]), rig.ip, body.get("minutes"))
-            else:
-                drivers.assign(rig.ip, body.get("name"), body.get("driver_id"), body.get("minutes"))
-        except DriverError as exc:
-            raise _bad(exc) from None
-        card = hub.session_card(rig.ip, previous) if previous else None
+        with hub._end_lock:     # one at a time with the automatic end: it must never end this new session
+            previous = drivers.get(rig.ip)  # replaced by the new session once that is valid
+            try:
+                if body.get("queue_id") is not None:
+                    drivers.start_from_queue(int(body["queue_id"]), rig.ip, body.get("minutes"))
+                else:
+                    drivers.assign(rig.ip, body.get("name"), body.get("driver_id"), body.get("minutes"))
+            except DriverError as exc:
+                raise _bad(exc) from None
+            card = hub.session_card(rig.ip, previous) if previous else None
         hub.session_started(rig.ip)
         return {**rig_row(rig, time.monotonic()), "card": _card_link(card)}
 
