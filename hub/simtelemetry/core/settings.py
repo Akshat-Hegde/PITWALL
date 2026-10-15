@@ -176,7 +176,7 @@ def recover_damaged_settings(store: SettingsStore, backups_dir: Path, now: dt.da
         log.error("Could not read %s (%s); starting without the cafe settings, the file is left as it is",
                   store.path, exc)
         return ("The cafe settings file couldn't be read just now (another program may be using it). "
-                "The hub started without the cafe's settings. Restart the hub to try again; "
+                "The hub started without the cafe's settings. Restart this PC to try again; "
                 "if this message stays, contact support.")
     except SettingsDamaged as exc:
         log.error("%s is damaged (%s)", store.path, exc)
