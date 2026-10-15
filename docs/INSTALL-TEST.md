@@ -21,10 +21,33 @@ Never run the installer on the development PC: it registers a boot task and fire
 11. **Version 0.5.0 checks** (new in this version; never on the dev PC):
     - **Keep awake:** after install, Settings, System, Power: "When plugged in, turn off my screen" and "put my device to sleep" both say Never.
     - **Start-menu shortcuts:** "Pitwall Show setup code" asks for administrator rights (Yes), shows one explanation line and the code (or "Setup is done; use the owner PIN."), and the window stays open. "Pitwall Reset owner PIN" asks for administrator rights, explains, waits for a key (closing the window cancels), then prints a new code; the setup page then asks for it. "Pitwall Open backups folder" and "Pitwall Open logs folder" open Explorer, with no window flashing; with the backup folder on an unplugged USB stick it shows a plain message instead.
-    - **Permissions:** in `C:\ProgramData\Pitwall`, Properties, Security: SYSTEM and Administrators Full control, Users Read & execute only; `data\logs` also gives Users Modify. As an ordinary user, the TV shortcut and the folder shortcuts still work.
+    - **Permissions:** right-click each folder, Properties, Security, and check:
+      - [ ] `C:\ProgramData\Pitwall`, `config` and `backups`: SYSTEM and Administrators Full control; Users "Read & execute".
+      - [ ] `data`: only SYSTEM and Administrators (Users not listed at all).
+      - [ ] `data\logs`: Users "Read & execute" only (no Modify).
+      - [ ] Sign in as a standard (non-administrator) Windows user: "Pitwall Open logs folder" and "Pitwall Open backups folder" open in Explorer; opening `C:\ProgramData\Pitwall\data` itself is refused. The TV shortcut still works.
+      - [ ] The installer's last page shows no red permissions warning.
     - **Hub not starting:** on the spare PC start another program on port 8000 first (for example `python -m http.server 8000`), then run the installer again: it waits up to 90 s, then the last page says "The hub has not started", shows the first line of `data\last-start-error.txt` if there is one, and does not offer "Open the setup page".
+      - [ ] While it waits, drag the installer window around and cover/uncover it: it moves and redraws, the progress bar keeps moving, and the title never says "Not Responding".
+    - **Custom data folder:** before an upgrade, set `data_dir` in `C:\ProgramData\Pitwall\config\hub.toml` to another folder (for example `D:\PitwallData`) and restart the hub once so it uses it. Run the installer again and check:
+      - [ ] the last page knows setup is done (or shows the setup code) from that folder;
+      - [ ] with the port-8000 blocker running, the start error shown comes from that folder's `last-start-error.txt`;
+      - [ ] the permissions above apply to that folder (only SYSTEM and Administrators), and there is still no red permissions warning.
     - **TV waiting page:** restart the PC with the TV set to open at sign-in (or run the TV shortcut while the hub task is stopped). The TV shows "Starting up" (never a browser error page) and switches to the LIVE page by itself within a few seconds of the hub answering.
-    - **TV-only PC:** on a second PC, run the installer and choose "This PC only shows the TV (the hub runs on another PC)". Type the hub PC's address (try a wrong one first: it asks whether to use it anyway). Check: no "Pitwall Hub" task, no firewall rules, no `Pitwall.exe` in Program Files, only the TV and Uninstall shortcuts; "Open the TV now" on the last page opens the hub's TV page; "Open the TV page when this PC signs in" was ticked by default.
+    - **TV-only PC:** on a second PC, run the installer and choose "This PC only shows the TV (the hub runs on another PC)".
+      - [ ] Type something that isn't an address, for example `http://a b/` or `hub_pc`: it says "That isn't a PC address" and won't go on.
+      - [ ] Type an address where no hub answers: it asks whether to use it anyway.
+      - [ ] Type the hub PC's real address and finish. Check: no "Pitwall Hub" task, no firewall rules, no `Pitwall.exe` in Program Files, only the TV and Uninstall shortcuts; "Open the TV now" on the last page opens the hub's TV page; "Open the TV page when this PC signs in" was ticked by default.
+    - **Switching a hub PC to TV-only:** on the spare PC that is already the hub, run the installer again and choose "This PC only shows the TV".
+      - [ ] The Ready page says "This PC will stop being the hub".
+      - [ ] Afterwards: no "Pitwall Hub" task in Task Scheduler, no Pitwall rules in `wf.msc`, no `Pitwall.exe` and no `_internal` folder in `C:\Program Files\Pitwall`, and no Staff, Owner, Setup or other admin shortcuts in the Start menu (only TV and Uninstall).
+      - [ ] `C:\ProgramData\Pitwall` is still there.
+    - **Silent TV-only install:** from an administrator Command Prompt:
+      - [ ] `Pitwall-Setup-0.5.0.exe /VERYSILENT /TYPE=tv /HUB=<hub ip>` installs with no windows, and a "Pitwall TV" shortcut opens the TV page when any user signs in.
+      - [ ] Without `/HUB=...` it installs nothing and ends with exit code 7 (`echo %ERRORLEVEL%` shows 7); the install log (`%TEMP%\Setup Log *.txt`) says the hub address is missing.
+    - **Only one TV window:** on a PC that already has a TV start-up shortcut from the old launcher (`powershell -ExecutionPolicy Bypass -File tv-launcher.ps1 -StartOnLogin`, which puts "Pitwall TV.lnk" in your own Startup folder, `shell:startup`), run the installer with "Open the TV page when this PC signs in" ticked.
+      - [ ] The old "Pitwall TV.lnk" is gone from `shell:startup`.
+      - [ ] Sign out and in again: exactly one TV window opens.
     - **Installer file details:** right-click the installer and `Pitwall.exe`, Properties, Details: company 9T7 Racing, product Pitwall, version 0.5.0.
     - **Disabled-task check in any Windows language:** with the task disabled in Task Scheduler and the hub stopped, `Pitwall.exe restore <zip>` from an administrator prompt must not print the warning; with it enabled, it must.
 12. **Send back** the install log (`%TEMP%\Setup Log *.txt`) and `C:\ProgramData\Pitwall\data\logs\hub.log`, plus a note of any step that failed.

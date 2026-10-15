@@ -468,6 +468,14 @@ packaged build uses a separate **python.org 3.11** in `.venv-build`.
    the installer with Inno Setup 6 (`winget install -e --id JRSoftware.InnoSetup`) into `dist\Pitwall-Setup-<version>.exe`.
    `build\` and `dist\` are not committed. Never run the installer on the dev PC; see [docs/INSTALL-TEST.md](docs/INSTALL-TEST.md).
 
+**For the builder: code signing.** Signing is optional; without a certificate the build skips it silently. Set
+these environment variables before running `build.ps1` to sign `Pitwall.exe`, the installer and its uninstaller:
+
+- `PITWALL_SIGN_CERT` (required to sign): path to the `.pfx` certificate file.
+- `PITWALL_SIGN_PASS` (optional): the `.pfx` password; leave it unset for a `.pfx` without one.
+- `PITWALL_SIGN_TIMESTAMP` (optional): timestamp server, default `http://timestamp.digicert.com`. `none` skips the
+  timestamp, but then the signature stops being valid when the certificate expires.
+
 Double-clicking `Pitwall.exe` (no arguments) starts the hub, same as `run`.
 
 ## Docs

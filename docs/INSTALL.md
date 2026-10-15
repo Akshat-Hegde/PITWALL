@@ -164,6 +164,8 @@ Settings, Apps, Pitwall, Uninstall. It removes the program, the firewall rules a
 | Technical settings (ports and such; not needed for normal use) | `C:\ProgramData\Pitwall\config\hub.toml` |
 | Start-up task | Task Scheduler, "Pitwall Hub" |
 
+The cafe data folder holds guests' phone numbers and the PINs, so only Windows administrators (and the hub itself) can open it. You don't need to: use the Start-menu shortcuts **Pitwall Open logs folder** and **Pitwall Open backups folder**, and the owner page. Any Windows user can open the logs and backups folders that way, but can't change them.
+
 Everything an owner changes is on the setup, owner and staff pages. `hub.toml` holds technical settings only (ports, recording, feature switches). If it ever has a mistake, the hub still starts with the standard settings and the staff and setup pages say which line is wrong.
 
 ## Renaming the product
