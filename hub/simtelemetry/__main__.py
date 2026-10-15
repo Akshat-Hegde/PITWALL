@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import csv
 import datetime as dt
-import io
 import json
 import logging
+import re
 import socket
 import sqlite3
 import subprocess
@@ -17,6 +16,7 @@ import threading
 import time
 import traceback
 import urllib.request
+import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
 
@@ -159,6 +159,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--config", type=Path, default=None, help="TOML config (default: config/hub.toml if present)")
     p.add_argument("--data-dir", type=Path, default=None, help="override data_dir from config")
     p.add_argument("--http-port", type=int, default=None, help="HTTP port the hub uses, to check it is stopped")
+
+    p = sub.add_parser("folder", help="print one of the hub's folders (the Start-menu shortcuts open it); reads only")
+    p.add_argument("which", choices=("data", "logs", "backups"))
+    p.add_argument("--config", type=Path, default=None, help="TOML config (default: config/hub.toml if present)")
+    p.add_argument("--data-dir", type=Path, default=None, help="override data_dir from config")
     return parser
 
 
@@ -395,6 +400,8 @@ def main(argv: list[str] | None = None) -> int:
         return backup_command(args, config)
     if args.command == "restore":
         return restore_command(args, config)
+    if args.command == "folder":
+        return folder_command(args, config)
     raise AssertionError(args.command)
 
 
@@ -466,6 +473,24 @@ def setup_code_command(args: argparse.Namespace, config: AppConfig) -> int:
     return 0
 
 
+def folder_command(args: argparse.Namespace, config: AppConfig) -> int:
+    """`folder data|logs|backups`: print the folder. Run by an ordinary Windows user (the "Open backups folder"
+    shortcut), who can only read the cafe's data folder, so it must never write anything."""
+    if args.which == "data":
+        print(config.data_dir)
+    elif args.which == "logs":
+        print(config.data_dir / "logs")
+    else:
+        try:
+            saved = SettingsStore(config.data_dir).load()
+        except Exception:                       # unreadable: the default folder is still a useful answer
+            saved = None
+        if saved is not None and saved.backup_dir:
+            config.set_owner_backup_dir(Path(saved.backup_dir))
+        print(config.backups_dir)
+    return 0
+
+
 def backup_command(args: argparse.Namespace, config: AppConfig) -> int:
     """`backup`: one backup now, in the folder chosen on the owner page (else hub.toml's); prints the zip path."""
     from .core.backup import make_backup, plain_backup_error, prune, record_backup
@@ -521,18 +546,54 @@ def hub_is_running(port: int) -> bool:
         return False
 
 
+TASK_NS = "{http://schemas.microsoft.com/windows/2004/02/mit/task}"
+
+
+def _decode_console(raw: bytes) -> str:
+    """schtasks output as text: UTF-16 when it writes wide characters to the pipe, else the console code page."""
+    if raw.startswith((b"\xff\xfe", b"\xfe\xff")) or raw[1:2] == b"\x00":
+        return raw.decode("utf-16", errors="replace")
+    for encoding in ("utf-8", "mbcs", "latin-1"):
+        try:
+            return raw.decode(encoding)
+        except (UnicodeDecodeError, LookupError):
+            continue
+    return raw.decode("latin-1", errors="replace")
+
+
+def task_xml_enabled(text: str) -> bool | None:
+    """Settings/Enabled of a task definition (as `schtasks /Query /XML` prints it). The XML is the same in every
+    Windows display language, unlike the Status column of the list output. None when it isn't a task definition."""
+    body = re.sub(r"^\s*<\?xml[^>]*\?>", "", text.lstrip("\ufeff"))   # the declaration names UTF-16; this is a str
+    try:
+        root = ET.fromstring(body.strip())
+    except ET.ParseError:
+        return None
+    if root.tag not in (f"{TASK_NS}Task", "Task"):
+        return None
+    settings = root.find(f"{TASK_NS}Settings")
+    if settings is None:
+        settings = root.find("Settings")
+    if settings is None:
+        return True                                     # no Settings block: the defaults, which are enabled
+    enabled = settings.find(f"{TASK_NS}Enabled")
+    if enabled is None:
+        enabled = settings.find("Enabled")
+    if enabled is None or enabled.text is None:
+        return True
+    return enabled.text.strip().lower() != "false"
+
+
 def task_enabled(name: str) -> bool | None:
     """Is the scheduled task `name` enabled? None when it can't be told (not Windows, no task, any error)."""
     try:
-        out = subprocess.run(["schtasks", "/Query", "/TN", name, "/FO", "CSV", "/NH"],
-                             capture_output=True, text=True, timeout=10, check=False)
+        out = subprocess.run(["schtasks", "/Query", "/TN", name, "/XML"],
+                             capture_output=True, timeout=10, check=False)
         if out.returncode != 0:
             return None
-        row = next(csv.reader(io.StringIO(out.stdout.strip().splitlines()[0])))
-        status = row[2].strip().lower()
+        return task_xml_enabled(_decode_console(out.stdout))
     except Exception:
         return None
-    return status != "disabled"
 
 
 def restore_task_warning() -> str | None:

@@ -1,0 +1,64 @@
+<!doctype html>
+<!-- Shown on the TV by tv-launcher.ps1 while the hub is not answering yet (right after the PCs start). It is a
+     local file, so it works offline and the TV never shows a browser error page. It polls the hub and opens the
+     TV page as soon as the hub answers. No product name (it comes from brand.py only) and no addresses: the TV
+     never shows technical details. Usage: waiting.html?to=<the TV page URL> -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Starting</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { height: 100%; margin: 0; background: #0b0d10; color: #e8eaed; overflow: hidden; }
+  body { display: flex; align-items: center; justify-content: center; font-family: "Segoe UI", system-ui, sans-serif; }
+  main { text-align: center; }
+  .dots { display: inline-flex; gap: 0.6vw; margin-bottom: 3vh; }
+  .dots span { width: 1.4vw; height: 1.4vw; min-width: 10px; min-height: 10px; border-radius: 50%; background: #e10600;
+               animation: pulse 1.4s ease-in-out infinite; }
+  .dots span:nth-child(2) { animation-delay: 0.2s; }
+  .dots span:nth-child(3) { animation-delay: 0.4s; }
+  h1 { font-size: 4vw; font-weight: 600; margin: 0 0 1.5vh; letter-spacing: 0.02em; }
+  p { font-size: 1.8vw; margin: 0; color: #9aa0a6; }
+  @keyframes pulse { 0%, 100% { opacity: 0.25; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1); } }
+</style>
+</head>
+<body>
+<main>
+  <div class="dots" aria-hidden="true"><span></span><span></span><span></span></div>
+  <h1>Starting up</h1>
+  <p>The screen appears by itself in a moment.</p>
+</main>
+<script>
+  (function () {
+    var DEFAULT = "http://localhost:8000/";
+    var to = new URLSearchParams(location.search).get("to") || DEFAULT;
+    if (!/^https?:\/\//i.test(to)) to = DEFAULT;            // only ever go to a web page
+    var origin;
+    try { origin = new URL(to).origin; } catch (e) { to = DEFAULT; origin = new URL(DEFAULT).origin; }
+    var going = false;
+
+    function go() {
+      if (going) return;
+      going = true;
+      location.replace(to);
+    }
+
+    // Two ways to notice the hub: a no-cors request (resolves as soon as anything answers) and an image load
+    // (the TV page's icon). Either one is enough.
+    function probe() {
+      var stamp = Date.now();
+      if (window.fetch) {
+        fetch(origin + "/api/health?t=" + stamp, { mode: "no-cors", cache: "no-store" }).then(go, function () {});
+      }
+      var img = new Image();
+      img.onload = go;
+      img.src = origin + "/favicon.svg?t=" + stamp;
+    }
+
+    probe();
+    setInterval(probe, 2000);
+  })();
+</script>
+</body>
+</html>

@@ -18,6 +18,30 @@ $brand = & $py -c "import json; from simtelemetry import brand; print(json.dumps
 & $py -m PyInstaller --noconfirm --clean --distpath "$root\dist" --workpath "$root\build" "$root\packaging\pitwall.spec"
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed" }
 $exe = "$root\dist\$($brand.EXE_NAME)\$($brand.EXE_NAME).exe"
+
+# Optional code signing (U8): only when <EXE_NAME>_SIGN_CERT (a .pfx file) and <EXE_NAME>_SIGN_PASS are set, e.g.
+# PITWALL_SIGN_CERT / PITWALL_SIGN_PASS; <EXE_NAME>_SIGN_TIMESTAMP may name a timestamp server URL. Skipped silently
+# otherwise. The exe is signed here, the installer and its uninstaller by Inno Setup (SignTool below).
+$signPrefix = $brand.EXE_NAME.ToUpper()
+$signCert = [Environment]::GetEnvironmentVariable("$($signPrefix)_SIGN_CERT")
+$signPass = [Environment]::GetEnvironmentVariable("$($signPrefix)_SIGN_PASS")
+$signTs = [Environment]::GetEnvironmentVariable("$($signPrefix)_SIGN_TIMESTAMP")
+$signtool = $null
+if ($signCert -and $signPass) {
+  if (-not (Test-Path $signCert)) { throw "The signing certificate $signCert was not found" }
+  $signtool = (Get-Command signtool.exe -ErrorAction SilentlyContinue).Source
+  if (-not $signtool) {
+    $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue |
+                Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
+  }
+  if (-not $signtool) { throw "signtool.exe not found: install the Windows SDK signing tools, or unset $($signPrefix)_SIGN_CERT" }
+  $tsArgs = @()
+  if ($signTs) { $tsArgs = @("/tr", $signTs, "/td", "SHA256") }
+  & $signtool sign /f $signCert /p $signPass /fd SHA256 @tsArgs $exe
+  if ($LASTEXITCODE -ne 0) { throw "Signing $exe failed (exit $LASTEXITCODE)" }
+  Write-Host "Signed $exe"
+}
+
 & $exe --version
 if ($LASTEXITCODE -ne 0) { throw "$exe --version failed (exit $LASTEXITCODE)" }
 $smokeHome = Join-Path $env:TEMP "$($brand.SLUG)-smoke"
@@ -44,8 +68,15 @@ $version = (& $exe --version).Split(" ")[-1]
 $iscc = @("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
           "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $iscc) { throw "Inno Setup 6 not found. Install it: winget install -e --id JRSoftware.InnoSetup" }
-& $iscc "/DAppName=$($brand.PRODUCT_NAME)" "/DExeName=$($brand.EXE_NAME)" "/DTaskName=$($brand.TASK_NAME)" `
-        "/DAppVersion=$version" "$root\packaging\pitwall.iss"
+$isccArgs = @("/DAppName=$($brand.PRODUCT_NAME)", "/DExeName=$($brand.EXE_NAME)", "/DTaskName=$($brand.TASK_NAME)",
+               "/DCompany=$($brand.COMPANY)", "/DAppVersion=$version")
+if ($signtool) {
+  # Inno Setup replaces $f with the quoted file to sign; a literal $ is written $$.
+  $ts = if ($signTs) { " /tr $signTs /td SHA256" } else { "" }
+  $isccArgs += @("/DSignInstaller=1",
+                 "/Ssigntool=`"$signtool`" sign /f `"$signCert`" /p `"$($signPass.Replace('$', '$$'))`" /fd SHA256$ts `$f")
+}
+& $iscc @isccArgs "$root\packaging\pitwall.iss"
 if ($LASTEXITCODE -ne 0) { throw "ISCC failed (exit $LASTEXITCODE)" }
 $installer = "$root\dist\$($brand.EXE_NAME)-Setup-$version.exe"
 if (-not (Test-Path $installer)) { throw "$installer was not produced" }

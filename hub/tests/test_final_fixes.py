@@ -118,24 +118,55 @@ async def test_backup_loop_catches_up_and_survives_any_exception(tmp_path, monke
 
 # --- finding 1: warning when the start-up task is enabled -------------------------------------------------------
 
-def _fake_run(stdout="", returncode=0):
-    return lambda *a, **k: subprocess.CompletedProcess(a[0], returncode, stdout=stdout, stderr="")
+def _fake_run(stdout: bytes = b"", returncode=0):
+    return lambda *a, **k: subprocess.CompletedProcess(a[0], returncode, stdout=stdout, stderr=b"")
 
 
-def test_task_enabled_parses_schtasks_csv(monkeypatch):
-    monkeypatch.setattr(subprocess, "run", _fake_run('"\\Pitwall Hub","N/A","Ready"\n'))
-    assert cli.task_enabled("Pitwall Hub") is True
-    monkeypatch.setattr(subprocess, "run", _fake_run('"\\Pitwall Hub","N/A","Disabled"\n'))
+def _task_xml(enabled: str | None, encoding="utf-16") -> bytes:
+    settings = f"<Enabled>{enabled}</Enabled>" if enabled is not None else ""
+    text = ('<?xml version="1.0" encoding="UTF-16"?>\r\n'
+            '<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">'
+            "<Triggers><BootTrigger><Enabled>true</Enabled></BootTrigger></Triggers>"
+            f"<Settings><Priority>5</Priority>{settings}</Settings></Task>\r\n")
+    return text.encode(encoding)
+
+
+def test_task_enabled_reads_the_task_xml_not_the_translated_status(monkeypatch):
+    """Language-independent: the Status column says "Deaktiviert" or "Désactivé" on other Windows languages."""
+    seen = []
+
+    def run(cmd, **kw):
+        seen.append(cmd)
+        return _fake_run(_task_xml("false"))(cmd, **kw)
+    monkeypatch.setattr(subprocess, "run", run)
     assert cli.task_enabled("Pitwall Hub") is False
-    monkeypatch.setattr(subprocess, "run", _fake_run("", returncode=1))
+    assert seen[0][-1] == "/XML" and "/TN" in seen[0]
+    monkeypatch.setattr(subprocess, "run", _fake_run(_task_xml("true")))
+    assert cli.task_enabled("Pitwall Hub") is True
+    monkeypatch.setattr(subprocess, "run", _fake_run(_task_xml(None)))         # no <Enabled>: Windows' default, on
+    assert cli.task_enabled("Pitwall Hub") is True
+    monkeypatch.setattr(subprocess, "run", _fake_run(_task_xml("false", "utf-8")))   # code-page output, not UTF-16
+    assert cli.task_enabled("Pitwall Hub") is False
+    monkeypatch.setattr(subprocess, "run", _fake_run(b"\xff\xfe" + _task_xml("false", "utf-16-le")))
+    assert cli.task_enabled("Pitwall Hub") is False
+    monkeypatch.setattr(subprocess, "run", _fake_run(b"", returncode=1))
     assert cli.task_enabled("Pitwall Hub") is None
-    monkeypatch.setattr(subprocess, "run", _fake_run("garbage"))
+    monkeypatch.setattr(subprocess, "run", _fake_run(b"garbage"))
+    assert cli.task_enabled("Pitwall Hub") is None
+    monkeypatch.setattr(subprocess, "run", _fake_run(b"<Other/>"))
     assert cli.task_enabled("Pitwall Hub") is None
 
     def missing(*a, **k):
         raise FileNotFoundError("schtasks")
     monkeypatch.setattr(subprocess, "run", missing)
     assert cli.task_enabled("Pitwall Hub") is None
+
+
+def test_the_trigger_enabled_flag_is_not_the_task_flag():
+    """<Enabled> also appears inside each trigger; only Settings/Enabled says whether the task is disabled."""
+    text = ('<Task xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task"><Triggers><TimeTrigger>'
+            "<Enabled>false</Enabled></TimeTrigger></Triggers><Settings><Enabled>true</Enabled></Settings></Task>")
+    assert cli.task_xml_enabled(text) is True
 
 
 def test_restore_warning_only_when_frozen_on_windows_with_enabled_task(monkeypatch):
@@ -177,3 +208,27 @@ def test_starter_config_equals_the_defaults():
     default = AppConfig()
     default.data_dir = cfg.data_dir                                   # both anchored to the home folder
     assert cfg.model_dump() == default.model_dump()
+
+
+# --- Task 7: "folder" (the Open backups / logs folder shortcuts) ------------------------------------------------
+
+def test_folder_command_prints_the_folders_and_writes_nothing(tmp_path, capsys):
+    data = tmp_path / "data"
+    assert cli.main(["folder", "logs", "--data-dir", str(data)]) == 0
+    assert capsys.readouterr().out.strip() == str(data / "logs")
+    assert cli.main(["folder", "backups", "--data-dir", str(data)]) == 0
+    assert capsys.readouterr().out.strip() == str(tmp_path / "backups")              # the default folder
+    assert not data.exists()                                                       # read only: nothing made
+    SettingsStore(data).save(SettingsStore(data).read() or _settings(str(tmp_path / "usb")))
+    assert cli.main(["folder", "backups", "--data-dir", str(data)]) == 0
+    assert capsys.readouterr().out.strip() == str(tmp_path / "usb")                # the owner's choice
+
+
+def _settings(backup_dir: str):
+    from simtelemetry.core.settings import CafeSettings
+    return CafeSettings(name="Cafe", owner_pin="2468", setup_done=True, backup_dir=backup_dir)
+
+
+def test_version_is_0_5_0():
+    import simtelemetry
+    assert simtelemetry.__version__ == "0.5.0"

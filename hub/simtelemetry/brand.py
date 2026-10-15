@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 
 PRODUCT_NAME = "Pitwall"
+COMPANY = "9T7 Racing"                                           # publisher: exe and installer details
 
 SLUG = re.sub(r"[^a-z0-9]+", "-", PRODUCT_NAME.lower()).strip("-")
 EXE_NAME = re.sub(r"[^A-Za-z0-9]+", "", PRODUCT_NAME)          # Pitwall.exe
@@ -21,4 +22,4 @@ HOME_ENV = f"{EXE_NAME.upper()}_HOME"                            # e.g. PITWALL_
 def as_dict() -> dict[str, str]:
     """For build scripts: `python -c "from simtelemetry import brand, json; print(json.dumps(brand.as_dict()))"`."""
     return {"PRODUCT_NAME": PRODUCT_NAME, "SLUG": SLUG, "EXE_NAME": EXE_NAME, "TASK_NAME": TASK_NAME,
-            "MDNS_HOST": MDNS_HOST, "HOME_ENV": HOME_ENV}
+            "MDNS_HOST": MDNS_HOST, "HOME_ENV": HOME_ENV, "COMPANY": COMPANY}

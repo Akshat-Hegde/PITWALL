@@ -9,7 +9,8 @@ from simtelemetry import brand, paths
 
 def test_derived_names():
     assert brand.as_dict() == {"PRODUCT_NAME": "Pitwall", "SLUG": "pitwall", "EXE_NAME": "Pitwall",
-                               "TASK_NAME": "Pitwall Hub", "MDNS_HOST": "pitwall.local", "HOME_ENV": "PITWALL_HOME"}
+                               "TASK_NAME": "Pitwall Hub", "MDNS_HOST": "pitwall.local", "HOME_ENV": "PITWALL_HOME",
+                               "COMPANY": "9T7 Racing"}
 
 
 def test_rename_flows_into_paths(monkeypatch, tmp_path):

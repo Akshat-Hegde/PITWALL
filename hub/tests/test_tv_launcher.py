@@ -54,3 +54,42 @@ def test_plain_launch_never_looks_up_the_product_name():
         assert "Get-ShortcutPath" in block
     lookup = text.split("function Get-ProductName", 1)[1].split("function Get-ShortcutPath", 1)[0]
     assert "try {" in lookup and "catch" in lookup and "--version" not in lookup and "python" not in lookup
+
+
+# --- Task 7: the local waiting page instead of a fixed wait ------------------------------------------------------
+
+WAITING = SCRIPT.parent / "waiting.html"
+
+
+def test_dry_run_offers_the_local_waiting_page():
+    out = run("-DryRun", "-Url", "http://192.168.1.64:8000/portrait")
+    if out.returncode == 2:
+        pytest.skip("no Edge or Chrome on this PC")
+    (line,) = [ln for ln in out.stdout.splitlines() if ln.startswith("WAITING ")]
+    assert line.startswith("WAITING file:///") and "/waiting.html?to=" in line
+    assert line.endswith("to=http%3A%2F%2F192.168.1.64%3A8000%2Fportrait")
+
+
+def test_launcher_no_longer_waits_a_fixed_time():
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert "WaitSeconds" not in text and "AddSeconds" not in text
+    assert "waiting.html" in text and "$browserArgs[1] = $waitingUrl" in text
+
+
+def test_waiting_page_is_offline_plain_and_unbranded():
+    page = WAITING.read_text(encoding="utf-8")
+    assert "<script src" not in page and "<link" not in page and "@import" not in page   # nothing from the internet
+    assert brand.PRODUCT_NAME not in page and brand.SLUG not in page.lower()           # name only from brand.py
+    assert "location.replace(to)" in page and "setInterval(probe" in page
+    assert r"/^https?:\/\//i.test(to)" in page                                     # only ever goes to a web page
+    assert "/api/health" in page
+
+
+def test_open_folder_script_parses_and_asks_the_hub_program():
+    script = SCRIPT.parent / "open-folder.ps1"
+    check = ("$errors = $null; [System.Management.Automation.Language.Parser]::ParseFile("
+             f"'{script}', [ref]$null, [ref]$errors) | Out-Null; $errors.Count")
+    out = subprocess.run(["powershell", "-NoProfile", "-Command", check], capture_output=True, text=True, timeout=60)
+    assert out.stdout.strip() == "0", out.stdout + out.stderr
+    text = script.read_text(encoding="utf-8")
+    assert "& $Exe folder $Which" in text and "Test-Path -LiteralPath $folder -PathType Container" in text

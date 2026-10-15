@@ -3,9 +3,10 @@
   Opens the TV dashboard full screen (kiosk mode) in Edge or Chrome, with sound allowed.
 
 .DESCRIPTION
-  Run it on the PC that drives the TV. It waits until the hub answers (handy right after the PC starts), then
-  opens the dashboard in kiosk mode with --autoplay-policy=no-user-gesture-required, so moment sounds play
-  without anyone clicking the page. The browser uses its own profile folder, so it doesn't touch anyone's
+  Run it on the PC that drives the TV. It opens the dashboard in kiosk mode with
+  --autoplay-policy=no-user-gesture-required, so moment sounds play without anyone clicking the page. When the hub
+  is not answering yet (right after the PCs start), it opens the local waiting.html next to this script instead:
+  that page waits for the hub and switches to the dashboard by itself, so the TV never shows a browser error. The browser uses its own profile folder, so it doesn't touch anyone's
   normal browsing. Press Alt+F4 to close it.
 
   -StartOnLogin adds a shortcut to this Windows user's Startup folder, so the TV opens by itself after a
@@ -21,7 +22,6 @@ param(
   [string]$Url = "http://localhost:8000/",
   [ValidateSet("auto", "edge", "chrome")]
   [string]$Browser = "auto",
-  [int]$WaitSeconds = 120,          # how long to wait for the hub before opening anyway
   [switch]$StartOnLogin,
   [switch]$RemoveStartOnLogin,
   [switch]$DryRun                   # print what would run, start nothing (used by the tests)
@@ -113,25 +113,33 @@ $browserArgs = @(
   "--kiosk", $Url,
   "--autoplay-policy=no-user-gesture-required",
   "--no-first-run",
-  "--disable-features=Translate",
+  "--disable-features=Translate,LocalNetworkAccessChecks",   # the waiting page (a local file) may ask the hub
   "--disable-session-crashed-bubble",
   "--noerrdialogs",
   "--user-data-dir=`"$profileDir`""
 )
 if ($isEdge) { $browserArgs += "--edge-kiosk-type=fullscreen" }
 
+# The hub answering now? Then open the TV page straight away; otherwise the local waiting page, which opens it
+# as soon as the hub answers (never a browser error page on the TV).
+$waitingFile = Join-Path $PSScriptRoot "waiting.html"
+$waitingUrl = $null
+if (Test-Path -LiteralPath $waitingFile) {
+  $waitingUrl = ([Uri]$waitingFile).AbsoluteUri + "?to=" + [Uri]::EscapeDataString($Url)
+}
+
 if ($DryRun) {
   Write-Output "BROWSER $exe"
   Write-Output ("ARGS " + ($browserArgs -join " "))
+  if ($waitingUrl) { Write-Output "WAITING $waitingUrl" }
   exit 0
 }
 
-# Wait for the hub, so the first thing on the TV isn't "can't reach this page".
 $health = ([Uri]$Url).GetLeftPart([UriPartial]::Authority) + "/api/health"
-$deadline = (Get-Date).AddSeconds($WaitSeconds)
-while ((Get-Date) -lt $deadline) {
-  try { Invoke-WebRequest -UseBasicParsing -Uri $health -TimeoutSec 3 | Out-Null; break }
-  catch { Start-Sleep -Seconds 2 }
+$answers = $false
+try { Invoke-WebRequest -UseBasicParsing -Uri $health -TimeoutSec 3 | Out-Null; $answers = $true } catch { }
+if (-not $answers -and $waitingUrl) {
+  $browserArgs[1] = $waitingUrl
 }
 
 Start-Process -FilePath $exe -ArgumentList $browserArgs
