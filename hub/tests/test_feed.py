@@ -517,3 +517,53 @@ async def test_session_uid_zero_keeps_live_state(tmp_path):
     rig = FeedBuilder(hub).frame_body(last_seen(hub))["rigs"][0]
     assert rig["session"]["session_id"] == f"{0x11:016x}" and rig["session"]["track_key"] == "F1:7"
     assert rig["speed_kph"] == 287
+
+
+def motion_at_frame(fmt, uid, frame, x=1.0, z=2.0):
+    pkt = blank_packet(fmt, PacketId.MOTION, player=PLAYER, session_uid=uid, frame=frame, overall_frame=frame)
+    base = FORMATS[fmt].packets[PacketId.MOTION].offset_of("m_carMotionData") + PLAYER * FORMATS[fmt].car_motion.size
+    set_fields(pkt, FORMATS[fmt].car_motion, base, m_worldPositionX=x, m_worldPositionY=5.0, m_worldPositionZ=z)
+    return bytes(pkt)
+
+
+async def test_single_player_pause_frozen_frame_is_not_driving(tmp_path):
+    hub = make_hub(tmp_path)
+    clock = [100.0]
+    hub.adapter._clock = lambda: clock[0]
+    await feed(hub, [(RIG_A, session(2025, 0x11)), (RIG_A, motion_at_frame(2025, 0x11, 500))])
+    driving_at = hub.health.get(RIG_A).last_driving
+    assert driving_at is not None
+    # Paused in Time Trial: packets keep coming, m_gamePaused stays 0, the frame id stops.
+    for _ in range(5):
+        clock[0] += 0.3
+        hub.health.get(RIG_A).last_driving = None
+        await feed(hub, [(RIG_A, motion_at_frame(2025, 0x11, 500))])
+    assert hub.health.get(RIG_A).last_driving is None
+    assert hub.health.state(RIG_A, last_seen(hub) + 3).value == "in_menu_paused"
+    # Unpaused: the frame id moves again and Motion is driving at once.
+    clock[0] += 0.05
+    await feed(hub, [(RIG_A, motion_at_frame(2025, 0x11, 501))])
+    assert hub.health.get(RIG_A).last_driving is not None
+
+
+async def test_stationary_car_with_advancing_frames_is_still_driving(tmp_path):
+    hub = make_hub(tmp_path)
+    clock = [100.0]
+    hub.adapter._clock = lambda: clock[0]
+    await feed(hub, [(RIG_A, session(2025, 0x11))])
+    for frame in range(600, 620):          # sitting in the garage: same position, frames still advancing
+        clock[0] += 0.3
+        hub.health.get(RIG_A).last_driving = None
+        await feed(hub, [(RIG_A, motion_at_frame(2025, 0x11, frame))])
+        assert hub.health.get(RIG_A).last_driving is not None
+
+
+async def test_frame_stall_needs_half_a_second(tmp_path):
+    hub = make_hub(tmp_path)
+    clock = [100.0]
+    hub.adapter._clock = lambda: clock[0]
+    await feed(hub, [(RIG_A, session(2025, 0x11)), (RIG_A, motion_at_frame(2025, 0x11, 700))])
+    clock[0] += 0.4                         # several packet types share one frame id: not a pause
+    hub.health.get(RIG_A).last_driving = None
+    await feed(hub, [(RIG_A, motion_at_frame(2025, 0x11, 700))])
+    assert hub.health.get(RIG_A).last_driving is not None

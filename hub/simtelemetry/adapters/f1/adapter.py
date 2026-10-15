@@ -50,6 +50,25 @@ class F1Adapter:
         self._laps: dict[str, F1LapTracker] = {}
         self._slides: dict[str, SlideDetector] = {}
         self._paused: dict[str, bool] = {}      # game paused or spectating (from the Session packet): not driving
+        # Frame stall: per source, the last overall frame id and when (clock) it last changed.
+        self._frames: dict[str, tuple[int, float]] = {}
+        self._clock = time.monotonic
+
+    # m_gamePaused is only set in network games (F1_25_structures.txt), so a single-player pause
+    # (e.g. Time Trial) is spotted another way: packets keep arriving but the header's overall
+    # frame identifier stops advancing. A car standing still in the garage or pits still has
+    # advancing frames, so it is unaffected. TODO: confirm with a real paused Time Trial capture
+    # that the game keeps sending packets with a frozen frame id (if it stops sending instead,
+    # the no-data handling already covers it).
+    FRAME_STALL_S = 0.5
+
+    def _frame_stalled(self, source: str, frame: int) -> bool:
+        now = self._clock()
+        seen = self._frames.get(source)
+        if seen is None or seen[0] != frame:
+            self._frames[source] = (frame, now)
+            return False
+        return now - seen[1] >= self.FRAME_STALL_S
 
     def check(self, data: bytes, source: str) -> Checked:
         result = self._gate.check(data, source)
@@ -71,9 +90,12 @@ class F1Adapter:
                 self._live.pop(source, None)  # a different real session: nothing from the old one carries over
                 self._slides.pop(source, None)
                 self._paused.pop(source, None)
+                self._frames.pop(source, None)
             self._session_of[source] = session_id
         live = self._live.setdefault(source, LiveSummary())
         result = DecodeResult()
+        header = getattr(checked.payload, "header", None)
+        stalled = self._frame_stalled(source, header.overall_frame_identifier) if header is not None else False
         if packet is not None and hasattr(packet, "header"):
             tracker = self._laps.setdefault(source, F1LapTracker())
             uid = packet.header.session_uid or tracker.session_uid or 0   # UID 0 (menus) keeps the current session
@@ -83,7 +105,8 @@ class F1Adapter:
             live.position = (packet.position[0], packet.position[2])
             live.g_lat = round(packet.g_force_lateral, 2)
             live.g_long = round(packet.g_force_longitudinal, 2)
-            result.driving = not self._paused.get(source, False)   # paused or spectating is not driving
+            # Paused (network game), spectating, or a single-player pause (frame id stalled): not driving.
+            result.driving = not self._paused.get(source, False) and not stalled
         elif isinstance(packet, Session):
             self._paused[source] = packet.game_paused or packet.is_spectating
             live.track = track_name(packet.track_id, self._track_overrides)
