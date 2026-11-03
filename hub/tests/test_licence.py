@@ -7,8 +7,8 @@ from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 from simtelemetry import brand, licence, licence_pubkey
 from simtelemetry.config import FeaturesConfig
-from simtelemetry.licence import (ALREADY_INSTALLED, FALLBACK, INVALID, OLDER, OTHER_CAFE, LicenceError, accept_new,
-                                  encode_payload, entitlements_from, make_code, parse, verify)
+from simtelemetry.licence import (ALREADY_INSTALLED, FALLBACK, INVALID, OLDER, LicenceError, OtherCafeError, accept_new,
+                                  encode_payload, entitlements_from, make_code, other_cafe, parse, verify)
 
 
 def raw_public(key: Ed25519PrivateKey) -> bytes:
@@ -232,9 +232,37 @@ def test_higher_seq_same_cafe_is_accepted(trusted):
 
 def test_other_cafe_is_refused(trusted):
     current = entitlements_from(verify(sign(trusted, payload(seq=1))))
-    with pytest.raises(LicenceError) as exc:
-        accept_new(current, verify(sign(trusted, payload(cafe_id="cafe-b", seq=5))))
-    assert str(exc.value) == OTHER_CAFE
+    with pytest.raises(OtherCafeError) as exc:
+        accept_new(current, verify(sign(trusted, payload(cafe_id="cafe-b", cafe_name="Kart Hub", seq=5))))
+    assert str(exc.value) == "This code is for Kart Hub. This PC belongs to Apex Lounge."
+
+
+# --- Decision 9.2 (user, 2026-11-03): whose PC it is decides, even before any licence -----------------------
+
+def test_other_cafe_is_refused_on_a_stamped_pc_without_a_licence(trusted):
+    new = verify(sign(trusted, payload(cafe_id="cafe-b", cafe_name="Kart Hub")))
+    for current in (None, FALLBACK):
+        with pytest.raises(OtherCafeError) as exc:
+            accept_new(current, new, owner=("cafe-a", "Apex Lounge"))
+        assert str(exc.value) == "This code is for Kart Hub. This PC belongs to Apex Lounge."
+    assert accept_new(None, verify(sign(trusted, payload())), owner=("cafe-a", "Apex Lounge")).cafe_id == "cafe-a"
+
+
+def test_a_pc_with_no_stamp_and_no_licence_accepts_any_cafe(trusted):
+    new = verify(sign(trusted, payload(cafe_id="cafe-b", cafe_name="Kart Hub")))
+    assert accept_new(None, new).cafe_id == "cafe-b"
+    assert accept_new(FALLBACK, new).cafe_id == "cafe-b"
+
+
+def test_the_stamp_names_the_pc_before_the_installed_licence(trusted):
+    current = entitlements_from(verify(sign(trusted, payload(seq=1))))           # Apex Lounge's licence
+    new = verify(sign(trusted, payload(seq=2, licence_id="lic-2")))
+    with pytest.raises(OtherCafeError, match="This PC belongs to Kart Hub"):
+        accept_new(current, new, owner=("cafe-b", "Kart Hub"))
+    # stamp and code agree but the installed licence is another cafe's: still refused, never mixed up
+    with pytest.raises(OtherCafeError, match="This PC belongs to Apex Lounge"):
+        accept_new(current, verify(sign(trusted, payload(cafe_id="cafe-b", cafe_name="Kart Hub", seq=9))),
+                   owner=("cafe-b", "Kart Hub"))
 
 
 @pytest.mark.parametrize("seq", [0, 1, 2])
@@ -254,7 +282,7 @@ def test_same_code_again_says_already_installed(trusted):
 
 
 def test_messages_are_plain_english():
-    for msg in (INVALID, OTHER_CAFE, OLDER, ALREADY_INSTALLED):
+    for msg in (INVALID, other_cafe("Kart Hub", "Apex Lounge"), OLDER, ALREADY_INSTALLED):
         assert msg.endswith(".") and not any(w in msg.lower() for w in ("signature", "seq", "payload", "base64"))
 
 

@@ -639,13 +639,17 @@ class Hub:
         return self._entitlements
 
     def apply_licence(self, code: Any) -> licence.Entitlements:
-        """A new code from the owner page: verified, checked against the current licence (same cafe, higher seq;
-        a missing or damaged file counts as no licence yet, so the owner can recover), saved, and applied at once
-        with no restart; every TV gets a fresh snapshot. Raises LicenceError with the owner's plain message.
+        """A new code from the owner page: verified, checked against whose PC this is (cafe.json, else the installed
+        licence: another cafe's code is refused, Decision 9.2) and the current licence (higher seq; a missing or
+        damaged file counts as no licence yet, so the owner can recover), saved, and applied at once with no
+        restart; every TV gets a fresh snapshot. Raises LicenceError with the owner's plain message.
         Call it on the event loop thread (the owner route is async): the hooks change state the feed reads."""
+        from .provision import read_stamp                   # cafe.json, written by a cafe installer
         with self._licence_lock:
             new = licence.verify(code)
-            ent = licence.accept_new(self._entitlements, new)
+            stamp = read_stamp(self.config.data_dir)
+            owner = (stamp.cafe_id, stamp.name) if stamp is not None else None
+            ent = licence.accept_new(self._entitlements, new, owner)
             try:
                 licence.write_file(self.config.data_dir, new)
             except OSError:

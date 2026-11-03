@@ -121,7 +121,7 @@ The checks are plain English ("Choose a logo under 1 MB", "An unbranded build ne
 - The licence lives in `<data>\licence.txt`, readable only by SYSTEM and Administrators (the existing data ACL), and is included in backups.
 - A new code entered on the owner page is accepted only if it:
   - verifies;
-  - has the same `cafe_id`, or there is no licence yet;
+  - is for the cafe this PC belongs to: the `cafe_id` in `cafe.json`, else the installed licence's; a PC with neither accepts any valid code (first time). Decision 9.2 (user, 2026-11-03): another cafe's code is refused even with no licence yet; a PC changing hands is reinstalled by the seller with the new cafe's package and `/FORCEOTHERCAFE`;
   - has a `seq` higher than the current one.
 
   So an old code can't be re-entered to downgrade, and another cafe's code is refused with a plain message.
@@ -149,7 +149,7 @@ The checks are plain English ("Choose a logo under 1 MB", "An unbranded build ne
 - **Owner page:** a Licence card shows:
   - "Licensed to {cafe} · {rigs} rigs · {games}";
   - the licence id;
-  - an **Enter new code** box with plain errors ("This code is for a different cafe", "This code is older than the one installed", "This code isn't valid: check you copied all of it").
+  - an **Enter new code** box with plain errors ("This code is for {other cafe}. This PC belongs to {cafe}.", "This code is older than the one installed", "This code isn't valid: check you copied all of it").
 
   A new code applies instantly: no restart, and the TV refreshes through the feed.
 

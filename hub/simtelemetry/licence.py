@@ -9,7 +9,9 @@ API (errors are exceptions, never return values):
 - `entitlements_from(licence) -> Entitlements`
 - `encode_payload(dict | LicencePayload) -> bytes`, `check_payload(bytes) -> LicencePayload`, `make_code(payload, sig)`
                                                 for the factory, which signs exactly these bytes
-- `accept_new(current, new) -> Entitlements`    raises LicenceError (OTHER_CAFE, OLDER, ALREADY_INSTALLED)
+- `accept_new(current, new, owner=None) -> Entitlements`
+                                                raises OtherCafeError (`other_cafe(...)`) or LicenceError (OLDER,
+                                                ALREADY_INSTALLED)
 - `FALLBACK`                                    used when there is no licence or it is damaged
 - `read_file(data_dir) -> Licence | None`       <data>/licence.txt; None when missing, LicenceError when damaged
 - `write_file(data_dir, licence)`               atomic (a power cut never leaves half a file)
@@ -42,7 +44,6 @@ SIG_LEN = 64
 MAX_CODE_LEN = 20_000      # a real code is well under 1,000 characters; anything far longer is refused unread
 
 INVALID = "This code isn't valid: check you copied all of it."
-OTHER_CAFE = "This code is for a different cafe."
 OLDER = "This code is older than the one installed."
 ALREADY_INSTALLED = "This code is already installed."
 SAVE_FAILED = "The code couldn't be saved on this PC. Try again; if it keeps happening, restart the hub PC."
@@ -73,6 +74,15 @@ Name = Annotated[str, StringConstraints(min_length=1, max_length=40, pattern=_TE
 
 class LicenceError(ValueError):
     """A code that can't be used; the message is shown to the owner as-is."""
+
+
+class OtherCafeError(LicenceError):
+    """A validly signed code for a cafe other than the one this PC belongs to (Decision 9.2: refused)."""
+
+
+def other_cafe(code_cafe: str | None, pc_cafe: str | None) -> str:
+    """The owner page's refusal of another cafe's code."""
+    return f"This code is for {code_cafe or 'another cafe'}. This PC belongs to {pc_cafe or 'another cafe'}."
 
 
 class LicencePayload(BaseModel):
@@ -228,13 +238,25 @@ def entitlements_from(licence: Licence) -> Entitlements:
                         seq=p.seq, source="licence")
 
 
-def accept_new(current: Entitlements | None, new: Licence) -> Entitlements:
-    """Whether a verified new code may replace the current one: same cafe (or no real licence yet) and a higher seq."""
+def accept_new(current: Entitlements | None, new: Licence,
+               owner: tuple[str, str] | None = None) -> Entitlements:
+    """Whether a verified new code may replace the current one: the code is for the cafe this PC belongs to, and
+    has a higher seq than the installed licence.
+
+    `owner` is (cafe_id, name) from the PC's cafe.json stamp, when it has one. Whose PC it is: the stamp, else the
+    installed licence. A PC with neither (or with only a damaged licence file) accepts any valid code: first time.
+    Decision 9.2: another cafe's code is refused even when there is no licence yet; a PC that changes hands is
+    reinstalled by the seller with the new cafe's package and /FORCEOTHERCAFE."""
     ent = entitlements_from(new)
-    if current is None or current.source == "fallback":
+    real = current is not None and current.source != "fallback"
+    if owner is None and real:
+        owner = (current.cafe_id or "", current.cafe_name or "")
+    if owner is not None and ent.cafe_id != owner[0]:
+        raise OtherCafeError(other_cafe(ent.cafe_name, owner[1]))
+    if not real:
         return ent
-    if ent.cafe_id != current.cafe_id:
-        raise LicenceError(OTHER_CAFE)
+    if ent.cafe_id != current.cafe_id:                   # the stamp and the installed licence disagree
+        raise OtherCafeError(other_cafe(ent.cafe_name, current.cafe_name))
     if ent.seq == current.seq and ent.licence_id == current.licence_id:
         raise LicenceError(ALREADY_INSTALLED)
     if ent.seq <= current.seq:

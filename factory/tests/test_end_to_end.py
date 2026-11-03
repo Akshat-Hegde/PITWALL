@@ -229,7 +229,7 @@ async def test_9t7_cafe_from_profile_to_tv_and_add_on_codes(factory):
         r = post_code(client, old)
         assert r.status_code == 400 and r.json()["detail"] == licence.OLDER
     r = post_code(client, other_build.code)
-    assert r.status_code == 400 and r.json()["detail"] == licence.OTHER_CAFE
+    assert r.status_code == 400 and r.json()["detail"] == "This code is for Kart Hub. This PC belongs to Apex Lounge."
     r = post_code(client, up.code)
     assert r.status_code == 400 and r.json()["detail"] == licence.ALREADY_INSTALLED
     assert hub.entitlements.seq == 3

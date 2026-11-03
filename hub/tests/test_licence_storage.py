@@ -14,10 +14,12 @@ from simtelemetry.api.app import create_app
 from simtelemetry.core.backup import BACKED_UP_FILES, make_backup, restore
 from simtelemetry.core.feed import FeedBuilder, FeedConnection
 from simtelemetry.licence import (ALREADY_INSTALLED, DAMAGED, FALLBACK, INVALID, LICENCE_FILE, NO_LICENCE, OLDER,
-                                  OTHER_CAFE, LicenceError, read_file, write_file)
+                                  LicenceError, OtherCafeError, other_cafe, read_file, write_file)
 
 from licence_helpers import CAFE_ID, Signer, trust
 from test_drivers import make_hub
+
+OTHER_CAFE = other_cafe("Kart Hub", "Apex Lounge")      # the refusal of Kart Hub's code on Apex Lounge's PC
 
 OWNER = {"X-Owner-Pin": "2468"}
 
@@ -129,11 +131,57 @@ def test_damaged_file_counts_as_no_licence_yet_so_the_owner_can_recover(tmp_path
     assert ent.cafe_id == "another-cafe" and hub.licence_problem is None
 
 
+def write_stamp(data_dir, cafe_id, name):
+    import json
+    (data_dir / "cafe.json").write_text(json.dumps({"cafe_id": cafe_id, "name": name}), encoding="utf-8")
+
+
+def test_a_stamped_pc_refuses_another_cafes_code_even_without_a_licence(tmp_path, signer):
+    """Decision 9.2 (user, 2026-11-03): cafe.json says whose PC it is; another cafe's code is refused there."""
+    write_stamp(tmp_path, CAFE_ID, "Apex Lounge")
+    hub = make_hub(tmp_path)
+    hub.load_licence()
+    epoch = hub.feed_epoch
+    with pytest.raises(OtherCafeError) as exc:
+        hub.apply_licence(signer.code(cafe_id="cafe-other", cafe_name="Kart Hub"))
+    assert str(exc.value) == OTHER_CAFE
+    assert hub.entitlements is FALLBACK and not (tmp_path / LICENCE_FILE).exists() and hub.feed_epoch == epoch
+    assert hub.apply_licence(signer.code()).cafe_id == CAFE_ID                   # its own cafe's code works
+
+
+def test_a_damaged_licence_on_a_stamped_pc_takes_only_that_cafes_code(tmp_path, signer):
+    write_stamp(tmp_path, CAFE_ID, "Apex Lounge")
+    (tmp_path / LICENCE_FILE).write_text("rubbish", encoding="utf-8")
+    hub = make_hub(tmp_path)
+    hub.load_licence()
+    with pytest.raises(OtherCafeError, match="This PC belongs to Apex Lounge"):
+        hub.apply_licence(signer.code(cafe_id="cafe-other", cafe_name="Kart Hub"))
+    assert hub.apply_licence(signer.code()).cafe_id == CAFE_ID and hub.licence_problem is None
+
+
+def test_a_damaged_stamp_falls_back_to_the_installed_licence(tmp_path, signer):
+    (tmp_path / "cafe.json").write_text("{oops", encoding="utf-8")
+    hub = make_hub(tmp_path)
+    hub.apply_licence(signer.code(seq=1))
+    with pytest.raises(OtherCafeError, match="This PC belongs to Apex Lounge"):
+        hub.apply_licence(signer.code(cafe_id="cafe-other", cafe_name="Kart Hub", seq=2))
+
+
+def test_owner_page_shows_the_other_cafe_refusal(tmp_path, signer):
+    write_stamp(tmp_path, CAFE_ID, "Apex Lounge")
+    hub, client = owner_client(tmp_path)
+    hub.load_licence()
+    r = client.post("/api/owner/licence", json={"code": signer.code(cafe_id="cafe-other", cafe_name="Kart Hub")},
+                    headers=OWNER)
+    assert r.status_code == 400 and r.json()["detail"] == "This code is for Kart Hub. This PC belongs to Apex Lounge."
+
+
 def test_rules_against_the_current_licence(tmp_path, signer):
     hub = make_hub(tmp_path)
     hub.apply_licence(signer.code(seq=3, licence_id="lic-3"))
-    with pytest.raises(LicenceError, match=OTHER_CAFE):
-        hub.apply_licence(signer.code(cafe_id="cafe-other", seq=9))
+    with pytest.raises(OtherCafeError) as exc:
+        hub.apply_licence(signer.code(cafe_id="cafe-other", cafe_name="Kart Hub", seq=9))
+    assert str(exc.value) == OTHER_CAFE
     with pytest.raises(LicenceError, match=OLDER):
         hub.apply_licence(signer.code(seq=2, licence_id="lic-2"))
     with pytest.raises(LicenceError, match=ALREADY_INSTALLED):
@@ -176,7 +224,7 @@ def test_owner_licence_api_happy_path(tmp_path, signer):
     (lambda s: Signer().code(seq=5), INVALID),                              # signed by someone else
     (lambda s: "", INVALID),
     (lambda s: 12345, INVALID),
-    (lambda s: s.code(cafe_id="cafe-other", seq=5), OTHER_CAFE),
+    (lambda s: s.code(cafe_id="cafe-other", cafe_name="Kart Hub", seq=5), OTHER_CAFE),
     (lambda s: s.code(seq=1, licence_id="lic-1"), OLDER),
     (lambda s: s.code(seq=2), ALREADY_INSTALLED),
 ])

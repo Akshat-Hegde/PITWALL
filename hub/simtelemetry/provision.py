@@ -609,7 +609,7 @@ def _install_licence(data_dir: Path, baked: Baked, current: licence.Licence | No
         ent = licence.accept_new(licence.entitlements_from(current) if current else None, new)
     except licence.LicenceError as exc:
         log.info("Kept this PC's licence: %s", exc)
-        if str(exc) == licence.OTHER_CAFE:
+        if isinstance(exc, licence.OtherCafeError):
             return "The licence in this installer is for a different cafe, so the one on this PC was kept."
         return "The licence on this PC is already up to date, so it was kept."
     licence.write_file(data_dir, new)

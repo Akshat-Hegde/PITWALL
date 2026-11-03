@@ -110,6 +110,7 @@ Your licence says how many rigs, which games and which features your cafe has. I
 - **More rigs than the licence covers.** Extra rigs still record laps and show on the staff page (marked "Not licensed"), but the TV shows only the licensed rigs. The staff and owner pages say so and who to contact.
 - **"No licence found. Contact your supplier."** The hub runs as a 4-rig licence until the code is entered. Ask your supplier for your code and enter it on the owner page.
 - **Installer for another cafe.** Each cafe's installer is made for that cafe. If it belongs to another cafe, it stops before changing anything and says so.
+- **Code for another cafe.** A licence code works only on the cafe it was made for. Another cafe's code is refused ("This code is for Kart Hub. This PC belongs to Apex Lounge.") and nothing changes. If the hub PC has moved to a new cafe, ask your supplier: they reinstall it for the new cafe.
 
 ## Start-menu shortcuts (hub PC)
 
