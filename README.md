@@ -485,6 +485,57 @@ when its `build-stamp.json` matches this version and a clean git commit, and onl
 
 Double-clicking `Pitwall.exe` (no arguments) starts the hub, same as `run`.
 
+## Factory (seller only)
+
+The factory is the seller's window for making each cafe's package: its profile (name, logo, colour, Wi-Fi, hours,
+rigs, games, features, branding and price), its licence, and a ready-to-ship folder. It runs on the seller's PC
+only and is never part of a cafe's installer. It needs no internet.
+
+**Starting it.** Double-click `Pitwall Factory.cmd` in the repo root (it runs `.venv\Scripts\pythonw -m factory`;
+do the [Setup](#setup-windows-python-311) first). The window has the cafe list on the left (search box, **New cafe**),
+the tabs **Cafe**, **Rigs & games**, **Features** and **Branding & price** on the right, and the buttons **Preview**,
+**Build package**, **Issue upgrade**, **Rebuild all** and **Open shipments folder** at the bottom. Anything that stops
+a build is written in red next to its field, and the tab says how many things are left to fix. Press **Save** to
+keep your changes (the factory asks before you leave a cafe with unsaved changes; Build package, Issue upgrade and
+Rebuild all save the cafe first). Long jobs show a progress bar with **Cancel**, which removes everything that job
+wrote. If something fails, the message says what to do, and **Show details** has the full log.
+
+**Signing key (first run).** Every licence is signed with your private key, kept only on this PC in
+`%APPDATA%\PitwallFactory\keys` (never in the repo, a package or Shipments).
+
+1. Press **Set up keys** on the red banner. It makes the key and adds its public half to
+   `hub\simtelemetry\licence_pubkey.py`. Commit that file. Cafes' hubs only accept licences from a program that
+   knows your key, so the program must be built again: the next **Build package** does that by itself (several
+   minutes, once).
+2. Press **Copy key to…** and choose a USB drive. The red "Back up your signing key" banner stays until you do.
+   Keep the drive safe and away from the PC: anyone with the key can make licences.
+
+If the key is lost (and there is no backup): delete the old `public.pem` in the key folder and use **Set up keys**
+again. The old key stays trusted, so cafes you already sold keep working, but codes made with the new key need a
+program that knows it: send those cafes a new package (or rebuild theirs) before their next add-on code.
+
+**Workflow.**
+- **New cafe:** New cafe → fill in the four tabs → Save → **Preview** (the cafe's TV, staff page and a phone-sized
+  check-in window open on this PC with demo cars; **Stop preview** closes them) → **Build package** → send the
+  whole package folder to the cafe (installer, setup guide, licence certificate, guide video, README).
+- **Add-on** (more rigs, a game or a feature): open the cafe, change the rigs, games or features, Save, then
+  **Issue upgrade**. Type the add-ons' price (rigs alone get the list price for 9T7 Racing). The new code is shown
+  with a **Copy code** button, and an upgrade certificate is saved; the owner pastes the code into "Enter new code"
+  on the owner page and presses "Use this code". No reinstall.
+- **New version of the program:** **Rebuild all** rebuilds every built cafe's package with the same rigs, games
+  and features and shows a table of what happened. A cafe whose details changed since its last licence is left for
+  you (use Issue upgrade or Build package for it).
+
+**Where things live.** Packages and cafe files go to the Shipments folder (default `Documents\Pitwall Shipments`;
+change it in **Settings…**, which also has the Microsoft Edge location and the key backup). Cafe files are in
+`<Shipments>\profiles`. Keep Shipments outside the repo; `.gitignore` also blocks `Shipments/`, `/profiles/` and
+`*.key`. The factory's own settings and log are in `%APPDATA%\PitwallFactory`.
+
+**Files to copy in by hand (LOCAL, not in git):** the two guide videos as `factory\assets\video\9t7.mp4` and
+`factory\assets\video\unbranded.mp4` (see the README there; a variant without its video can't be built), and the
+9T7 Racing logo as `factory\assets\brand\9t7-logo.svg` or `.png` (see the README there). Building also needs Inno
+Setup 6 and the `.venv-build` described above, and Microsoft Edge (for the PDFs).
+
 ## Docs
 
 - [docs/INSTALL.md](docs/INSTALL.md): installing at a cafe (the Windows warning, antivirus, router, setup, guest
