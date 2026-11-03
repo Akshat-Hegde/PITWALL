@@ -56,8 +56,8 @@ export class DashboardStore {
       return;
     }
     if (msg.type === "snapshot" || msg.type === "frame") {
-      const frames = msg.type === "snapshot" ? msg.frame.rigs : msg.rigs;
-      for (const frame of frames) {
+      // The reducer's frames: only rigs the hub described in rig_info.
+      for (const frame of Object.values(this.state.frames)) {
         this.lapShare.add(frame);
         this.laps.add(frame);
         this.live.add(frame, now);

@@ -114,6 +114,8 @@ Compatibility rules:
   rigs (a podium or race podium loses their lines; a `tv.pinned_rig` beyond the licence reads as `null`;
   `status` leaves out their formats and warnings). Their laps are still recorded and shown on the staff page.
   If a rig the TV already has falls outside the licence, the TV gets a fresh snapshot.
+  The hub sends a rig's `rig_info` before its first frame. As a guard, the dashboard ignores frame and
+  `comparison` entries for any rig not described in `rigs` / `rig_info` (a reference to one reads as `null`).
 - `cafe.branding`: CSS custom properties from `[cafe.branding]` in the hub config. The dashboard applies
   them to `:root` as-is (keys must start with `--`; others are ignored).
 - `cafe.tagline` *(added in v1, optional, default `""`)*: the line shown on the attract and portrait screens; empty means the built-in line.

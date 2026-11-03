@@ -187,8 +187,10 @@ export function PitwallPage({ store, state, trackKey, mapDisplay = null, pinnedR
             <span className="pw-cafe__name">{cafe}</span>
           </div>
           <div className="pw-head__clockrow">
-            <span className="pw-powered">POWERED BY</span>
-            <PitwallLogo height={18} />
+            {state.vendorMark && <>
+              <span className="pw-powered">POWERED BY</span>
+              <PitwallLogo height={18} />
+            </>}
             <span className="pw-clock">{clock}</span>
           </div>
         </div>

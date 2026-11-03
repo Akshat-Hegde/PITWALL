@@ -71,6 +71,8 @@ export interface DashboardState {
   cards: CardMoment[];
   /** A battle pop-up sent by the hub (demo director), shown before any the TV found itself. */
   battle: BattleMoment | null;
+  /** Show the supplier's "POWERED BY" mark (hub.vendor_mark; an older hub that doesn't send it keeps it on). */
+  vendorMark: boolean;
 }
 
 export const ALL_FEATURES: Features = {
@@ -112,6 +114,7 @@ export function initialState(source: DashboardState["source"]): DashboardState {
     queue: [],
     cards: [],
     battle: null,
+    vendorMark: true,
   };
 }
 
@@ -141,8 +144,22 @@ function boardsByPeriod(boards: Leaderboard[], pro = false): Partial<Record<Boar
   return Object.fromEntries(boards.filter((b) => isPeriod(b.period) && isPro(b) === pro).map((b) => [b.period, b]));
 }
 
-function framesById(frames: RigFrame[]): Record<string, RigFrame> {
-  return Object.fromEntries(frames.map((f) => [f.rig_id, f]));
+/** Frames by rig id, keeping only rigs the hub described (rig_info): the TV never shows a rig it wasn't told
+ *  about, e.g. one beyond the licence. The hub sends a new rig's rig_info before its first frame. */
+function framesById(frames: RigFrame[], rigs: RigInfo[]): Record<string, RigFrame> {
+  const known = new Set(rigs.map((r) => r.rig_id));
+  return Object.fromEntries(frames.filter((f) => known.has(f.rig_id)).map((f) => [f.rig_id, f]));
+}
+
+/** The comparison without rigs missing from rig_info (a reference to one reads as none). */
+function knownComparison(comparison: Comparison | null, rigs: RigInfo[]): Comparison | null {
+  if (!comparison) return comparison;
+  const known = new Set(rigs.map((r) => r.rig_id));
+  return {
+    ...comparison,
+    rigs: comparison.rigs.filter((e) => known.has(e.rig_id)).map((e) =>
+      e.reference_rig_id === null || known.has(e.reference_rig_id) ? e : { ...e, reference_rig_id: null }),
+  };
 }
 
 /** Rig colours are shown desaturated everywhere (map, stripes, charts). */
@@ -167,8 +184,9 @@ export function applyMessage(state: DashboardState, msg: HubMessage, now: number
   if (state.link === "version_mismatch" || !KNOWN_TYPES.has(msg.type)) return state;
 
   switch (msg.type) {
-    case "snapshot":
+    case "snapshot": {
       // A snapshot replaces all state.
+      const rigs = msg.rigs.map(soften);
       return {
         ...initialState(state.source),
         link: "live",
@@ -181,9 +199,9 @@ export function applyMessage(state: DashboardState, msg: HubMessage, now: number
         battleMarginMs: msg.hub.moments?.battle_margin_ms ?? 300,
         sounds: msg.hub.sounds ?? { enabled: false, volume: 0.6 },
         status: msg.status,
-        rigs: msg.rigs.map(soften),
-        frames: framesById(msg.frame.rigs),
-        comparison: msg.frame.comparison,
+        rigs,
+        frames: framesById(msg.frame.rigs, rigs),
+        comparison: knownComparison(msg.frame.comparison, rigs),
         outlines: Object.fromEntries(msg.outlines.map((o) => [o.track_key, o])),
         leaderboards: boardsByPeriod(msg.leaderboards),
         proLeaderboards: boardsByPeriod(msg.leaderboards, true),
@@ -195,9 +213,12 @@ export function applyMessage(state: DashboardState, msg: HubMessage, now: number
         pitEvents: storyEvents(msg.session_story ?? []),
         queue: msg.queue ?? [],
         lastFrameAt: now,
+        vendorMark: msg.hub.vendor_mark !== false,
       };
+    }
     case "frame":
-      return { ...state, frames: framesById(msg.rigs), comparison: msg.comparison, lastFrameAt: now };
+      return { ...state, frames: framesById(msg.rigs, state.rigs), comparison: knownComparison(msg.comparison, state.rigs),
+        lastFrameAt: now };
     case "rig_info":
       return { ...state, rigs: upsertRig(state.rigs, msg.rig) };
     case "status":
