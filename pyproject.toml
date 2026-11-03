@@ -35,5 +35,5 @@ where = ["hub"]
 simtelemetry = ["api/*.html", "tracks/*.json"]
 
 [tool.pytest.ini_options]
-testpaths = ["hub/tests"]
+testpaths = ["hub/tests", "factory/tests"]
 asyncio_mode = "auto"

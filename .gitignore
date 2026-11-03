@@ -49,3 +49,8 @@ brag-output*/
 
 # Subagent-driven development scratch (ledgers, briefs, review packages)
 .superpowers/
+
+# Pitwall Factory (seller's PC): packages, cafe profiles and signing keys never go into the repo
+Shipments/
+/profiles/
+*.key

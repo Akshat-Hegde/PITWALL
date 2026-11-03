@@ -10,7 +10,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SCAN = ["hub/simtelemetry", "dashboard/src", "dashboard/index.html", "dashboard/public", "packaging", "tools/windows"]
+SCAN = ["hub/simtelemetry", "factory", "dashboard/src", "dashboard/index.html", "dashboard/public", "packaging", "tools/windows"]
 EXTS = {".py", ".ts", ".tsx", ".html", ".css", ".ps1", ".cmd", ".iss", ".xml", ".svg", ".json", ".js"}
 SKIP_DIRS = {"node_modules", "dist", "build", "__pycache__"}
 NAME = re.compile(r"(?<![A-Za-z0-9_])(Pitwall|PITWALL)(?![A-Za-z0-9_])")

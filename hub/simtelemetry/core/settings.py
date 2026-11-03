@@ -30,6 +30,10 @@ _PIN = re.compile(r"^(\d{4,8})?$")
 #   1 = 0.5.0: sessions end automatically at closing time (the owner should check the opening hours).
 SETTINGS_VERSION = 1
 
+# The colour swatches offered on /setup (setup.html SWATCHES, kept equal by a test); the page's colour picker also
+# allows any other #RRGGBB. The factory's cafe profiles offer the same swatches.
+ACCENT_SWATCHES = ("#E10600", "#FF2A6D", "#2D7FF9", "#14B8A6", "#F59E0B", "#8B5CF6")
+
 
 class CafeSettings(BaseModel):
     name: str = Field(min_length=1, max_length=40)

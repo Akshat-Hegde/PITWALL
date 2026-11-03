@@ -158,3 +158,13 @@ def test_fresh_first_setup_still_requires_owner_pin(tmp_path):
     _, client, code = _client(tmp_path)
     assert client.post("/api/setup", json={**GOOD, "owner_pin": ""}, headers=code).status_code == 400
     assert client.get("/api/setup").json()["has_settings"] is False
+
+
+def test_accent_swatches_match_the_setup_page():
+    """The factory offers settings.ACCENT_SWATCHES; they must be the swatches setup.html shows."""
+    import json
+    import re
+    from simtelemetry.api.setup import SETUP_PAGE
+    from simtelemetry.core.settings import ACCENT_SWATCHES
+    m = re.search(r"const SWATCHES = (\[[^\]]*\]);", SETUP_PAGE.read_text(encoding="utf-8"))
+    assert m and tuple(json.loads(m.group(1))) == ACCENT_SWATCHES
