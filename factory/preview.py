@@ -75,6 +75,7 @@ TEMP_PREFIX = f"{brand.EXE_NAME.lower()}-preview-"
 MARKER = ".factory-preview"
 STALE_S = 12 * 3600
 HOST = "127.0.0.1"                             # the preview's pages are for this PC only, never the cafe LAN
+_running_roots: set[Path] = set()              # this factory's previews still running: never swept as stale
 
 TV_WINDOW = (1280, 760)
 STAFF_WINDOW = (1100, 860)
@@ -218,7 +219,10 @@ def remove_stale(temp_root: Path | None = None, older_than: float = STALE_S, now
         candidates = list(temp_root.glob(TEMP_PREFIX + "*"))
     except OSError:
         return
+    active = {os.path.normcase(str(r)) for r in _running_roots}
     for folder in candidates:
+        if os.path.normcase(str(folder)) in active:
+            continue
         try:
             if (folder / MARKER).is_file() and now - (folder / MARKER).stat().st_mtime > older_than:
                 shutil.rmtree(folder, ignore_errors=True)
@@ -308,6 +312,8 @@ def wait_for_health(base_url: str, proc: Any = None, timeout: float = HEALTH_TIM
             status, body = get(base_url + "/api/health", timeout=2.0)
             if status == 200:
                 data = json.loads(body)
+                if proc is not None and proc.poll() is not None:     # another hub answered on the port; ours stopped
+                    raise PreviewError(START_FAILED, f"The hub stopped with exit code {proc.poll()}.")
                 if isinstance(data, dict):
                     return data
         except (OSError, ValueError):
@@ -413,6 +419,7 @@ class Preview:
                 except OSError:
                     pass
         _remove_tree(self.root)
+        _running_roots.discard(self.root)
         try:
             atexit.unregister(self.stop)
         except Exception:
@@ -515,6 +522,8 @@ def start_preview(profile: CafeProfile, settings: build.FactorySettings, keys: K
         try:
             out_file = open(root / "hub-output.txt", "wb")
         except OSError:
+            if job is not None:
+                job.close()
             raise PreviewError(WRITE_FAILED) from None
         try:
             proc = popen(args, cwd=root, env=env, **_popen_kwargs(out_file))
@@ -529,6 +538,7 @@ def start_preview(profile: CafeProfile, settings: build.FactorySettings, keys: K
         _join_job(job, proc)
         preview = Preview(root=root, data_dir=data, port=port, program=program, process=proc, licensed=licensed,
                           job=job)
+        _running_roots.add(root)
         atexit.register(preview.stop)
         details.append(f"Hub started on {preview.base_url} (process {getattr(proc, 'pid', '?')}).")
         try:

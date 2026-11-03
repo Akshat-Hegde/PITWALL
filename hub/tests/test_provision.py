@@ -581,3 +581,24 @@ def test_demo_without_settings_is_unchanged(tmp_path, monkeypatch):
     cli.prepare_demo(argparse.Namespace(data_dir=cfg.data_dir), cfg)
     assert cfg.cafe.name == AppConfig().cafe.name
     assert cfg.owner.pin == "2468" and cfg.staff.pin == "2468"
+
+
+def test_demo_never_logs_a_saved_pin_hash(tmp_path, monkeypatch, caplog):
+    """C11 review: a demo folder whose /setup was saved has hashed PINs; the start-up line doesn't print the hash."""
+    import argparse
+    import logging
+    import simtelemetry.__main__ as cli
+    from simtelemetry.tools import seed_demo
+    monkeypatch.setattr(seed_demo, "seed", lambda d, *a, **k: {"sessions": 0, "laps": 0})
+    data = tmp_path / "demo"
+    data.mkdir()
+    store = SettingsStore(data)
+    store.save(CafeSettings(name="Grid Cafe", owner_pin="2468", staff_pin="1357", setup_done=True))
+    hashed = store.load().owner_pin
+    assert hashed.startswith("scrypt$")
+    cfg = AppConfig()
+    cfg.data_dir = data
+    with caplog.at_level(logging.INFO):
+        cli.prepare_demo(argparse.Namespace(data_dir=data), cfg)
+    assert cfg.cafe.name == "Grid Cafe" and cfg.owner.pin == hashed and verify_pin("2468", cfg.owner.pin)
+    assert hashed not in caplog.text and "as saved on the setup page" in caplog.text

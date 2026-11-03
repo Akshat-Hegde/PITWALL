@@ -443,6 +443,66 @@ def test_stale_preview_folders_are_removed(tmp_path):
     assert not old.exists() and new.exists() and other.exists() and (tmp_path / (P.TEMP_PREFIX + "nomarker")).exists()
 
 
+
+def test_a_running_preview_is_never_swept_as_stale(trusted):
+    """C11 review: a preview of this factory running for more than 12 hours keeps its folder when another starts."""
+    p = cafe(trusted)
+    first = start(trusted, p)
+    try:
+        os.utime(first.root / P.MARKER, (1, 1))
+        second = start(trusted, p)
+        assert first.root.exists()
+        second.stop()
+    finally:
+        first.stop()
+    assert not first.root.exists()
+    P.remove_stale(trusted.tmp / "temp")                     # stopped: no longer protected (and already gone)
+
+
+def test_another_hub_answering_on_the_port_is_not_taken_for_ours(trusted):
+    """C11 review: our hub stopped (e.g. the port was taken a moment after it was picked) while something else
+    answers /api/health on that port: the preview doesn't show the other hub."""
+    p = cafe(trusted)
+
+    class ExitsAfterStart(FakePopen):
+        def __call__(self, args, **kwargs):
+            proc = super().__call__(args, **kwargs)
+            if "run" in args:
+                answers = iter([None])                       # running when first asked, stopped from then on
+                proc.poll = lambda: next(answers, 0)
+            return proc
+    with pytest.raises(PreviewError) as exc:
+        start(trusted, p, popen=ExitsAfterStart())
+    assert str(exc.value) == P.START_FAILED
+    assert not list((trusted.tmp / "temp").iterdir())
+
+
+def test_job_is_closed_when_the_output_file_cant_be_made(trusted, monkeypatch):
+    p = cafe(trusted)
+    closed = []
+
+    class Job:
+        def add(self, proc):
+            return True
+
+        def terminate(self):
+            pass
+
+        def close(self):
+            closed.append(True)
+    real_open = open
+
+    def fake_open(path, *a, **kw):
+        if str(path).endswith("hub-output.txt"):
+            raise PermissionError("locked")
+        return real_open(path, *a, **kw)
+    monkeypatch.setattr("builtins.open", fake_open)
+    popen = FakePopen()
+    with pytest.raises(PreviewError) as exc:
+        start(trusted, p, popen=popen, job_factory=Job)
+    assert str(exc.value) == P.WRITE_FAILED and closed == [True] and not popen.procs
+
+
 # --- the health wait against a real (fake) HTTP server -------------------------------------------------
 
 class _Health(http.server.BaseHTTPRequestHandler):

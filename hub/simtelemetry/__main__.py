@@ -750,8 +750,11 @@ def prepare_demo(args: argparse.Namespace, config: AppConfig) -> None:
         config.owner.pin = "0000"
     if not config.staff.pin:
         config.staff.pin = config.owner.pin          # a staff PIN is required; the demo uses the same one
+    # PINs saved by /setup are stored hashed: never print them (nor a hash) as "the PIN"
+    from .core.pins import PREFIX as HASHED
+    pin = "as saved on the setup page" if config.owner.pin.startswith(HASHED) else config.owner.pin
     log.info("Demo: %d sessions and %d laps of history in %s; six simulated rigs; owner and staff PIN %s; "
-             "Director panel on /staff", counts["sessions"], counts["laps"], config.data_dir, config.owner.pin)
+             "Director panel on /staff", counts["sessions"], counts["laps"], config.data_dir, pin)
 
 
 def apply_demo_settings(config: AppConfig, args: argparse.Namespace) -> bool:
