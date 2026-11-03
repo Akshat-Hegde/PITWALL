@@ -7,6 +7,8 @@ API (errors are exceptions, never return values):
 - `parse(code) -> Parsed`                       raises LicenceError (INVALID)
 - `verify(code, keys=None) -> Licence`          raises LicenceError (INVALID); keys=None means licence_pubkey.TRUSTED_KEYS
 - `entitlements_from(licence) -> Entitlements`
+- `encode_payload(dict | LicencePayload) -> bytes`, `check_payload(bytes) -> LicencePayload`, `make_code(payload, sig)`
+                                                for the factory, which signs exactly these bytes
 - `accept_new(current, new) -> Entitlements`    raises LicenceError (OTHER_CAFE, OLDER, ALREADY_INSTALLED)
 - `FALLBACK`                                    used when there is no licence or it is damaged
 
@@ -21,17 +23,18 @@ import datetime as dt
 import json
 import re
 from dataclasses import dataclass
-from typing import Any, Literal, NamedTuple
+from typing import Annotated, Any, Literal, NamedTuple
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError
 
 from . import brand, licence_pubkey
 from .config import FeaturesConfig
 
 PREFIX = "PW1-"
 SIG_LEN = 64
+MAX_CODE_LEN = 20_000      # a real code is well under 1,000 characters; anything far longer is refused unread
 
 INVALID = "This code isn't valid: check you copied all of it."
 OTHER_CAFE = "This code is for a different cafe."
@@ -39,6 +42,14 @@ OLDER = "This code is older than the one installed."
 ALREADY_INSTALLED = "This code is already installed."
 
 _B64URL = re.compile(r"[A-Za-z0-9_-]+={0,2}")
+# Invisible characters that copy-paste (chat apps, Notepad's UTF-8 BOM) can slip into a code. Never part of base64url.
+_INVISIBLE = dict.fromkeys(map(ord, "\u200b\u200c\u200d\u2060\ufeff\u00ad"))
+
+# One line of visible text: no control characters, not blank.
+_CTRL = r"\x00-\x1f\x7f"
+_TEXT = rf"^[^{_CTRL}]*[^\s{_CTRL}][^{_CTRL}]*$"
+Text = Annotated[str, StringConstraints(min_length=1, max_length=100, pattern=_TEXT)]
+Name = Annotated[str, StringConstraints(min_length=1, max_length=40, pattern=_TEXT)]
 
 
 class LicenceError(ValueError):
@@ -50,16 +61,16 @@ class LicencePayload(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True, strict=True)
 
-    v: Literal[1]
-    licence_id: str = Field(min_length=1, max_length=100)
-    cafe_id: str = Field(min_length=1, max_length=100)
-    cafe_name: str = Field(min_length=1, max_length=100)
+    v: int = Field(ge=1, le=1)         # a strict int, so `true` and `1.0` are refused
+    licence_id: Text
+    cafe_id: Text
+    cafe_name: Text
     rigs: int = Field(ge=1, le=999)
-    games: tuple[str, ...] = Field(min_length=1)
-    features: tuple[str, ...]          # the features that are on; names not known to this hub are ignored later
+    games: tuple[Name, ...] = Field(min_length=1)
+    features: tuple[Name, ...]         # the features that are on; names not known to this hub are ignored later
     variant: Literal["9t7", "unbranded"]
     issued: dt.date
-    seq: int = Field(ge=0)
+    seq: int = Field(ge=0, le=2**31 - 1)   # stays exact in JSON for the owner page's browser
 
 
 class Parsed(NamedTuple):
@@ -88,7 +99,7 @@ class Entitlements:
 
     def licensed(self, rig_number: int | None) -> bool:
         """Rig numbers are 1-based ("Rig N"); the first `rigs` numbers are licensed."""
-        return rig_number is not None and 1 <= rig_number <= self.rigs
+        return isinstance(rig_number, int) and not isinstance(rig_number, bool) and 1 <= rig_number <= self.rigs
 
     @property
     def supplier(self) -> str:
@@ -105,9 +116,29 @@ FALLBACK = Entitlements(rigs=4, games=("f1_25",), features=tuple(FeaturesConfig.
 
 # --- encoding (shared with the factory) -------------------------------------------------------
 
-def encode_payload(payload: dict[str, Any]) -> bytes:
-    """Canonical payload bytes: sorted keys, compact separators, UTF-8."""
-    return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+def encode_payload(payload: dict[str, Any] | LicencePayload) -> bytes:
+    """Canonical payload bytes: sorted keys, compact separators, UTF-8. Dates are written as ISO dates.
+
+    The factory should sign only bytes that `check_payload` accepts, so it can never issue a code the hub refuses.
+    """
+    if isinstance(payload, LicencePayload):
+        payload = payload.model_dump(mode="json")
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+                      default=_json_default).encode("utf-8")
+
+
+def _json_default(value: Any) -> Any:
+    if isinstance(value, dt.date):
+        return value.isoformat()
+    raise TypeError(f"not JSON serialisable: {type(value).__name__}")
+
+
+def check_payload(data: bytes) -> LicencePayload:
+    """The payload model for signed bytes, or LicenceError(INVALID). The hub runs this after the signature check."""
+    try:
+        return LicencePayload.model_validate_json(data)
+    except ValidationError:
+        raise LicenceError(INVALID) from None
 
 
 def _b64e(data: bytes) -> str:
@@ -133,9 +164,9 @@ def make_code(payload: bytes, signature: bytes) -> str:
 
 def parse(code: str) -> Parsed:
     """Split a pasted code into payload and signature. Whitespace and line breaks anywhere are ignored."""
-    if not isinstance(code, str):
+    if not isinstance(code, str) or len(code) > MAX_CODE_LEN:
         raise LicenceError(INVALID)
-    text = "".join(code.split())
+    text = "".join(code.translate(_INVISIBLE).split())
     if not text.startswith(PREFIX):
         raise LicenceError(INVALID)
     parts = text[len(PREFIX):].split(".")
@@ -160,13 +191,13 @@ def _signed_by(parsed: Parsed, keys: tuple[bytes, ...]) -> bool:
 def verify(code: str, keys: tuple[bytes, ...] | None = None) -> Licence:
     """A verified licence, or LicenceError(INVALID). `keys` defaults to licence_pubkey.TRUSTED_KEYS (read now)."""
     parsed = parse(code)
-    if not _signed_by(parsed, licence_pubkey.TRUSTED_KEYS if keys is None else tuple(keys)):
+    if keys is None:
+        keys = licence_pubkey.TRUSTED_KEYS
+    elif isinstance(keys, (bytes, bytearray)):
+        raise TypeError("keys must be a tuple of raw public keys, not one key")
+    if not _signed_by(parsed, tuple(keys)):
         raise LicenceError(INVALID)
-    try:
-        payload = LicencePayload.model_validate_json(parsed.payload)
-    except ValidationError:
-        raise LicenceError(INVALID) from None
-    return Licence(code=parsed.code, payload=payload)
+    return Licence(code=parsed.code, payload=check_payload(parsed.payload))
 
 
 def entitlements_from(licence: Licence) -> Entitlements:

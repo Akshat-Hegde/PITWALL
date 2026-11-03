@@ -256,3 +256,57 @@ def test_same_code_again_says_already_installed(trusted):
 def test_messages_are_plain_english():
     for msg in (INVALID, OTHER_CAFE, OLDER, ALREADY_INSTALLED):
         assert msg.endswith(".") and not any(w in msg.lower() for w in ("signature", "seq", "payload", "base64"))
+
+
+# --- review hardening (C1 review) --------------------------------------------------------------------
+
+@pytest.mark.parametrize("over", [{"v": True}, {"v": 1.0}, {"seq": True}, {"seq": 2**31}, {"rigs": 6.0},
+                                  {"games": [""]}, {"features": ["  "]}, {"cafe_id": "   "},
+                                  {"cafe_name": "Apex\u0000Lounge"}, {"cafe_name": "Apex\nLounge"},
+                                  {"cafe_name": "A" * 101}, {"games": ["g" * 41]}])
+def test_signed_payload_with_odd_values_is_refused(trusted, over):
+    with pytest.raises(LicenceError) as exc:
+        verify(sign(trusted, payload(**over)))
+    assert str(exc.value) == INVALID
+
+
+def test_non_ascii_cafe_name_survives(trusted):
+    name = "कैफ़े Apex · Café"
+    assert verify(sign(trusted, payload(cafe_name=name))).payload.cafe_name == name
+
+
+@pytest.mark.parametrize("ch", [" ", " ", "　", "​", "﻿", "‍"])
+def test_unicode_spaces_and_invisible_characters_are_ignored(trusted, ch):
+    code = sign(trusted, payload())
+    assert verify(ch + code[:12] + ch + code[12:] + ch).code == code
+
+
+def test_non_ascii_digits_are_not_base64(trusted):
+    with pytest.raises(LicenceError):
+        parse("PW1-" + "١" * 12 + "." + "A" * 86)
+
+
+def test_huge_input_is_refused_quickly(trusted):
+    with pytest.raises(LicenceError) as exc:
+        verify("PW1-" + "A" * (licence.MAX_CODE_LEN + 1) + ".B")
+    assert str(exc.value) == INVALID
+
+
+def test_a_single_key_passed_as_bytes_is_a_programming_error(key):
+    with pytest.raises(TypeError):
+        verify(sign(key, payload()), keys=raw_public(key))
+
+
+def test_encode_payload_accepts_the_model_and_dates(trusted):
+    import datetime as dt
+    model = verify(sign(trusted, payload())).payload
+    data = encode_payload(model)
+    assert data == encode_payload(payload(games=["f1_25"], features=["moments", "battles"]))
+    assert encode_payload(payload(issued=dt.date(2026, 11, 3))) == data
+    assert licence.check_payload(data) == model
+    with pytest.raises(LicenceError):
+        licence.check_payload(encode_payload(payload(rigs=0)))
+
+
+def test_licensed_refuses_non_numbers():
+    assert FALLBACK.licensed(True) is False and FALLBACK.licensed("1") is False

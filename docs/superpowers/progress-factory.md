@@ -35,6 +35,7 @@ Each session starts by reading this log and continues from the first task not ma
   - Payload model is strict (`rigs: true` or `"6"` is refused), ignores unknown keys (a newer v1 factory still verifies), `rigs` 1..999. Feature names unknown to this hub are dropped in `entitlements_from`.
   - `Entitlements.licensed(n)`: rig numbers are 1-based ("Rig N" in rigs.json), so rigs 1..N are licensed. `supplier` is `brand.COMPANY` for 9t7, "your supplier" for unbranded; `vendor_mark` is `variant == "9t7"`.
   - PyInstaller spec unchanged: pyinstaller-hooks-contrib bundles `cryptography` itself. **LOCAL** must confirm the built exe verifies a code (part of L1/L2).
+  - C1 review: payload strings must be one visible line (no control characters, not blank; games/feature names ≤ 40); `v` is a strict int (`true`/`1.0` refused); `seq` ≤ 2³¹−1; pasted codes also drop zero-width characters and a BOM (Notepad); codes over 20,000 characters are refused unread; `verify(keys=<bytes>)` raises TypeError instead of silently failing; `encode_payload` accepts a `LicencePayload` or `date`, and new `check_payload(bytes)` lets C8 validate before signing; `licensed()` refuses bools. Tests: 84 in test_licence.py; hub `953 passed, 10 skipped, 5 failed` (same 5 pre-existing).
 
 ## Decisions to confirm
 - C1: the error messages end with a full stop ("This code isn't valid: check you copied all of it."), matching the hub's other owner messages.
