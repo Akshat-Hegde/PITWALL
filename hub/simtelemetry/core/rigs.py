@@ -52,6 +52,13 @@ class Rig:
     def name(self) -> str:
         return self.custom_name or self.config_name or self.auto_name
 
+    @property
+    def number(self) -> int | None:
+        """The rig's number from its auto name ("Rig 5" -> 5), stable in rigs.json (a merge keeps it); the licence
+        covers the first N numbers. None when rigs.json was edited by hand to something else."""
+        m = _RIG_N.fullmatch(self.auto_name.strip())
+        return int(m.group(1)) if m else None
+
 
 def clean_rig_name(value: Any) -> str | None:
     """A rig name as typed on the setup page; None (empty) means "back to its number"."""

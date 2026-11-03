@@ -11,7 +11,8 @@ from pathlib import Path
 from typing import Any, Callable
 
 from . import brand, licence, paths
-from .config import AppConfig
+from .adapters import game_id as adapter_game_id
+from .config import AppConfig, FeaturesConfig
 from .core.adapter import Checked, GameAdapter
 from .core.health import HealthMonitor, RigState, SilentRigWatch
 from .core.drivers import DriverRegistry
@@ -25,6 +26,9 @@ log = logging.getLogger(__name__)
 
 QUEUE_MAX = 20_000  # ~10 rigs x 60 Hz x 6 packets for >5 s of backlog
 DROP_QUEUE_FULL = "queue_full"
+DROP_GAME_NOT_LICENSED = "game_not_licensed"
+NOT_LICENSED = "Not licensed"          # the staff page's mark on a rig beyond the licensed rig count
+GAME_LINE_SHOW_S = 60.0                # a rig sending a game the licence doesn't include stays on Health this long
 WRONG_SENDER_SHOW_S = 60.0   # a non-rig sending wrong-format packets is listed on staff Health this long
 WRONG_SENDERS_MAX = 64      # addresses tracked at once; more (a flood of garbage) are ignored
 WRONG_SENDER_LOGS_PER_MIN = 10   # "wrong format" log lines for new senders per minute (a flood gets none)
@@ -122,6 +126,13 @@ class Hub:
         self.entitlement_hooks: list[Callable[[licence.Entitlements], None]] = []
         # Bumped when every TV must get a fresh snapshot (a new licence): see FeedConnection.tick.
         self.feed_epoch = 0
+        # Enforcement (spec 2.3), kept up to date by _apply_entitlements (an entitlement hook, on the event loop):
+        self._licensed_features: frozenset[str] = frozenset(licence.FALLBACK.features)
+        self._game_allowed = True                   # this adapter's game is in the licence (checked per packet)
+        self.unlicensed_game_senders: dict[str, float] = {}   # ip -> last packet of a game the licence lacks
+        self.laps.tv_hidden = self.tv_hidden_rigs   # record moments compare with the boards the TV shows
+        self.entitlement_hooks.append(self._apply_entitlements)
+        self._apply_entitlements(self._entitlements)
 
     # --- receive path (sync, called from datagram_received) -------------------------
 
@@ -140,6 +151,11 @@ class Hub:
             return
         self.registry.see(source_ip, now, checked.data_format, checked.session_id)
         self.wrong_senders.pop(source_ip, None)
+        if not self._game_allowed:
+            # A game the licence doesn't include: the rig is listed (staff Health says why), nothing is decoded.
+            self.unlicensed_game_senders[source_ip] = now
+            self.health.on_drop(source_ip, DROP_GAME_NOT_LICENSED, now)
+            return
         try:
             self._queue.put_nowait((checked, data, source_ip, now))
         except asyncio.QueueFull:
@@ -217,11 +233,15 @@ class Hub:
 
     # --- broadcast moments -----------------------------------------------------------
 
-    def active_track(self, now: float | None = None) -> str | None:
-        """The track the TV shows: the one most rigs are on, driving rigs counting double."""
+    def active_track(self, now: float | None = None, tv: bool = False) -> str | None:
+        """The track the TV shows: the one most rigs are on, driving rigs counting double (`tv`: only the rigs the
+        TV shows count, as in the feed)."""
         now = time.monotonic() if now is None else now
         counts: dict[str, int] = {}
+        hidden = self.tv_hidden_rigs() if tv else frozenset()
         for rig in self.registry.all():
+            if rig.ip in hidden:
+                continue
             state = self.health.state(rig.ip, now)
             s = self.adapter.live_summary(rig.ip)
             if state is RigState.NO_DATA or s is None or not s.track_key:
@@ -299,7 +319,7 @@ class Hub:
     def auto_end_sessions(self) -> list[dict[str, Any]]:
         """End every session that is due (see auto_end_reason) through the normal end_session path, so the card is
         still made. Also run at start-up, so a session left open from a previous day ends at once."""
-        if not self.config.features.auto_end_sessions:
+        if not self.features.auto_end_sessions:
             return []
         now = self.wall_clock()
         done = []
@@ -332,7 +352,7 @@ class Hub:
                   "text": AUTO_END_TEXT[reason], "at": round(now.timestamp() * 1000),
                   "card": ({"token": card["token"], "url": card["url"], "driver": card["driver"]}
                            if card else None),
-                  "card_note": None if card or not self.config.features.sharing else NO_CARD_TEXT}
+                  "card_note": None if card or not self.features.sharing else NO_CARD_TEXT}
         self.auto_ended[ip] = notice
         log.info("%s: %s's session %s", notice["rig_name"], session.name, notice["text"].lower())
         return notice
@@ -358,7 +378,7 @@ class Hub:
 
     def _make_card(self, ip: str, session: Any) -> dict[str, Any] | None:
         from .core.cards import build_card
-        if not self.config.features.sharing:
+        if not self.features.sharing:
             return None
         ended_at = round(time.time() * 1000)
         try:
@@ -409,7 +429,7 @@ class Hub:
         """Race cards for every rig that finished, plus the podium moment when 2 or more cafe drivers raced."""
         from .core.cards import build_race_card
         from .core.wifi import wifi_share
-        features = self.config.features
+        features = self.features
         race.track_name = race.track_name or self.race_track_name(race)
         if not (features.sharing and features.race_podium):
             return {"cards": [], "moment": None}
@@ -422,12 +442,13 @@ class Hub:
             self.drivers.save_card(rig, self.drivers.driver_id(rig), card)
             cards.append((rig, result, card))
         moment = None
-        if len(cards) == 1:
-            rig, result, card = cards[0]
+        shown = [c for c in cards if self.rig_licensed(c[0])]   # the TV leaves out rigs beyond the licence
+        if len(shown) == 1:
+            rig, result, card = shown[0]
             self.laps.publish_moment("card", rig_id=rig, driver=card["driver"], token=card["token"],
                                      url=base + card["token"], best_ms=card["best_ms"],
                                      track_name=card["track_name"], card_kind="race", position=card["position"])
-        elif cards:
+        elif shown:
             moment = self.laps.publish_moment(
                 "race_podium", track_key=race.track_key, track_name=race.track_name,
                 session_type=race.session_type,
@@ -435,8 +456,8 @@ class Hub:
                           "grid_position": res.grid_position, "laps": res.laps, "best_lap_ms": res.best_lap_ms,
                           "total_time_s": res.total_time_s, "status": res.status,
                           "card_url": base + card["token"], "card_token": card["token"]}
-                         for i, (rig, res, card) in enumerate(cards, 1)],
-                wifi=wifi_share(self.config))
+                         for i, (rig, res, card) in enumerate(shown, 1)],
+                wifi=wifi_share(self.config, features))
         return {"cards": [c for _, _, c in cards], "moment": moment}
 
     async def tick_races(self) -> None:
@@ -449,15 +470,15 @@ class Hub:
 
     def announce_driver(self, ip: str) -> dict[str, Any] | None:
         """'Now driving' moment when staff start a session on a rig."""
-        if not self.config.features.moments:
+        if not self.features.moments:
             return None
         rig = self.registry.get(ip)
         s = self.adapter.live_summary(ip)
         assigned = self.drivers.get(ip)
         if rig is None or assigned is None:
             return None
-        track_key = (s.track_key if s else None) or self.active_track()
-        record = self.laps.record_holder(track_key, "today") if track_key else None
+        track_key = (s.track_key if s else None) or self.active_track(tv=True)
+        record = self.laps.record_holder(track_key, "today", exclude=self.tv_hidden_rigs()) if track_key else None
         best = self.laps.driver_best(track_key, driver_key(assigned.name, ip, assigned.driver_id)) if track_key else None
         return self.laps.publish_moment(
             "now_driving", rig_id=ip, rig_name=rig.name, driver=assigned.name, track_key=track_key,
@@ -467,12 +488,12 @@ class Hub:
             personal_best_ms=best["lap_ms"] if best else None)
 
     def podium(self, reason: str) -> dict[str, Any] | None:
-        """Podium moment: today's top three on the shown track ("hourly" or "staff")."""
-        track_key = self.active_track()
-        if not self.config.features.podium or track_key is None:
+        """Podium moment: today's top three on the shown track ("hourly" or "staff"), as the TV's board shows it."""
+        track_key = self.active_track(tv=True)
+        if not self.features.podium or track_key is None:
             return None
         since = self.laps.period_starts()["today"]
-        board = self.laps.board(track_key, "today", since, limit=3)
+        board = self.laps.board(track_key, "today", since, limit=3, exclude=self.tv_hidden_rigs())
         if not board["entries"]:
             return None
         return self.laps.publish_moment("podium", reason=reason, track_key=track_key,
@@ -493,10 +514,10 @@ class Hub:
 
     def announce_challenge_winners(self) -> list[dict[str, Any]]:
         """'Challenge winner' moments for challenges that have just ended."""
-        if not self.config.features.challenges:
+        if not self.features.challenges:
             return []
         out = []
-        for c in self.competitions.due_winners():
+        for c in self.competitions.due_winners(exclude=self.tv_hidden_rigs()):
             winner = c["entries"][0] if c["entries"] else None
             out.append(self.laps.publish_moment(
                 "challenge_winner", challenge_id=c["id"], title=c["title"], track_name=c["track_name"],
@@ -530,7 +551,7 @@ class Hub:
 
     def backup_warning(self) -> str | None:
         """"Last backup: 5 days ago. Check the backup folder or USB stick." (owner page and staff Health only)."""
-        if not (self.config.features.backup_warning and self.config.backup.enabled):
+        if not (self.features.backup_warning and self.config.backup.enabled):
             return None
         if self.drivers.store.path is None:          # replays and tests in memory: nothing to back up
             return None
@@ -660,7 +681,60 @@ class Hub:
         return {"source": ent.source, "summary": self.licence_summary(),
                 "cafe_name": ent.cafe_name, "rigs": ent.rigs, "games": [licence.game_name(g) for g in ent.games],
                 "game_ids": list(ent.games), "features": list(ent.features), "variant": ent.variant,
-                "licence_id": ent.licence_id, "seq": ent.seq, "warning": self.licence_warning()}
+                "licence_id": ent.licence_id, "seq": ent.seq, "warning": self.licence_warning(),
+                "rigs_warning": self.licence_rigs_warning()}
+
+    # --- enforcement (spec 2.3) -------------------------------------------------------
+
+    def _apply_entitlements(self, ent: licence.Entitlements) -> None:
+        """Entitlement hook (start-up, a new code): which features and game the licence allows. Rigs are checked
+        live (tv_hidden_rigs), so a rig that registers later is covered too."""
+        self._licensed_features = frozenset(ent.features) | licence.NOT_LICENSED_FLAGS
+        game = adapter_game_id(self.adapter)
+        self._game_allowed = game is None or game in ent.games
+        if self._game_allowed:
+            self.unlicensed_game_senders.clear()
+
+    @property
+    def features(self) -> FeaturesConfig:
+        """The effective [features]: the hub.toml flags AND the licensed features. Every flag is read through this,
+        so an unlicensed feature is exactly like a switched-off flag, and the owner can switch a licensed one off
+        in hub.toml but can't switch on one the licence doesn't include."""
+        raw = self.config.features
+        off = {name: False for name in FeaturesConfig.model_fields
+               if name not in self._licensed_features and getattr(raw, name)}
+        return raw.model_copy(update=off) if off else raw
+
+    def rig_licensed(self, rig_id: str) -> bool:
+        """Rig numbers 1..N are licensed. An address that is no rig now (laps from a forgotten rig) counts as
+        licensed: it is history, not a rig being raced."""
+        rig = self.registry.get(rig_id)
+        return rig is None or self._entitlements.licensed(rig.number)
+
+    def tv_hidden_rigs(self) -> frozenset[str]:
+        """Rigs beyond the licensed rig count: they still record laps and show on the staff page, but the TV feed
+        leaves them out (frames, rig_info, boards, moments)."""
+        ent = self._entitlements
+        return frozenset(rig.ip for rig in self.registry.all() if not ent.licensed(rig.number))
+
+    def licence_rigs_warning(self) -> str | None:
+        """Staff Health, /setup and the owner page (never the TV), only while a rig beyond the licence exists."""
+        ent = self._entitlements
+        if not self.tv_hidden_rigs():
+            return None
+        covers = "1 rig" if ent.rigs == 1 else f"{ent.rigs} rigs"
+        return (f"This licence covers {covers}. Rig {ent.rigs + 1} and up aren't shown on the TV. "
+                f"Contact {ent.supplier} to add rigs.")
+
+    def game_warnings(self, now: float | None = None) -> list[dict[str, Any]]:
+        """"Rig 2: This licence doesn't include F1 25." for rigs sending a game the licence lacks (last minute)."""
+        if self._game_allowed:
+            return []
+        now = time.monotonic() if now is None else now
+        game = licence.game_name(adapter_game_id(self.adapter) or "")
+        return [{"code": "game_not_licensed", "rig_id": ip,
+                 "message": f"{self.rig_label(ip)}: This licence doesn't include {game}."}
+                for ip, at in sorted(self.unlicensed_game_senders.items()) if now - at <= GAME_LINE_SHOW_S]
 
     # --- views -----------------------------------------------------------------------
 
@@ -670,7 +744,7 @@ class Hub:
     def hours_check_warning(self) -> str | None:
         """After an upgrade from 0.4: sessions now end at closing time, so check the opening hours (until the
         setup page is saved)."""
-        if not self.settings_from_older_version or not self.config.features.auto_end_sessions:
+        if not self.settings_from_older_version or not self.features.auto_end_sessions:
             return None
         from .core.hours import hour_label
         owner = self.config.owner
@@ -687,6 +761,10 @@ class Hub:
         if self.licence_problem:
             warnings.append({"code": f"licence_{self.licence_problem}", "rig_id": None,
                              "message": self.licence_warning()})
+        rigs_warning = self.licence_rigs_warning()
+        if rigs_warning:
+            warnings.append({"code": "licence_rigs", "rig_id": None, "message": rigs_warning})
+        warnings += self.game_warnings()
         if self.udp_busy:
             warnings.append({"code": "udp_port_busy", "rig_id": None, "message": self.udp_busy})
         try:
@@ -743,6 +821,8 @@ class Hub:
     def state_text(self, ip: str, now: float) -> str:
         """A rig's state for staff and the owner, in plain words."""
         state = self.health.state(ip, now)
+        if not self._game_allowed and now - self.unlicensed_game_senders.get(ip, float("-inf")) <= GAME_LINE_SHOW_S:
+            return "Game not licensed"
         if state is RigState.DRIVING:
             return "On track"
         if state is RigState.NO_DATA:

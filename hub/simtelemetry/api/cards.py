@@ -16,7 +16,7 @@ def card_router(hub: Hub) -> APIRouter:
     router = APIRouter()
 
     def find(token: str) -> dict[str, Any]:
-        card = hub.drivers.card(token) if hub.config.features.sharing else None
+        card = hub.drivers.card(token) if hub.features.sharing else None
         if card is None:
             raise HTTPException(404, "This card doesn't exist (any more).")
         return card

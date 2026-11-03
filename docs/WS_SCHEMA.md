@@ -95,7 +95,8 @@ Compatibility rules:
 - `hub.udp_port`, `hub.lan_address` *(added in v1, optional)*: where games should send telemetry (this PC's
   network address, `null` if unknown). For staff tools; the TV never displays addresses (the staff and setup
   pages show the address to enter on every rig).
-- `hub.features` *(added in v1, optional)*: `[features]` from the hub config, e.g.
+- `hub.features` *(added in v1, optional)*: the effective `[features]`: the hub config's flags, with any
+  feature the licence doesn't include switched off, e.g.
   `{ "moments": true, "battles": true, "podium": true, "attract": true, "portrait": true, "head_to_head": true,
   "onboard": true }`. A feature that is `false` is not shown. Missing keys mean on. Hub-only switches
   (`auto_end_sessions`, `backup_warning`) are left out.
@@ -104,6 +105,15 @@ Compatibility rules:
 - `hub.sounds` *(added in v1, optional)*: `{ "enabled": false, "volume": 0.6 }`.
 - `hub.steering_rotation_deg` *(added in v1, optional, default 360)*: lock-to-lock wheel rotation for the
   steering wheel graphic, from `[dashboard] steering_wheel_rotation_deg`.
+- `hub.vendor_mark` *(added in v1, optional, default true)*: whether the TV shows the supplier's mark (the
+  "POWERED BY" block). `false` for an unbranded licence. A new licence code sends every TV a fresh snapshot,
+  so the value can change on a connection.
+- **Licensed rigs** *(v1, additive)*: the licence covers rigs 1 to N by rig number. The feed leaves the other
+  rigs out everywhere: `rigs` / `rig_info`, `frame.rigs` (and so `comparison`), the leaderboards, `recent_laps`,
+  `session_story`, `head_to_head`, the challenge board in `competition`, `lap_completed`, and moments about those
+  rigs (a podium or race podium loses their lines; a `tv.pinned_rig` beyond the licence reads as `null`;
+  `status` leaves out their formats and warnings). Their laps are still recorded and shown on the staff page.
+  If a rig the TV already has falls outside the licence, the TV gets a fresh snapshot.
 - `cafe.branding`: CSS custom properties from `[cafe.branding]` in the hub config. The dashboard applies
   them to `:root` as-is (keys must start with `--`; others are ignored).
 - `cafe.tagline` *(added in v1, optional, default `""`)*: the line shown on the attract and portrait screens; empty means the built-in line.

@@ -120,6 +120,7 @@ PRO_ASSISTS = {"traction_control": 0, "anti_lock_brakes": 0, "steering": 0, "bra
 
 class GameAdapter(Protocol):
     game: str
+    game_id: str        # the licence's id for the game, e.g. "f1_25" (simtelemetry.adapters.registry)
 
     def check(self, data: bytes, source: str) -> Checked: ...
 

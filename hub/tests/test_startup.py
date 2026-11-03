@@ -620,7 +620,8 @@ def test_hours_warning_names_the_closing_time():
     config = AppConfig()
     config.owner.open_hour, config.owner.close_hour = 10, 22
     from simtelemetry.hub import Hub
-    fake = type("H", (), {"config": config, "settings_from_older_version": True})()
+    fake = type("H", (), {"config": config, "settings_from_older_version": True,
+                          "features": property(lambda self: self.config.features)})()
     text = Hub.hours_check_warning(fake)
     assert text == "Sessions now end automatically at closing time (22:00). " + HOURS_TEXT
     config.owner.close_hour = 2

@@ -43,23 +43,33 @@ def owner_router(hub: Hub) -> APIRouter:
         analytics.day_start_hour = config.day_start_hour
 
     def check(request: Request) -> None:
+        # hub.toml's own switch: the licence never closes the page, so a new code can always be entered here.
         if not config.features.owner:
             raise HTTPException(404, "The owner page is switched off on this hub.")
         if not config.owner.pin:
             raise HTTPException(403, "Finish setup first: open the setup page on the hub PC and choose an owner PIN.")
         guard(request)
 
+    def check_figures(request: Request) -> None:
+        """The business figures are the licensed `owner` feature; backups and the Licence card are not."""
+        check(request)
+        if not hub.features.owner:
+            raise HTTPException(403, figures_note())
+
+    def figures_note() -> str:
+        return f"Business figures aren't included in this licence. Contact {hub.entitlements.supplier} to add them."
+
     @router.get("/owner", response_class=HTMLResponse, include_in_schema=False)
     def page() -> HTMLResponse:
         return render_page(OWNER_PAGE)
 
-    @router.get("/api/owner/report", dependencies=[Depends(check)])
+    @router.get("/api/owner/report", dependencies=[Depends(check_figures)])
     def report(days: int = 30) -> dict[str, Any]:
         _sync_hours()
         return {"cafe": config.cafe.name, **analytics.report(days),
                 "pin_alerts": [a["text"] for a in hub.pin_attempts.alert_list()]}
 
-    @router.get("/api/owner/export.csv", dependencies=[Depends(check)])
+    @router.get("/api/owner/export.csv", dependencies=[Depends(check_figures)])
     def export(kind: str = "daily", days: int = 30) -> Response:
         if kind not in CSV_KINDS:
             raise HTTPException(400, f"kind is one of {', '.join(CSV_KINDS)}")
@@ -116,9 +126,15 @@ def owner_router(hub: Hub) -> APIRouter:
         log.info("Backup folder is now %s", config.backups_dir)
         return backup_status()
 
+    def licence_body() -> dict[str, Any]:
+        figures = hub.features.owner
+        return {**hub.licence_info(), "figures": figures, "figures_note": None if figures else figures_note(),
+                # Shown with the report too; here for when the figures aren't licensed.
+                "pin_alerts": [a["text"] for a in hub.pin_attempts.alert_list()]}
+
     @router.get("/api/owner/licence", dependencies=[Depends(check)])
     def licence_get() -> dict[str, Any]:
-        return hub.licence_info()
+        return licence_body()
 
     @router.post("/api/owner/licence", dependencies=[Depends(check)])
     async def licence_post(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
@@ -132,6 +148,6 @@ def owner_router(hub: Hub) -> APIRouter:
             hub.apply_licence(code)
         except LicenceError as exc:
             raise HTTPException(400, str(exc)) from None
-        return hub.licence_info()
+        return licence_body()
 
     return router

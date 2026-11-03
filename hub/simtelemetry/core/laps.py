@@ -24,6 +24,7 @@ import json
 import logging
 import math
 from collections import deque
+from collections.abc import Callable, Collection
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -349,6 +350,9 @@ class LapBook:
         self.analysis_version = 0                              # bumps when a head-to-head lap is kept
         self._analyses: dict[tuple[str, str, str], dict[str, Any]] = {}  # no store: (track, day, driver) -> lap
         self._sector_cache: dict[tuple, list[int | None]] = {}
+        # Rigs the TV leaves out (beyond the licensed rig count; Hub sets this): the record moment compares a lap
+        # with the boards the TV shows. Their laps are still recorded and counted everywhere else.
+        self.tv_hidden: Callable[[], Collection[str]] = lambda: ()
 
     def rig(self, rig_id: str) -> RigLaps:
         return self.rigs.setdefault(rig_id, RigLaps())
@@ -583,16 +587,12 @@ class LapBook:
         start = self.period_starts()["today"] or 0
         return dt.datetime.fromtimestamp(start / 1000).date().isoformat()
 
-    def head_to_head(self, track_key: str | None) -> dict[str, Any] | None:
-        """Schema HeadToHead for a track today: the two drivers whose best traced laps are closest."""
+    def head_to_head(self, track_key: str | None, exclude: Collection[str] = ()) -> dict[str, Any] | None:
+        """Schema HeadToHead for a track today: the two drivers whose best traced laps are closest (laps from
+        `exclude` rigs left out)."""
         if track_key is None:
             return None
-        day = self._today()
-        if self.store is not None:
-            laps = self.store.analyses(track_key, day)
-        else:
-            laps = [e for (t, d, _), e in self._analyses.items() if t == track_key and d == day]
-        laps = sorted(laps, key=lambda e: (e["lap_ms"], e["completed_at"]))
+        laps = sorted(self._day_analyses(track_key, exclude), key=lambda e: (e["lap_ms"], e["completed_at"]))
         if len(laps) < 2:
             return None
         pair = (laps[0], laps[1])
@@ -601,24 +601,35 @@ class LapBook:
                 pair = (a, b)
         side = lambda e: {k: e[k] for k in ("rig_id", "driver", "lap_ms", "lap_number", "lap_class", "minis",
                                             "speed", "share")}
-        return {"track_key": track_key, "track_name": pair[0]["track_name"], "day": day,
+        return {"track_key": track_key, "track_name": pair[0]["track_name"], "day": self._today(),
                 "a": side(pair[0]), "b": side(pair[1])}
+
+    def _day_analyses(self, track_key: str, exclude: Collection[str] = ()) -> list[dict[str, Any]]:
+        """Each driver's best traced lap on a track today (head to head, mini-sectors), minus `exclude` rigs."""
+        day = self._today()
+        if self.store is not None:
+            laps = self.store.analyses(track_key, day)
+        else:
+            laps = [e for (t, d, _), e in self._analyses.items() if t == track_key and d == day]
+        return [e for e in laps if e.get("rig_id") not in exclude] if exclude else laps
 
     # --- records -----------------------------------------------------------------------------
 
-    def record_holder(self, track_key: str, period: str, lap_class: str = OPEN_CLASS) -> dict[str, Any] | None:
+    def record_holder(self, track_key: str, period: str, lap_class: str = OPEN_CLASS,
+                      exclude: Collection[str] = ()) -> dict[str, Any] | None:
         """Top entry of a board (period "today" / "week" / "all_time", class "open" / "pro"), or None."""
         since = self.period_starts()[period]
-        board = self.board(track_key, period, since, lap_class, limit=1)
+        board = self.board(track_key, period, since, lap_class, limit=1, exclude=exclude)
         return board["entries"][0] if board["entries"] else None
 
     def _records_broken(self, record: LapRecord) -> list[dict[str, Any]]:
         """Records this lap beats, checked before it is stored: all time first, then today; Pro, then Open."""
         classes = [PRO_CLASS, OPEN_CLASS] if record.lap_class == PRO_CLASS else [OPEN_CLASS]
         broken = []
+        hidden = frozenset(self.tv_hidden())          # a TV moment: against the boards the TV shows
         for period in ("all_time", "today"):
             for lap_class in classes:
-                prev = self.record_holder(record.track_key, period, lap_class)
+                prev = self.record_holder(record.track_key, period, lap_class, exclude=hidden)
                 if prev is not None and record.lap_ms < prev["lap_ms"]:
                     broken.append({"period": period, "lap_class": lap_class, "previous_ms": prev["lap_ms"],
                                    "previous_driver": prev["driver"] or prev["rig_name"],
@@ -760,8 +771,8 @@ class LapBook:
 
     # --- views -----------------------------------------------------------------------------
 
-    def recent_laps(self) -> list[dict[str, Any]]:
-        return [r.to_schema() for r in self.recent]
+    def recent_laps(self, exclude: Collection[str] = ()) -> list[dict[str, Any]]:
+        return [r.to_schema() for r in self.recent if r.rig_id not in exclude]
 
     def period_starts(self) -> dict[str, int | None]:
         """Unix ms where each leaderboard period begins (local time of the hub PC)."""
@@ -773,14 +784,16 @@ class LapBook:
             starts[period] = round(start.timestamp() * 1000) if start else None
         return starts
 
-    def boards(self, track_key: str, lap_class: str = OPEN_CLASS) -> list[dict[str, Any]]:
+    def boards(self, track_key: str, lap_class: str = OPEN_CLASS, exclude: Collection[str] = ()) -> list[dict[str, Any]]:
         """Schema Leaderboard for each period ("today", "week", "all_time") of one track."""
-        return [self.board(track_key, period, since, lap_class) for period, since in self.period_starts().items()]
+        return [self.board(track_key, period, since, lap_class, exclude=exclude)
+                for period, since in self.period_starts().items()]
 
     def board(self, track_key: str, period: str, since_ms: int | None, lap_class: str = OPEN_CLASS,
-              limit: int | None = None) -> dict[str, Any]:
+              limit: int | None = None, exclude: Collection[str] = ()) -> dict[str, Any]:
+        """One board; laps from `exclude` rigs don't count (the TV's boards: rigs beyond the licence)."""
         if self.store is not None:
-            rows = self.store.board(track_key, since_ms, lap_class=lap_class,
+            rows = self.store.board(track_key, since_ms, lap_class=lap_class, exclude_rigs=exclude,
                                     **({"limit": limit} if limit is not None else {}))
         else:  # no database (unit tests): this hub session's laps
             rows = [{"rig_id": r.rig_id, "rig_name": r.rig_name, "driver": r.driver, "lap_ms": r.lap_ms,
@@ -789,7 +802,7 @@ class LapBook:
                      "s3_ms": r.sectors_ms[2] if r.sectors_ms else None, "track_name": r.track_name,
                      "tyre": json.dumps(r.tyre) if r.tyre else None, "lap_number": r.lap_number,
                      "completed_at": r.completed_at}
-                    for r in self.leaderboard(track_key, lap_class)
+                    for r in self.leaderboard(track_key, lap_class, exclude)
                     if since_ms is None or r.completed_at >= since_ms][:limit]
         leader = rows[0]["lap_ms"] if rows else 0
         entries = []
@@ -806,17 +819,12 @@ class LapBook:
                  "lap_class": lap_class, "entries": entries}
         if period == "today" and entries:
             board["record_minis"] = self._record_minis(track_key, entries[0])
-            board["mini_owners"] = self._mini_owners(track_key)
+            board["mini_owners"] = self._mini_owners(track_key, exclude)
         return board
 
-    def _mini_owners(self, track_key: str) -> list[str] | None:
+    def _mini_owners(self, track_key: str, exclude: Collection[str] = ()) -> list[str] | None:
         """Per mini-sector, the rig of the driver fastest through it today (from each driver's best traced lap)."""
-        day = self._today()
-        if self.store is not None:
-            laps = self.store.analyses(track_key, day)
-        else:
-            laps = [e for (t, d, _), e in self._analyses.items() if t == track_key and d == day]
-        laps = [e for e in laps if e.get("minis")]
+        laps = [e for e in self._day_analyses(track_key, exclude) if e.get("minis")]
         if not laps:
             return None
         return [min(laps, key=lambda e: e["minis"][i])["rig_id"] for i in range(len(laps[0]["minis"]))]
@@ -831,7 +839,8 @@ class LapBook:
         match = next((e for e in laps if e["lap_ms"] == top["lap_ms"] and e.get("rig_id") == top["rig_id"]), None)
         return list(match["minis"]) if match and match.get("minis") else None
 
-    def session_story(self, track_key: str | None, since_ms: int | None = None) -> list[dict[str, Any]]:
+    def session_story(self, track_key: str | None, since_ms: int | None = None,
+                      exclude: Collection[str] = ()) -> list[dict[str, Any]]:
         """Every lap on a track in the last hour (or since since_ms), oldest first: the TV's session story."""
         if track_key is None:
             return []
@@ -847,7 +856,7 @@ class LapBook:
         return [{"rig_id": r["rig_id"], "driver": r["driver"], "track_key": track_key, "lap_ms": r["lap_ms"],
                  "valid": bool(r["valid"]),
                  "out_lap": bool(r["out_lap"]), "lap_class": r["lap_class"], "completed_at": r["completed_at"]}
-                for r in rows][-STORY_LAPS_MAX:]
+                for r in rows if r["rig_id"] not in exclude][-STORY_LAPS_MAX:]
 
     def driver_best(self, track_key: str | None, dkey: str) -> dict[str, Any] | None:
         """Schema BestLap: a driver's fastest counted lap on a track ever (lap database), or None."""
@@ -904,11 +913,12 @@ class LapBook:
             "last_sectors": rig.last_sectors,
         }
 
-    def leaderboard(self, track_key: str, lap_class: str = OPEN_CLASS) -> list[LapRecord]:
+    def leaderboard(self, track_key: str, lap_class: str = OPEN_CLASS,
+                    exclude: Collection[str] = ()) -> list[LapRecord]:
         """Best counted lap per driver on a track this hub session, fastest first."""
         best: dict[str, LapRecord] = {}
         for record in self.laps:
-            if record.counted and record.track_key == track_key and (
+            if record.counted and record.track_key == track_key and record.rig_id not in exclude and (
                     lap_class == OPEN_CLASS or record.lap_class == lap_class):
                 current = best.get(record.driver_key)
                 if current is None or record.lap_ms < current.lap_ms:

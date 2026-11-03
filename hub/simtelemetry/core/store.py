@@ -13,6 +13,7 @@ import logging
 import os
 import sqlite3
 import threading
+from collections.abc import Collection
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -220,20 +221,24 @@ class LapStore:
             self._db.execute("DELETE FROM laps WHERE id = ?", (lap_id,))
 
     def board(self, track_key: str, since_ms: int | None, limit: int = BOARD_LIMIT,
-              lap_class: str = "open", until_ms: int | None = None) -> list[dict[str, Any]]:
+              lap_class: str = "open", until_ms: int | None = None,
+              exclude_rigs: Collection[str] = ()) -> list[dict[str, Any]]:
         """Best counted lap per driver on a track since a time, fastest first (ties: earliest).
 
         lap_class "open": every lap (Pro laps count on the Open boards too); "pro": Pro laps only.
+        exclude_rigs: laps from these rigs don't count (the TV's boards leave out rigs the licence doesn't cover).
         """
         pro = " AND lap_class = 'pro'" if lap_class == "pro" else ""
         until = f" AND completed_at < {int(until_ms)}" if until_ms is not None else ""
+        excluded = sorted(exclude_rigs)
+        skip = f" AND rig_id NOT IN ({','.join('?' * len(excluded))})" if excluded else ""
         with self._lock:
             rows = self._db.execute(
                 "SELECT * FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY driver_key"
                 "  ORDER BY lap_ms, completed_at) AS n FROM laps"
-                "  WHERE track_key = ? AND valid = 1 AND out_lap = 0 AND completed_at >= ?" + pro + until + ")"
+                "  WHERE track_key = ? AND valid = 1 AND out_lap = 0 AND completed_at >= ?" + pro + until + skip + ")"
                 " WHERE n = 1 ORDER BY lap_ms, completed_at LIMIT ?",
-                (track_key, since_ms if since_ms is not None else 0, limit)).fetchall()
+                (track_key, since_ms if since_ms is not None else 0, *excluded, limit)).fetchall()
         return [dict(row) for row in rows]
 
     def sector_bests(self, track_key: str, since_ms: int | None, rig_id: str | None = None,

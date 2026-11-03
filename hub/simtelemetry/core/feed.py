@@ -135,6 +135,31 @@ def _round(value: float | None, digits: int) -> float | None:
     return None if value is None else round(value, digits)
 
 
+def tv_message(type_: str, body: dict[str, Any], hidden: frozenset[str]) -> dict[str, Any] | None:
+    """A lap book message as the TV may see it: None for a lap or moment of a rig beyond the licence, and a moment
+    about several rigs (podium, race podium) without those rigs' lines. Racing and the staff page are unaffected."""
+    if not hidden:
+        return body
+    if type_ == "lap_completed":
+        return None if body["lap"].get("rig_id") in hidden else body
+    if type_ != "moment":
+        return body
+    moment = body["moment"]
+    if moment.get("rig_id") in hidden or any(r in hidden for r in moment.get("rig_ids") or ()):
+        return None
+    for key in ("drivers", "entries", "runners_up"):
+        items = moment.get(key)
+        if isinstance(items, list) and any(isinstance(e, dict) and e.get("rig_id") in hidden for e in items):
+            kept = [e for e in items if not (isinstance(e, dict) and e.get("rig_id") in hidden)]
+            if not kept:
+                return None
+            moment = {**moment, key: kept}
+    winner = moment.get("winner")
+    if isinstance(winner, dict) and winner.get("rig_id") in hidden:
+        return None
+    return body if moment is body["moment"] else {**body, "moment": moment}
+
+
 class FeedBuilder:
     def __init__(self, hub: Hub) -> None:
         self.hub = hub
@@ -158,8 +183,17 @@ class FeedBuilder:
             "format_supported": rig.data_format is None or adapter.is_supported_format(rig.data_format),
         }
 
+    def hidden(self) -> frozenset[str]:
+        """Rigs the TV leaves out: beyond the licensed rig count (Hub.tv_hidden_rigs)."""
+        return self.hub.tv_hidden_rigs()
+
+    def tv_rigs(self) -> list[Rig]:
+        """The rigs the TV sees, in registry order."""
+        hidden = self.hidden()
+        return [rig for rig in self.hub.registry.all() if rig.ip not in hidden]
+
     def rig_infos(self) -> list[dict[str, Any]]:
-        return [self.rig_info(rig) for rig in self.hub.registry.all()]
+        return [self.rig_info(rig) for rig in self.tv_rigs()]
 
     def session(self, rig: Rig, now: float) -> dict[str, Any]:
         if self.hub.health.state(rig.ip, now) is RigState.NO_DATA:
@@ -215,12 +249,14 @@ class FeedBuilder:
     def competition(self, track_key: str | None) -> dict[str, Any]:
         """Schema Competition: the current challenge and the running corporate event (each null if none / off)."""
         hub = self.hub
-        key = (track_key, hub.laps._lap_version, hub.competitions.version, int(time.time() // 30))
+        hidden = self.hidden()
+        features = hub.features
+        key = (track_key, hub.laps._lap_version, hub.competitions.version, int(time.time() // 30), hidden,
+               features.challenges, features.events)
         if getattr(self, "_competition_key", None) != key:
-            features = hub.config.features
             self._competition_key = key
             self._competition = {
-                "challenge": hub.competitions.current_challenge() if features.challenges else None,
+                "challenge": hub.competitions.current_challenge(exclude=hidden) if features.challenges else None,
                 "event": hub.competitions.active_event(track_key) if features.events else None,
             }
         return self._competition
@@ -228,10 +264,12 @@ class FeedBuilder:
     def head_to_head(self, track_key: str | None) -> dict[str, Any] | None:
         """Schema HeadToHead of the shown track today (null until two drivers have a traced lap)."""
         laps = self.hub.laps
-        key = (track_key, laps.analysis_version, laps._today())
+        hidden = self.hidden()
+        on = self.hub.features.head_to_head
+        key = (track_key, laps.analysis_version, laps._today(), hidden, on)
         if getattr(self, "_h2h_key", None) != key:
             self._h2h_key = key
-            self._h2h = laps.head_to_head(track_key) if self.hub.config.features.head_to_head else None
+            self._h2h = laps.head_to_head(track_key, exclude=hidden) if on else None
         return self._h2h
 
     def queue(self) -> list[dict[str, Any]]:
@@ -239,7 +277,7 @@ class FeedBuilder:
         return [{"id": e["id"], "name": e["name"]} for e in self.hub.drivers.queue()]
 
     def frame_body(self, now: float) -> dict[str, Any]:
-        rigs = [self.rig_frame(rig, now) for rig in self.hub.registry.all()]
+        rigs = [self.rig_frame(rig, now) for rig in self.tv_rigs()]
         return {"rigs": rigs, "comparison": self.comparison(rigs)}
 
     @staticmethod
@@ -267,7 +305,8 @@ class FeedBuilder:
         """Today / this week / all time boards of the shown track (none while no track is known)."""
         if track_key is None:
             return []
-        boards = self.hub.laps.boards(track_key) + self.hub.laps.boards(track_key, "pro")
+        hidden = self.hidden()
+        boards = self.hub.laps.boards(track_key, exclude=hidden) + self.hub.laps.boards(track_key, "pro", hidden)
         name = next((r["session"]["track_name"] for r in rigs if r["session"]["track_key"] == track_key), None)
         for board in boards:
             board["track_name"] = board["track_name"] or name
@@ -276,11 +315,15 @@ class FeedBuilder:
     def board_key(self, track_key: str | None) -> tuple[Any, ...]:
         """Changes whenever the shown boards may change: new laps, another track, a new day or week."""
         laps = self.hub.laps
-        return (track_key, laps.board_version.get(track_key or "", 0), tuple(laps.period_starts().values()))
+        return (track_key, laps.board_version.get(track_key or "", 0), tuple(laps.period_starts().values()),
+                self.hidden())
 
-    def status(self, now: float) -> dict[str, Any]:
+    def status(self, now: float, tv: bool = False) -> dict[str, Any]:
+        """Formats, recorder state and warnings. `tv`: the feed's copy, without the rigs the TV leaves out (staff
+        Health gets every rig)."""
         hub = self.hub
-        formats = {ip: fmt for ip, fmt in hub._active_formats(now).items()}
+        hidden = self.hidden() if tv else frozenset()
+        formats = {ip: fmt for ip, fmt in hub._active_formats(now).items() if ip not in hidden}
         warnings: list[dict[str, Any]] = []
         if len(set(formats.values())) > 1:
             warnings.append({"code": "format_mismatch", "rig_id": None,
@@ -288,6 +331,8 @@ class FeedBuilder:
                                         + " and ".join(sorted(set(formats.values())))
                                         + "): set UDP Format to 2025 on every rig."})
         for rig in hub.registry.all():
+            if rig.ip in hidden:
+                continue
             if rig.data_format and not hub.adapter.is_supported_format(rig.data_format) \
                     and hub.health.state(rig.ip, now) is not RigState.NO_DATA:
                 warnings.append({"code": "format_unsupported", "rig_id": rig.ip,
@@ -326,30 +371,40 @@ class FeedBuilder:
         c = self.hub.config.cafe
         return {"name": c.name, "branding": dict(c.branding), "tagline": c.tagline,
                 "logo": f"/api/cafe/logo?v={c.logo}" if c.logo else None,
-                "wifi": wifi_share(self.hub.config)}
+                "wifi": wifi_share(self.hub.config, self.hub.features)}
+
+    def tv(self) -> dict[str, Any]:
+        """Schema TvSetting; a pinned rig the TV doesn't show (beyond the licence) reads as automatic."""
+        tv = self.hub.tv.to_json()
+        if tv["pinned_rig"] is not None and tv["pinned_rig"] in self.hidden():
+            tv["pinned_rig"] = None
+        return tv
 
     def snapshot_body(self, now: float) -> dict[str, Any]:
         frame = self.frame_body(now)
+        hidden = self.hidden()
         return {
             "hub": {"version": __version__, "games": [self.hub.adapter.game], "frame_hz": self.frame_hz,
                     "udp_port": self.hub.config.network.udp_port, "lan_address": self.hub.hub_address(),
                     "steering_rotation_deg": self.hub.config.dashboard.steering_wheel_rotation_deg,
                     # Hub-side switches the TV has no use for stay out of the feed.
-                    "features": self.hub.config.features.model_dump(exclude={"auto_end_sessions", "backup_warning"}),
+                    "features": self.hub.features.model_dump(exclude={"auto_end_sessions", "backup_warning"}),
                     "moments": {"battle_margin_ms": self.hub.config.moments.battle_margin_ms},
-                    "sounds": self.hub.config.sounds.model_dump()},
+                    "sounds": self.hub.config.sounds.model_dump(),
+                    # The supplier's mark ("POWERED BY" on the TV): off for an unbranded licence.
+                    "vendor_mark": self.hub.entitlements.vendor_mark},
             "cafe": self.cafe(),
-            "status": self.status(now),
+            "status": self.status(now, tv=True),
             "rigs": self.rig_infos(),
             "frame": frame,
             "outlines": list(self.hub.laps.outlines.values()),
             "leaderboards": self.leaderboards(self.active_track(frame["rigs"]), frame["rigs"]),
-            "recent_laps": self.hub.laps.recent_laps(),
+            "recent_laps": self.hub.laps.recent_laps(exclude=hidden),
             "queue": self.queue(),
             "competition": self.competition(self.active_track(frame["rigs"])),
             "head_to_head": self.head_to_head(self.active_track(frame["rigs"])),
-            "tv": self.hub.tv.to_json(),
-            "session_story": self.hub.laps.session_story(self.active_track(frame["rigs"])),
+            "tv": self.tv(),
+            "session_story": self.hub.laps.session_story(self.active_track(frame["rigs"]), exclude=hidden),
         }
 
 
@@ -372,6 +427,7 @@ class FeedConnection:
         self._tv: dict[str, Any] | None = None                # TV page setting last sent
         self._cafe: dict[str, Any] | None = None              # cafe name, tagline, colour, logo last sent
         self._epoch = builder.hub.feed_epoch                  # hub.feed_epoch of the last snapshot sent
+        self._hidden: frozenset[str] = frozenset()            # rigs the TV leaves out (beyond the licence)
 
     def _message(self, type_: str, body: dict[str, Any]) -> dict[str, Any]:
         msg = {"v": SCHEMA_VERSION, "type": type_, "seq": self.seq, "ts": round(self._clock() * 1000)}
@@ -381,6 +437,7 @@ class FeedConnection:
 
     def start(self, now: float) -> dict[str, Any]:
         self._epoch = self.builder.hub.feed_epoch
+        self._hidden = self.builder.hidden()
         body = self.builder.snapshot_body(now)
         self._rig_infos = {r["rig_id"]: r for r in body["rigs"]}
         self._sessions = {f["rig_id"]: f["session"]["session_id"] for f in body["frame"]["rigs"]
@@ -399,6 +456,11 @@ class FeedConnection:
     def tick(self, now: float) -> list[dict[str, Any]]:
         if self.builder.hub.feed_epoch != self._epoch:
             return [self.start(now)]       # e.g. a new licence: a fresh snapshot replaces the TV's state (seq goes on)
+        hidden = self.builder.hidden()
+        if hidden != self._hidden:
+            if any(rig_id in hidden for rig_id in self._rig_infos):
+                return [self.start(now)]   # a rig the TV has now falls outside the licence: take it off the TV
+            self._hidden = hidden          # only new rigs beyond the licence: they are simply never sent
         out = []
         for info in self.builder.rig_infos():
             if self._rig_infos.get(info["rig_id"]) != info:
@@ -418,7 +480,9 @@ class FeedConnection:
         laps = self.builder.hub.laps
         for message_id, type_, body in laps.messages_after(self._message_id):
             self._message_id = message_id
-            out.append(self._message(type_, body))
+            shown = tv_message(type_, body, hidden)
+            if shown is not None:
+                out.append(self._message(type_, shown))
         track = self.builder.active_track(frame["rigs"])
         board = self.builder.board_key(track)
         if board != self._board:
@@ -433,7 +497,7 @@ class FeedConnection:
         if competition != self._competition:
             self._competition = competition
             out.append(self._message("competition", {"competition": competition}))
-        tv = self.builder.hub.tv.to_json()
+        tv = self.builder.tv()
         if tv != self._tv:
             self._tv = tv
             out.append(self._message("tv", {"tv": tv}))
@@ -445,7 +509,7 @@ class FeedConnection:
         if queue != self._queue:
             self._queue = queue
             out.append(self._message("queue", {"queue": queue}))
-        status = self.builder.status(now)
+        status = self.builder.status(now, tv=True)
         if status != self._status or now - self._status_at >= STATUS_INTERVAL_S:
             self._status, self._status_at = status, now
             out.append(self._message("status", {"status": status}))

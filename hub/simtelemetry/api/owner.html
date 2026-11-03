@@ -39,6 +39,7 @@
   h1 { flex: 1; margin: 0; font-size: 1.4rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
   h1 small { display: block; color: var(--text-muted); font-size: 0.8rem; letter-spacing: 0.08em; }
   main { max-width: 1200px; margin: 0 auto; padding: 0 16px 32px; }
+  [data-figures][hidden] { display: none; }
   .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0 16px; }
   .seg { display: inline-flex; border: 1px solid var(--line); }
   .seg button, .btn {
@@ -110,7 +111,8 @@
   <div id="report" hidden>
     <div id="pin-alerts"></div>
     <p class="alert" id="backup-alert" hidden></p>
-    <div class="filters" role="group" aria-label="Period">
+    <p class="alert" id="figures-note" hidden></p>
+    <div class="filters" role="group" aria-label="Period" data-figures>
       <div class="seg" id="range">
         <button type="button" data-days="7" aria-pressed="false">7 days</button>
         <button type="button" data-days="30" aria-pressed="true">30 days</button>
@@ -123,9 +125,9 @@
       <a class="btn" data-csv="laps">Laps CSV</a>
     </div>
 
-    <div class="tiles" id="tiles"></div>
+    <div class="tiles" id="tiles" data-figures></div>
 
-    <div class="grid">
+    <div class="grid" data-figures>
       <section class="card wide">
         <h2>Driving hours per day</h2>
         <p class="sub">Staff-started sessions, all rigs</p>
@@ -179,6 +181,7 @@
       <h2>Licence</h2>
       <p id="licence-summary">Checking...</p>
       <p class="sub" id="licence-id" hidden></p>
+      <p class="alert" id="licence-rigs" hidden></p>
       <form class="code" id="licence-form">
         <label for="licence-code">Enter new code. Paste the whole code you were sent for more rigs, games or
           features. It works at once: no restart.</label>
@@ -188,7 +191,7 @@
       </form>
     </section>
 
-    <details>
+    <details data-figures>
       <summary>Table: every day</summary>
       <div id="table"></div>
     </details>
@@ -364,15 +367,19 @@
   const openHours = ([open, close]) => `${hh(open)}–${hh(close)}` + (close <= open ? " next day" : "");
 
   // --- render ----------------------------------------------------------------------------------
-  function render() {
-    const d = data;
-    $("cafe").textContent = d.cafe || "Owner";
-    $("pin-alerts").replaceChildren(...(d.pin_alerts || []).map((t) => {
+  function showPinAlerts(alerts) {
+    $("pin-alerts").replaceChildren(...(alerts || []).map((t) => {
       const p = document.createElement("p");
       p.className = "alert";
       p.textContent = `${t}. They were locked out for 15 minutes; if it wasn't staff, change the PINs on the setup page.`;
       return p;
     }));
+  }
+
+  function render() {
+    const d = data;
+    $("cafe").textContent = d.cafe || "Owner";
+    showPinAlerts(d.pin_alerts);
     $("period").textContent = `${shortDate(d.from)} – ${shortDate(d.to)}`;
     const s = d.summary;
     const tiles = [
@@ -468,9 +475,8 @@
     $("licence-id").hidden = !l.licence_id;
     $("licence-id").textContent = l.licence_id ? `Licence ${l.licence_id}` : "";
     $("licence-summary").className = l.warning ? "error" : "";     // "No licence found. Contact your supplier."
-  }
-  async function loadLicence() {
-    try { showLicence(await api("/api/owner/licence")); } catch { $("licence-summary").textContent = "Licence details unavailable"; }
+    $("licence-rigs").hidden = !l.rigs_warning;                     // "This licence covers 4 rigs. ..."
+    $("licence-rigs").textContent = l.rigs_warning || "";
   }
   $("licence-form").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -491,11 +497,18 @@
 
   async function load() {
     try {
-      data = await api(`/api/owner/report?days=${days}`);
+      // The Licence card first: it works even when the business figures aren't in the licence, so a new code
+      // can always be entered here.
+      const l = await api("/api/owner/licence");
+      showLicence(l);
       loadBackup();
-      loadLicence();
+      document.querySelectorAll("[data-figures]").forEach((x) => { x.hidden = !l.figures; });
+      $("figures-note").hidden = l.figures;
+      $("figures-note").textContent = l.figures_note || "";
       $("report").hidden = false;
       $("msg").textContent = "";
+      if (!l.figures) { data = null; showPinAlerts(l.pin_alerts); return; }
+      data = await api(`/api/owner/report?days=${days}`);
       render();
     } catch (err) {
       if (err.message === "locked") return;

@@ -18,7 +18,7 @@ from ..core.drivers import EXTEND_PROMPT_MS, DriverError, clean_name
 from ..core.feed import FeedBuilder
 from ..core.tv import TvError
 from ..core.wifi import wifi_share
-from ..hub import NO_CARD_TEXT
+from ..hub import NO_CARD_TEXT, NOT_LICENSED
 from ..core.health import RigState
 from ..core.phone_test import usable_address
 from ..core.pins import PinAttempts, verify_pin
@@ -75,6 +75,7 @@ def staff_router(hub: Hub) -> APIRouter:
         state = hub.health.state(rig.ip, now)
         assigned = drivers.get(rig.ip)
         left = drivers.time_left_ms(rig.ip)
+        licensed = hub.rig_licensed(rig.ip)
         return {
             "rig_id": rig.ip,
             "rig_name": rig.name,
@@ -89,6 +90,9 @@ def staff_router(hub: Hub) -> APIRouter:
             "laps_stored_as": drivers.lap_name(rig.ip, rig.driver_name, rig.name),
             # The last session here ended by itself (closing time, time up): until the next session starts.
             "auto_ended": hub.auto_ended.get(rig.ip) if assigned is None else None,
+            # Beyond the licensed rig count: racing and laps carry on, the TV leaves the rig out.
+            "licensed": licensed,
+            "licence_note": None if licensed else NOT_LICENSED,
         }
 
     def find_rig(rig_id: str):
@@ -109,7 +113,7 @@ def staff_router(hub: Hub) -> APIRouter:
     def rigs() -> dict[str, Any]:
         now = time.monotonic()
         return {"cafe": hub.config.cafe.name, "rigs": [rig_row(r, now) for r in hub.registry.all()],
-                "queue": drivers.queue(), "features": hub.config.features.model_dump(), "demo": hub.demo is not None,
+                "queue": drivers.queue(), "features": hub.features.model_dump(), "demo": hub.demo is not None,
                 # Unlocked with the owner PIN because no staff PIN is set: the page shows a red banner.
                 "staff_pin_missing": not hub.config.staff.pin}
 
@@ -145,9 +149,9 @@ def staff_router(hub: Hub) -> APIRouter:
         fields = {k: body[k] for k in ("page", "pinned_rig", "overlay") if k in body}
         if fields.get("pinned_rig"):
             find_rig(str(fields["pinned_rig"]))
-        if fields.get("overlay") == "head_to_head" and not hub.config.features.head_to_head:
+        if fields.get("overlay") == "head_to_head" and not hub.features.head_to_head:
             raise HTTPException(400, "Head to head is switched off on this hub.")
-        if fields.get("overlay") == "teams" and not hub.config.features.events:
+        if fields.get("overlay") == "teams" and not hub.features.events:
             raise HTTPException(400, "Corporate events are switched off on this hub.")
         try:
             return hub.tv.set(**fields)
@@ -200,7 +204,7 @@ def staff_router(hub: Hub) -> APIRouter:
     @router.get("/api/staff/wifi", dependencies=[Depends(guard)])
     def wifi() -> dict[str, Any]:
         """The guest Wi-Fi QR for the card panel ("Join the Wi-Fi first"), or null when none is set."""
-        share = wifi_share(hub.config)
+        share = wifi_share(hub.config, hub.features)
         return {"wifi": {"ssid": share["ssid"], "svg": _qr_svg(share["qr"])} if share else None}
 
     @router.post("/api/staff/rigs/{rig_id}/extend", dependencies=[Depends(guard)])
@@ -219,7 +223,7 @@ def staff_router(hub: Hub) -> APIRouter:
         had_session = session is not None
         card = hub.end_session(rig.ip, session) if had_session else None   # the same card if auto-end won
         hub.auto_ended.pop(rig.ip, None)
-        note = NO_CARD_TEXT if had_session and card is None and hub.config.features.sharing else None
+        note = NO_CARD_TEXT if had_session and card is None and hub.features.sharing else None
         return {**rig_row(rig, time.monotonic()), "card": _card_link(card), "card_note": note}
 
     # --- self check-in codes -------------------------------------------------------------------
@@ -232,7 +236,7 @@ def staff_router(hub: Hub) -> APIRouter:
     @router.get("/api/staff/checkin/codes", dependencies=[Depends(guard)])
     def checkin_codes() -> dict[str, Any]:
         codes = hub.checkin.codes()
-        return {"enabled": hub.config.features.self_checkin,
+        return {"enabled": hub.features.self_checkin,
                 "rigs": [code_row(r, codes[r.ip]) for r in hub.registry.all() if r.ip in codes]}
 
     @router.get("/api/staff/checkin/sheet", dependencies=[Depends(guard)])
@@ -241,9 +245,9 @@ def staff_router(hub: Hub) -> APIRouter:
         codes = hub.checkin.codes()
         rigs = [{**row, "svg": _qr_svg(row["url"])}
                 for row in (code_row(r, codes[r.ip]) for r in hub.registry.all() if r.ip in codes)]
-        share = wifi_share(hub.config)
+        share = wifi_share(hub.config, hub.features)
         address = hub.hub_address()
-        return {"enabled": hub.config.features.self_checkin, "rigs": rigs,
+        return {"enabled": hub.features.self_checkin, "rigs": rigs,
                 "wifi": {"ssid": share["ssid"], "svg": _qr_svg(share["qr"])} if share else None,
                 "address_warning": None if usable_address(address) else sticker_address_warning(address)}
 
@@ -322,7 +326,7 @@ def staff_router(hub: Hub) -> APIRouter:
     @router.get("/api/staff/competitions", dependencies=[Depends(guard)])
     def competitions() -> dict[str, Any]:
         return {"tracks": hub.drivers.store.tracks(), "challenges": comp.challenges(),
-                "event": comp.active_event(hub.active_track()), "features": hub.config.features.model_dump()}
+                "event": comp.active_event(hub.active_track()), "features": hub.features.model_dump()}
 
     @router.post("/api/staff/challenges", dependencies=[Depends(guard)])
     def challenge_create(body: dict[str, Any] = Body(...)) -> dict[str, Any]:

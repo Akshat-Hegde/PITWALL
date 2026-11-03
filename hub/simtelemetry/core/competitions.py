@@ -18,6 +18,7 @@ import datetime as dt
 import re
 import secrets
 import time
+from collections.abc import Collection
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -96,18 +97,19 @@ class Competitions:
     def challenges(self) -> list[dict[str, Any]]:
         return [self._with_board(c) for c in self.store.challenges()]
 
-    def current_challenge(self) -> dict[str, Any] | None:
-        """The running challenge that ends first, else the next one to start (for the TV)."""
+    def current_challenge(self, exclude: Collection[str] = ()) -> dict[str, Any] | None:
+        """The running challenge that ends first, else the next one to start (for the TV, whose boards leave out
+        laps from `exclude` rigs: those beyond the licensed rig count)."""
         now = self._now_ms()
         items = self.store.challenges()
         running = sorted((c for c in items if c["starts_at"] <= now < c["ends_at"]), key=lambda c: c["ends_at"])
         upcoming = sorted((c for c in items if c["starts_at"] > now), key=lambda c: c["starts_at"])
         pick = (running or upcoming or [None])[0]
-        return self._with_board(pick, limit=5) if pick else None
+        return self._with_board(pick, limit=5, exclude=exclude) if pick else None
 
-    def _with_board(self, c: dict[str, Any], limit: int = 10) -> dict[str, Any]:
+    def _with_board(self, c: dict[str, Any], limit: int = 10, exclude: Collection[str] = ()) -> dict[str, Any]:
         rows = self.store.board(c["track_key"], c["starts_at"], limit=limit, lap_class=c["lap_class"],
-                                until_ms=c["ends_at"])
+                                until_ms=c["ends_at"], exclude_rigs=exclude)
         leader = rows[0]["lap_ms"] if rows else 0
         entries = [{"rank": i + 1, "driver": r["driver"] or r["rig_name"], "lap_ms": r["lap_ms"],
                     "gap_ms": r["lap_ms"] - leader} for i, r in enumerate(rows)]
@@ -115,14 +117,15 @@ class Competitions:
         state = "upcoming" if now < c["starts_at"] else "running" if now < c["ends_at"] else "ended"
         return {**c, "state": state, "entries": entries}
 
-    def due_winners(self) -> list[dict[str, Any]]:
-        """Challenges that have ended and whose winner hasn't been announced; marks them announced."""
+    def due_winners(self, exclude: Collection[str] = ()) -> list[dict[str, Any]]:
+        """Challenges that have ended and whose winner hasn't been announced; marks them announced. For the TV's
+        winner moment, so laps from `exclude` rigs don't count (as on the TV's challenge board)."""
         now = self._now_ms()
         due = [c for c in self.store.challenges() if c["ends_at"] <= now and not c["announced"]]
         out = []
         for c in due:
             self.store.mark_challenge_announced(c["id"])
-            out.append(self._with_board(c, limit=3))
+            out.append(self._with_board(c, limit=3, exclude=exclude))
         if due:
             self._changed()
         return out

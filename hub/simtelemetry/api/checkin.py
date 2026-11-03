@@ -42,7 +42,7 @@ def checkin_router(hub: Hub) -> APIRouter:
     drivers = hub.drivers
 
     def require_on() -> None:
-        if not hub.config.features.self_checkin:
+        if not hub.features.self_checkin:
             raise HTTPException(403, "Check-in is switched off, please ask staff.")
 
     def rig_of(code: str):
@@ -53,7 +53,7 @@ def checkin_router(hub: Hub) -> APIRouter:
 
     @router.get("/checkin/{code}", response_class=HTMLResponse, include_in_schema=False)
     def page(code: str) -> HTMLResponse:
-        if not hub.config.features.self_checkin:
+        if not hub.features.self_checkin:
             return _friendly("Check-in is switched off, please ask staff.", 403)
         if svc.rig_for(code) is None:
             return _friendly("This code is no longer valid, please ask staff.", 404)

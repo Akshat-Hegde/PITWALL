@@ -53,6 +53,10 @@ NO_LICENCE = "No licence found. Contact your supplier."
 DAMAGED = "The licence file is damaged. Contact your supplier."
 PROBLEMS = {"missing": NO_LICENCE, "damaged": DAMAGED}
 
+# Hub-side safety switches, not products: only hub.toml turns them off, whatever a licence lists (a licence that
+# left them out must never stop backup warnings or the closing-time session end).
+NOT_LICENSED_FLAGS = frozenset({"auto_end_sessions", "backup_warning"})
+
 # Game ids in licences -> the names people know. An id not listed here is shown as it is.
 GAME_NAMES = {"f1_25": "F1 25"}
 

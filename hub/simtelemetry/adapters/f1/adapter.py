@@ -41,6 +41,9 @@ PACKET_LABELS: dict[PacketId, str] = {
 
 class F1Adapter:
     game = "F1"
+    # The licence's id for this game. Every packet format the adapter reads (2025, and 2026 when a rig sends it)
+    # counts as this game, so no cafe loses a rig over the format setting.
+    game_id = "f1_25"
 
     def __init__(self, track_overrides: Mapping[int, str] | None = None) -> None:
         self._gate = PacketGate()

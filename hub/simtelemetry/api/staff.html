@@ -74,6 +74,7 @@
   .timer { font-size: 1.6rem; font-weight: 800; }
   .timer.is-low { color: var(--warn); }
   .timer.is-over { color: var(--error); }
+  .rig__licence { margin: 6px 0 0; color: var(--warn); font-size: 0.9rem; font-weight: 700; }
   .extend {
     display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
     margin-top: 10px; padding: 10px 12px; background: rgba(242, 194, 48, 0.12); border-left: 3px solid var(--warn);
@@ -338,6 +339,7 @@
 <template id="rig-template">
   <section class="panel rig">
     <div class="row"><span class="title rig__name"></span><span class="muted rig__state"></span></div>
+    <p class="rig__licence" hidden></p>
     <div class="rig__session" hidden>
       <div class="row" style="margin-top:8px">
         <div><div class="faint">Now driving</div><div class="driver rig__driver"></div></div>
@@ -509,6 +511,9 @@
     el.style.setProperty("--rig-colour", rig.colour);
     el.querySelector(".rig__name").textContent = rig.rig_name;
     el.querySelector(".rig__state").textContent = rig.state_text + (rig.track_name ? " · " + rig.track_name : "");
+    const licence = el.querySelector(".rig__licence");     // "Not licensed": still races, not on the TV
+    licence.hidden = !rig.licence_note;
+    licence.textContent = rig.licence_note || "";
     const msg = el.querySelector(".rig__msg");
     if (rigMsgs[rig.rig_id]) say(msg, rigMsgs[rig.rig_id].text, rigMsgs[rig.rig_id].kind);
     const s = rig.session;

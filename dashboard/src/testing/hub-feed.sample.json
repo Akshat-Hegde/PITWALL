@@ -34,7 +34,8 @@
    "sounds": {
     "enabled": false,
     "volume": 0.6
-   }
+   },
+   "vendor_mark": true
   },
   "cafe": {
    "name": "Sim Racing Cafe",
