@@ -220,18 +220,32 @@ def test_baked_profile_is_exactly_bakedprofile():
     model.settings()                                            # the settings provisioning would write are valid
 
 
-def test_baked_features_leave_off_licensed_flags_out():
-    """A licensed feature that is off isn't written into hub.toml: the licence keeps it off, and an add-on code
-    switches it on with no reinstall. The safety flags are written as set (only hub.toml controls them)."""
+def test_baked_features_write_licensed_flags_on():
+    """hub.toml gets every licensed feature on: the licence alone keeps the ones the cafe didn't buy off, and an
+    add-on code switches them on with no reinstall. The safety flags are written as set (only hub.toml controls
+    them)."""
     p = good()
     p.apply_preset("basic")
     p.features = {**p.features, "auto_end_sessions": False}
     feats = p.baked_profile()["features"]
-    assert not BASIC_OFF & set(feats)
+    assert set(feats) == set(FEATURES)
     assert feats["auto_end_sessions"] is False and feats["backup_warning"] is True
     assert all(feats[f] for f in feats if f not in SAFETY_FLAGS)
     pay = p.licence_payload(1, "lic-1", DAY)
     assert set(pay["features"]) == {f for f, on in p.features.items() if on}
+
+
+def test_basic_cafe_can_still_enter_add_on_codes_over_an_old_hub_toml():
+    """A hub.toml kept from an earlier install (an uninstall keeps it) may say owner = false. Provisioning a BASIC
+    cafe must switch the owner page back on, or the cafe could never enter an add-on code."""
+    from simtelemetry.provision import set_features
+    import tomllib
+    p = good()
+    p.apply_preset("basic")
+    old = "[features]\nowner = false\nevents = false\n"
+    out = tomllib.loads(set_features(old, BakedProfile.model_validate(p.baked_profile()).known_features()))
+    assert out["features"]["owner"] is True and out["features"]["events"] is True
+    assert "owner" not in p.licence_payload(1, "lic-1", DAY)["features"]       # the licence keeps the figures off
 
 
 def test_licence_payload_validates():
@@ -290,7 +304,8 @@ def test_indic_rig_and_cafe_names_survive():
 
 @pytest.mark.parametrize("name, slug", [("Apex Lounge", "Apex-Lounge"), ("Café Rapide!", "Cafe-Rapide"),
                                         ("  --Pit  Stop--  ", "Pit-Stop"), ("R&D 24/7", "R-D-24-7"),
-                                        ("x" * 80, "x" * 40)])
+                                        ("x" * 80, "x" * 40), ("Straße Øst", "Strasse-Ost"),
+                                        ("Łódź Racing", "Lodz-Racing"), ("-Pit", "Pit")])
 def test_slug(name, slug):
     assert slugify(name, "c-7f3a09c1d2e4b5a6") == slug and SLUG_RE.match(slug)
 
@@ -311,7 +326,8 @@ def test_file_names():
 
 @pytest.mark.parametrize("text, out", [("CON", "_CON"), ("nul.txt", "_nul.txt"), ("Apex. ", "Apex"),
                                        ("a/b\\c", "a b c"), ("", "fallback"), ("...", "fallback"),
-                                       ("x" * 70, "x" * 60), ("Tab\there", "Tab here"), ("Com1", "_Com1")])
+                                       ("x" * 70, "x" * 60), ("Tab\there", "Tab here"), ("Com1", "_Com1"),
+                                       ("COM¹", "_COM¹"), ("lpt³.x", "_lpt³.x"), ("Console", "Console")])
 def test_safe_file_name(text, out):
     assert safe_file_name(text, "fallback") == out
 
@@ -364,6 +380,26 @@ def test_list_find_rename_and_same_names(tmp_path):
     entries = store.list()
     assert [e.title for e in entries] == ["Apex Lounge", "Zen Racing", "broken"]
     assert entries[-1].profile is None and entries[-1].error == "This cafe's file is damaged."
+
+
+def test_a_damaged_file_is_never_overwritten(tmp_path):
+    store = ProfileStore(tmp_path)
+    store.dir.mkdir(parents=True)
+    broken = store.dir / "Apex-Lounge.json"
+    broken.write_text("{half a file", encoding="utf-8")
+    p = good()
+    path = store.save(p)
+    assert path.name == f"Apex-Lounge-{p.cafe_id[2:10]}.json"
+    assert broken.read_text(encoding="utf-8") == "{half a file"
+    assert store.save(p) == path                                  # saving again keeps its own file
+
+
+@pytest.mark.parametrize("name", ["CON", "nul", "Aux", "com1", "LPT9"])
+def test_a_windows_reserved_slug_gets_its_own_file_name(tmp_path, name):
+    store = ProfileStore(tmp_path)
+    p = good(name=name)
+    path = store.save(p)
+    assert path.stem == f"{p.slug()}-{p.cafe_id[2:10]}" and store.save(p) == path
 
 
 def test_load_errors_are_plain(tmp_path):

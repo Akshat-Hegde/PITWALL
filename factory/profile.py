@@ -59,7 +59,12 @@ _HEX = re.compile(r"^#[0-9A-Fa-f]{6}$")
 _RIG_N = re.compile(r"rig\s*0*(\d+)", re.IGNORECASE)
 _CTRL = re.compile(r"[\x00-\x1f\x7f]")
 _WIN_BAD = re.compile(r'[<>:"/\\|?*\x00-\x1f\x7f]')
-_WIN_RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
+# Windows also reserves COM¹ COM² COM³ and LPT¹ LPT² LPT³ (superscript digits).
+_WIN_RESERVED = {"CON", "PRN", "AUX", "NUL",
+                 *(f"{p}{i}" for p in ("COM", "LPT") for i in (*range(1, 10), "¹", "²", "³"))}
+# Latin letters NFKD can't split into an ASCII letter and an accent: "Straße" -> "Strasse", not "Strae".
+_TRANSLIT = str.maketrans({"ß": "ss", "ẞ": "SS", "Æ": "AE", "æ": "ae", "Œ": "OE", "œ": "oe", "Ø": "O",
+                           "ø": "o", "Ł": "L", "ł": "l", "Đ": "D", "đ": "d", "Þ": "Th", "þ": "th", "ı": "i"})
 
 # --- features and presets ------------------------------------------------------------------------
 
@@ -361,10 +366,11 @@ class CafeProfile(BaseModel):
     def baked_profile(self) -> dict[str, Any]:
         """The installer's profile.json: exactly simtelemetry.provision.BakedProfile. No contact details, no price.
 
-        `features` lists every flag that is on, plus the safety flags as set. A licensed feature that is off is
-        **left out**, so hub.toml keeps it on and the licence alone keeps it off: an add-on code that adds it later
-        switches it on with no reinstall (spec F3). Writing it as false would hide it even after the cafe bought it,
-        and `owner = false` would close the owner page where add-on codes are entered.
+        `features` writes every licensed feature as **on** (the safety flags as set): the licence alone keeps the
+        features the cafe didn't buy off, so an add-on code that adds one later switches it on with no reinstall
+        (spec F3). Writing false, or leaving a flag out (an old hub.toml kept from an earlier install could hold
+        `owner = false`), could hide it even after the cafe bought it, and `owner = false` closes the owner page
+        where add-on codes are entered.
         """
         names: list[str | None] = [clean_rig_name(n) if _fits(n) else n for n in self.rig_names[:self.rigs]]
         while names and not names[-1]:
@@ -388,7 +394,7 @@ class CafeProfile(BaseModel):
             "rigs": self.rigs,
             "rig_names": rig_names,
             "games": list(dict.fromkeys(self.games)),
-            "features": {name: on for name, on in self.features.items() if on or name in SAFETY_FLAGS},
+            "features": {name: on if name in SAFETY_FLAGS else True for name, on in self.features.items()},
             "variant": self.variant,
         }
 
@@ -460,7 +466,8 @@ def _wifi_problems(w: Wifi) -> list[str]:
 
 def slugify(name: str, cafe_id: str) -> str:
     """See CafeProfile.slug. Always matches SLUG_RE."""
-    ascii_text = unicodedata.normalize("NFKD", name or "").encode("ascii", "ignore").decode("ascii")
+    latin = (name or "").translate(_TRANSLIT)
+    ascii_text = unicodedata.normalize("NFKD", latin).encode("ascii", "ignore").decode("ascii")
     slug = re.sub(r"[^A-Za-z0-9]+", "-", ascii_text).strip("-")[:SLUG_MAX].strip("-")
     if not slug:
         slug = "cafe-" + (re.sub(r"[^a-z0-9]", "", cafe_id.lower().removeprefix("c-"))[:8] or "new")
@@ -525,11 +532,12 @@ class ProfileStore:
         return None
 
     def path_for(self, profile: CafeProfile) -> Path:
-        """<slug>.json, or <slug>-<id>.json when another cafe already has that file."""
+        """<slug>.json, or <slug>-<id>.json when that file is another cafe's (or damaged: it is never overwritten),
+        or when the slug is a name Windows reserves (CON.json, NUL.json... can't be created)."""
         slug = profile.slug()
         path = self.dir / f"{slug}.json"
-        current = _peek_cafe_id(path)
-        if current is not None and current != profile.cafe_id:
+        taken = path.exists() and _peek_cafe_id(path) != profile.cafe_id
+        if taken or slug.upper() in _WIN_RESERVED:
             path = self.dir / f"{slug}-{profile.cafe_id.removeprefix('c-')[:8]}.json"
         return path
 
