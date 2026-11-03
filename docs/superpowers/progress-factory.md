@@ -200,6 +200,13 @@ Each session starts by reading this log and continues from the first task not ma
     - 9.3 version `0.6.0`: pyproject, `simtelemetry.__version__`, `test_version_is_0_6_0`, the ISPP test defines, the dashboard sample feed, INSTALL-TEST installer names, INSTALL.md "Upgrading to 0.6.0, the first version with licences".
   - Commits: de7f769 (crash), bccbe92 (9.2), 46de649 (4.1), 040a695 (8.8), then the 0.6.0 + log commit.
 
+- 2026-11-03 **L3 done: guide videos** (LOCAL, the developer's Windows PC; video projects are git-ignored `brag-output*/`).
+  - **Unbranded:** `brag-output-2026-10-15-010421` copied to `brag-output-unbranded` (original untouched). Every 9T7 mark replaced: intro = a redrawn red slanted "P" badge (`composition/assets/pitwall-mark.svg`, our own paths, no font or logo extracted) + PITWALL + "Install and feature guide for sim racing cafes" (no "presents"); outro = mark + PITWALL; wizard sidebar and the two desktop icons use the same mark; `logo-9t7*.png` deleted from the copy. Narration lines 1 and 30 rewritten without the company ("Pitwall. In the next few minutes…", "That's Pitwall. Happy racing."), only those two WAVs regenerated (Kokoro af_heart), vo-durations updated (7.42 s, 1.81 s). The 18 screenshots were checked by eye: none shows a 9T7 mark (only the product's own P mark / "POWERED BY PITWALL"), so no cover-ups were needed. `hyperframes check` 0 errors; snapshots of intro, wizard, desktop icons and outro and a 30-frame sheet over the whole render show no 9T7; the generated index.html has no "9t7" at all.
+  - **Branded:** the 2026-10-15 guide had never been rendered (no `brag.mp4` in its folder), so it was rendered from an untouched copy (`brag-output-9t7-render`).
+  - Both rendered `--quality high --workers 2` with TEMP on X: (C: had 0.3 GB free; 4 auto workers stalled starting Chrome), then the intro title frame was baked in as frame 0 (ffmpeg overlay at n=0, x264 CRF 17, audio copied, faststart).
+  - `factory/assets/video/9t7.mp4`: 242.3 s, 29.9 MB. `factory/assets/video/unbranded.mp4`: 238.3 s, 29.5 MB. Both 1920x1080 30 fps H.264 + AAC, git-ignored (`git check-ignore` confirms .gitignore:58); not committed.
+  - Still for LOCAL: L3.2's package check (build a package per variant and confirm `Pitwall guide video.mp4` is the right one) belongs with L2.
+
 ## LOCAL hand-off list (user's Windows PC)
 
 Everything below was mocked or checked statically in the cloud. Do these in order, on the seller's PC (L1–L4, L6) and a spare PC or VM (L5): **never** run an installer, `schtasks`, `netsh`, `icacls` or `taskkill` on the developer's PC, and never touch port 8000.
