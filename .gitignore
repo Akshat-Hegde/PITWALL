@@ -54,3 +54,5 @@ brag-output*/
 Shipments/
 /profiles/
 *.key
+# The two guide videos (large; LOCAL L3 copies them in, see factory/assets/video/README.md)
+factory/assets/video/*.mp4

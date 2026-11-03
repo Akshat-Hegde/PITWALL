@@ -153,8 +153,9 @@ class Contact(_Part):
 
 
 class HistoryEntry(_Part):
-    """One per build or upgrade code, appended by the factory (C10)."""
-    kind: Literal["build", "upgrade"] = "build"
+    """One per build, rebuild or upgrade code, appended by the factory (C10). A "rebuild" (Rebuild all) is the
+    same entitlements on a new program version: its price is the certificate's agreed price, not a new sale."""
+    kind: Literal["build", "rebuild", "upgrade"] = "build"
     pitwall_version: str
     licence_id: str
     seq: int
@@ -164,6 +165,7 @@ class HistoryEntry(_Part):
     rigs: int | None = None       # what that licence covered, so an upgrade can list only the add-ons
     games: list[str] = Field(default_factory=list)
     features: list[str] = Field(default_factory=list)
+    variant: Literal["9t7", "unbranded"] | None = None     # the licence's branding (None in entries before C10)
 
 
 class CafeProfile(BaseModel):
