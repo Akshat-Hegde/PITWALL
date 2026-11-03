@@ -7,7 +7,7 @@ Files, in the key folder (`keys_dir()`):
     public.pem      the public key, PEM (SubjectPublicKeyInfo); always re-derived from the private key on load.
     backup.json     where and when the private key was last copied (`copy_backup`), for the backup banner.
 
-The key folder is `%APPDATA%\\<Product>Factory\\keys` on Windows and `$XDG_CONFIG_HOME/<Product>Factory/keys`
+The key folder is `%USERPROFILE%\\<Product>Factory\\keys` on Windows and `$XDG_CONFIG_HOME/<Product>Factory/keys`
 (default ~/.config) elsewhere; `<PRODUCT>_FACTORY_KEYS` or a `folder=` argument overrides it (tests use tmp).
 
 The private key never goes into the repo, a package or a Shipments folder: every write of key material goes
@@ -106,7 +106,9 @@ def default_dir(env: dict[str, str] | None = None, windows: bool | None = None) 
     if env.get(KEYS_ENV):
         return Path(env[KEYS_ENV])
     if windows:
-        base = Path(env["APPDATA"]) if env.get("APPDATA") else Path.home() / "AppData" / "Roaming"
+        # The user's profile folder, not %APPDATA%: Microsoft Store Python quietly redirects AppData writes into
+        # its own package folder, so icacls (a separate program) would look at a folder that doesn't exist.
+        base = Path(env["USERPROFILE"]) if env.get("USERPROFILE") else Path.home()
     else:
         base = Path(env["XDG_CONFIG_HOME"]) if env.get("XDG_CONFIG_HOME") else Path.home() / ".config"
     return base / FACTORY_DIR_NAME / "keys"

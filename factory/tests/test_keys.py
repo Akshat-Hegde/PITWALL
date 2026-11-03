@@ -45,8 +45,10 @@ def load_module(path):
 def test_default_folder():
     name = f"{brand.EXE_NAME}Factory"
     assert K.FACTORY_DIR_NAME == name
-    win = K.default_dir({"APPDATA": r"C:\Users\ravi\AppData\Roaming"}, windows=True)
-    assert win.parts[-2:] == (name, "keys") and str(win).startswith(r"C:\Users\ravi\AppData\Roaming")
+    # The profile folder, never %APPDATA%: Microsoft Store Python redirects AppData writes, so icacls would miss it.
+    win = K.default_dir({"USERPROFILE": r"C:\Users\ravi", "APPDATA": r"C:\Users\ravi\AppData\Roaming"}, windows=True)
+    assert win.parts[-2:] == (name, "keys") and str(win).startswith(r"C:\Users\ravi")
+    assert "AppData" not in str(win)
     assert K.default_dir({"XDG_CONFIG_HOME": "/x/cfg"}, windows=False).as_posix() == f"/x/cfg/{name}/keys"
     assert K.default_dir({}, windows=False) == K.Path.home() / ".config" / name / "keys"
     assert K.default_dir({K.KEYS_ENV: "/tmp/k", "APPDATA": "/a"}, windows=True) == K.Path("/tmp/k")

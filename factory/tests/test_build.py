@@ -693,7 +693,7 @@ def test_settings_never_saved_in_repo_or_shipments(tmp_path):
 
 
 def test_config_dir_next_to_keys(tmp_path):
-    env = {"XDG_CONFIG_HOME": str(tmp_path), "APPDATA": str(tmp_path), K.KEYS_ENV: str(tmp_path / "elsewhere")}
+    env = {"XDG_CONFIG_HOME": str(tmp_path), "USERPROFILE": str(tmp_path), K.KEYS_ENV: str(tmp_path / "elsewhere")}
     assert B.config_dir(env) == K.default_dir({k: v for k, v in env.items() if k != K.KEYS_ENV}).parent
     assert B.config_dir(env).name == f"{brand.EXE_NAME}Factory"
     assert B.config_dir({B.CONFIG_ENV: str(tmp_path / "c")}) == tmp_path / "c"

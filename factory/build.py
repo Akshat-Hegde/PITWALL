@@ -130,7 +130,7 @@ class BuildCancelled(BuildError):
 # --- settings -----------------------------------------------------------------------------------
 
 def config_dir(env: dict[str, str] | None = None) -> Path:
-    """The factory's own folder: `%APPDATA%\\<Product>Factory` (the keys folder's parent), or $<PRODUCT>_FACTORY_CONFIG.
+    """The factory's own folder: `%USERPROFILE%\\<Product>Factory` (the keys folder's parent), or $<PRODUCT>_FACTORY_CONFIG.
     A keys folder moved with <PRODUCT>_FACTORY_KEYS doesn't move the settings."""
     env = dict(os.environ if env is None else env)
     if env.get(CONFIG_ENV):

@@ -501,7 +501,7 @@ Rebuild all save the cafe first). Long jobs show a progress bar with **Cancel**,
 wrote. If something fails, the message says what to do, and **Show details** has the full log.
 
 **Signing key (first run).** Every licence is signed with your private key, kept only on this PC in
-`%APPDATA%\PitwallFactory\keys` (never in the repo, a package or Shipments).
+`%USERPROFILE%\PitwallFactory\keys` (never in the repo, a package or Shipments).
 
 1. Press **Set up keys** on the red banner. It makes the key and adds its public half to
    `hub\simtelemetry\licence_pubkey.py`. Commit that file. Cafes' hubs only accept licences from a program that
@@ -541,7 +541,7 @@ back on the TV the moment the owner enters it.
 **Where things live.** Packages and cafe files go to the Shipments folder (default `Documents\Pitwall Shipments`;
 change it in **Settings…**, which also has the Microsoft Edge location and the key backup). Cafe files are in
 `<Shipments>\profiles`. Keep Shipments outside the repo; `.gitignore` also blocks `Shipments/`, `/profiles/` and
-`*.key`. The factory's own settings and log are in `%APPDATA%\PitwallFactory`.
+`*.key`. The factory's own settings and log are in `%USERPROFILE%\PitwallFactory`.
 
 **Files to copy in by hand (LOCAL, not in git):** the two guide videos as `factory\assets\video\9t7.mp4` and
 `factory\assets\video\unbranded.mp4` (see the README there; a variant without its video can't be built), and the
