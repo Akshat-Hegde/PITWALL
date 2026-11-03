@@ -14,6 +14,7 @@ dependencies = [
     "pydantic>=2.6",
     "segno>=1.6",           # QR codes for story cards (pure Python, offline)
     "python-multipart>=0.0.9",  # logo upload on /setup
+    "cryptography>=42",     # Ed25519 licence check (offline)
 ]
 
 [project.optional-dependencies]
