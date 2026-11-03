@@ -1,6 +1,7 @@
 """Backups: laps.db copied with SQLite's online backup (safe while the hub writes), plus settings.json, rigs.json,
-tv.json, checkin.json, branding/, logos/ and hub.toml, zipped as pitwall-YYYYMMDD-HHMM.zip. Restore puts them back
-(hub stopped).
+tv.json, checkin.json, licence.txt, branding/, logos/ and hub.toml, zipped as pitwall-YYYYMMDD-HHMM.zip. Restore puts
+them back (hub stopped; the hub reads them, the licence included, when it starts again). A restore never replaces
+this cafe's licence with an older one from the same cafe (add-ons bought since the backup would be lost).
 
 setup-code.txt is deliberately left out: it is a secret that must die after setup.
 
@@ -26,11 +27,12 @@ from pathlib import Path
 from typing import Any
 
 from .. import __version__, brand
+from ..licence import LICENCE_FILE
 
 log = logging.getLogger(__name__)
 
 PATTERN = f"{brand.SLUG}-*.zip"            # pitwall-20261013-0400.zip with the current name
-BACKED_UP_FILES = ("settings.json", "rigs.json", "tv.json", "checkin.json")
+BACKED_UP_FILES = ("settings.json", "rigs.json", "tv.json", "checkin.json", "licence.txt")
 BACKED_UP_FOLDERS = ("branding", "logos")
 STATUS_FILE = "backup-status.json"
 WARN_AFTER = dt.timedelta(days=2)
@@ -339,6 +341,9 @@ def restore(zip_path: Path, data_dir: Path, config_path: Path | None) -> None:
                         shutil.move(str(staged), str(config_path))
                     continue
                 dest = data_dir / name
+                if name == LICENCE_FILE and _keep_current_licence(staging, data_dir):
+                    log.info("Restore kept this PC's licence: it is newer than the one in the backup")
+                    continue
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 if name == "laps.db":
                     if dest.exists():
@@ -348,6 +353,26 @@ def restore(zip_path: Path, data_dir: Path, config_path: Path | None) -> None:
                 os.replace(staged, dest)
         finally:
             shutil.rmtree(staging, ignore_errors=True)
+
+
+def _keep_current_licence(staging: Path, data_dir: Path) -> bool:
+    """True when this PC's licence verifies and the backup's is the same cafe's with a lower seq (or doesn't
+    verify). A missing or damaged current licence, or another cafe's, is replaced by the backup's."""
+    from ..licence import LicenceError, read_file
+    try:
+        current = read_file(data_dir)
+    except LicenceError:
+        return False
+    if current is None:
+        return False
+    try:
+        restored = read_file(staging)
+    except LicenceError:
+        return True
+    if restored is None:
+        return True
+    return (restored.payload.cafe_id == current.payload.cafe_id
+            and restored.payload.seq < current.payload.seq)
 
 
 def last_backup(target_dir: Path) -> dict[str, Any] | None:

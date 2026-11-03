@@ -8,9 +8,9 @@ import logging
 import threading
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
-from . import brand, paths
+from . import brand, licence, paths
 from .config import AppConfig
 from .core.adapter import Checked, GameAdapter
 from .core.health import HealthMonitor, RigState, SilentRigWatch
@@ -114,6 +114,14 @@ class Hub:
         self.pin_attempts = PinAttempts()          # wrong PINs on the staff, owner and setup pages
         self._wrong_log_window: tuple[float, int] | None = None     # (window start, lines logged in it)
         self._queue: asyncio.Queue[tuple[Checked, bytes, str, float]] = asyncio.Queue(QUEUE_MAX)
+        # Licence (spec 2.2): the fallback until load_licence() runs at start-up (tests and replays keep it).
+        self._entitlements: licence.Entitlements = licence.FALLBACK
+        self.licence_problem: str | None = None       # "missing" / "damaged": staff, setup and owner pages say so
+        self._licence_lock = threading.Lock()
+        # Called with the new entitlements whenever they change (start-up load, a new code): enforcement hooks.
+        self.entitlement_hooks: list[Callable[[licence.Entitlements], None]] = []
+        # Bumped when every TV must get a fresh snapshot (a new licence): see FeedConnection.tick.
+        self.feed_epoch = 0
 
     # --- receive path (sync, called from datagram_received) -------------------------
 
@@ -574,6 +582,81 @@ class Hub:
                 for line in self.summary_lines(now):
                     log.info("%s", line)
 
+    # --- licence ---------------------------------------------------------------------
+
+    @property
+    def entitlements(self) -> licence.Entitlements:
+        return self._entitlements
+
+    def load_licence(self, warn_missing: bool = True) -> licence.Entitlements:
+        """Read <data>/licence.txt at start-up. Missing or damaged: the fallback, and staff Health, /setup and the
+        owner page say so (never the TV). `warn_missing=False` (demo) runs on the fallback quietly."""
+        try:
+            found = licence.read_file(self.config.data_dir)
+        except licence.LicenceError:
+            log.warning("%s is damaged or not signed for this hub; using the fallback licence",
+                        self.config.data_dir / licence.LICENCE_FILE)
+            found, problem = None, "damaged"
+        else:
+            problem = None if found is not None or not warn_missing else "missing"
+        if found is None:
+            if problem == "missing":
+                log.warning("No licence file; using the fallback licence (%d rigs)", licence.FALLBACK.rigs)
+            self._set_entitlements(licence.FALLBACK, problem)
+        else:
+            log.info("Licence %s: %s", found.payload.licence_id, licence.summary(licence.entitlements_from(found)))
+            self._set_entitlements(licence.entitlements_from(found), None)
+        return self._entitlements
+
+    def apply_licence(self, code: Any) -> licence.Entitlements:
+        """A new code from the owner page: verified, checked against the current licence (same cafe, higher seq;
+        a missing or damaged file counts as no licence yet, so the owner can recover), saved, and applied at once
+        with no restart; every TV gets a fresh snapshot. Raises LicenceError with the owner's plain message."""
+        with self._licence_lock:
+            new = licence.verify(code)
+            ent = licence.accept_new(self._entitlements, new)
+            try:
+                licence.write_file(self.config.data_dir, new)
+            except OSError:
+                log.exception("Could not save %s", self.config.data_dir / licence.LICENCE_FILE)
+                raise licence.LicenceError(licence.SAVE_FAILED) from None
+            self._set_entitlements(ent, None)
+        log.info("New licence %s installed: %s", ent.licence_id, licence.summary(ent))
+        return ent
+
+    def _set_entitlements(self, ent: licence.Entitlements, problem: str | None) -> None:
+        self._entitlements = ent
+        self.licence_problem = problem
+        self._on_entitlements_changed()
+
+    def _on_entitlements_changed(self) -> None:
+        """Re-apply everything the licence decides (enforcement hooks), then refresh every TV."""
+        for hook in list(self.entitlement_hooks):
+            try:
+                hook(self._entitlements)
+            except Exception:  # one hook failing must never stop the licence applying
+                log.exception("Applying the licence failed in %r", hook)
+        self.refresh_feed()
+
+    def refresh_feed(self) -> None:
+        """Every connected TV gets a fresh snapshot on its next tick (it replaces the TV's state)."""
+        self.feed_epoch += 1
+
+    def licence_warning(self) -> str | None:
+        """"No licence found. ..." or "The licence file is damaged. ..." (staff Health, /setup, owner page)."""
+        return licence.PROBLEMS.get(self.licence_problem) if self.licence_problem else None
+
+    def licence_summary(self) -> str:
+        return licence.summary(self._entitlements, self.licence_problem)
+
+    def licence_info(self) -> dict[str, Any]:
+        """The owner page's Licence card (never the code itself)."""
+        ent = self._entitlements
+        return {"source": ent.source, "summary": self.licence_summary(),
+                "cafe_name": ent.cafe_name, "rigs": ent.rigs, "games": [licence.game_name(g) for g in ent.games],
+                "game_ids": list(ent.games), "features": list(ent.features), "variant": ent.variant,
+                "licence_id": ent.licence_id, "seq": ent.seq, "warning": self.licence_warning()}
+
     # --- views -----------------------------------------------------------------------
 
     def add_startup_warning(self, code: str, message: str) -> None:
@@ -596,6 +679,9 @@ class Hub:
         hours = self.hours_check_warning()
         if hours:
             warnings.append({"code": "check_hours", "rig_id": None, "message": hours})
+        if self.licence_problem:
+            warnings.append({"code": f"licence_{self.licence_problem}", "rig_id": None,
+                             "message": self.licence_warning()})
         if self.udp_busy:
             warnings.append({"code": "udp_port_busy", "rig_id": None, "message": self.udp_busy})
         try:

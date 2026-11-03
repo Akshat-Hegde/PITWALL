@@ -86,7 +86,8 @@ def test_bad_hub_toml_starts_with_defaults_and_warns_staff_and_setup(tmp_path):
     assert code == 0
     setup_msgs = [w["message"] for w in got["/api/setup"]["warnings"]]
     assert setup_msgs == ["Your settings file (hub.toml) has a mistake on line 2: Invalid value. "
-                          "The hub started with default settings."]
+                          "The hub started with default settings.",
+                          "No licence found. Contact your supplier."]      # no licence.txt: the fallback
     staff = got["/api/staff/health"]["warnings"]
     assert {"code": "config", "rig_id": None, "message": setup_msgs[0]} in staff
     log_text = (tmp_path / "data" / "logs" / "hub.log").read_text(encoding="utf-8")
@@ -246,7 +247,7 @@ def test_run_with_damaged_settings_warns_on_setup_page(tmp_path):
     assert code == 0
     state = got["/api/setup"]
     assert state["needs_code"] is True and state["authed"] is True
-    assert [w["code"] for w in state["warnings"]] == ["settings_damaged"]
+    assert [w["code"] for w in state["warnings"]] == ["settings_damaged", "licence_missing"]
     # Setup isn't finished: the log points to the shortcut but never holds the code (data\logs is open to users)
     log_text = (data / "logs" / "hub.log").read_text(encoding="utf-8")
     assert "Setup isn't finished. Open http://" in log_text

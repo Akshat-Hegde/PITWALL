@@ -371,6 +371,7 @@ class FeedConnection:
         self._h2h: dict[str, Any] | None = None               # head to head last sent
         self._tv: dict[str, Any] | None = None                # TV page setting last sent
         self._cafe: dict[str, Any] | None = None              # cafe name, tagline, colour, logo last sent
+        self._epoch = builder.hub.feed_epoch                  # hub.feed_epoch of the last snapshot sent
 
     def _message(self, type_: str, body: dict[str, Any]) -> dict[str, Any]:
         msg = {"v": SCHEMA_VERSION, "type": type_, "seq": self.seq, "ts": round(self._clock() * 1000)}
@@ -379,6 +380,7 @@ class FeedConnection:
         return msg
 
     def start(self, now: float) -> dict[str, Any]:
+        self._epoch = self.builder.hub.feed_epoch
         body = self.builder.snapshot_body(now)
         self._rig_infos = {r["rig_id"]: r for r in body["rigs"]}
         self._sessions = {f["rig_id"]: f["session"]["session_id"] for f in body["frame"]["rigs"]
@@ -395,6 +397,8 @@ class FeedConnection:
         return self._message("snapshot", body)
 
     def tick(self, now: float) -> list[dict[str, Any]]:
+        if self.builder.hub.feed_epoch != self._epoch:
+            return [self.start(now)]       # e.g. a new licence: a fresh snapshot replaces the TV's state (seq goes on)
         out = []
         for info in self.builder.rig_infos():
             if self._rig_infos.get(info["rig_id"]) != info:

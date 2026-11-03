@@ -11,6 +11,9 @@ API (errors are exceptions, never return values):
                                                 for the factory, which signs exactly these bytes
 - `accept_new(current, new) -> Entitlements`    raises LicenceError (OTHER_CAFE, OLDER, ALREADY_INSTALLED)
 - `FALLBACK`                                    used when there is no licence or it is damaged
+- `read_file(data_dir) -> Licence | None`       <data>/licence.txt; None when missing, LicenceError when damaged
+- `write_file(data_dir, licence)`               atomic (a power cut never leaves half a file)
+- `summary(ent, problem)`, `game_name(id)`      plain-English lines for the owner, staff and setup pages
 
 LicenceError's message is plain English, shown to the owner as-is.
 """
@@ -21,8 +24,10 @@ import base64
 import binascii
 import datetime as dt
 import json
+import os
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Annotated, Any, Literal, NamedTuple
 
 from cryptography.exceptions import InvalidSignature
@@ -40,6 +45,16 @@ INVALID = "This code isn't valid: check you copied all of it."
 OTHER_CAFE = "This code is for a different cafe."
 OLDER = "This code is older than the one installed."
 ALREADY_INSTALLED = "This code is already installed."
+SAVE_FAILED = "The code couldn't be saved on this PC. Try again; if it keeps happening, restart the hub PC."
+
+LICENCE_FILE = "licence.txt"
+# Why the hub runs on the fallback (staff Health, /setup and the owner page; never the TV).
+NO_LICENCE = "No licence found. Contact your supplier."
+DAMAGED = "The licence file is damaged. Contact your supplier."
+PROBLEMS = {"missing": NO_LICENCE, "damaged": DAMAGED}
+
+# Game ids in licences -> the names people know. An id not listed here is shown as it is.
+GAME_NAMES = {"f1_25": "F1 25"}
 
 _B64URL = re.compile(r"[A-Za-z0-9_-]+={0,2}")
 # Invisible characters that copy-paste (chat apps, Notepad's UTF-8 BOM) can slip into a code. Never part of base64url.
@@ -221,3 +236,54 @@ def accept_new(current: Entitlements | None, new: Licence) -> Entitlements:
     if ent.seq <= current.seq:
         raise LicenceError(OLDER)
     return ent
+
+
+# --- the file on the cafe PC ------------------------------------------------------------------
+
+def read_file(data_dir: Path, keys: tuple[bytes, ...] | None = None) -> Licence | None:
+    """The verified licence in <data>/licence.txt; None when there is no file; LicenceError(INVALID) when it can't be
+    read or doesn't verify (damaged, cut short, or made for another key)."""
+    path = Path(data_dir) / LICENCE_FILE
+    try:
+        with open(path, "rb") as f:
+            raw = f.read(MAX_CODE_LEN * 4 + 1)       # never reads a huge file whole; verify refuses it anyway
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise LicenceError(INVALID) from exc
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        raise LicenceError(INVALID) from None
+    return verify(text, keys)
+
+
+def write_file(data_dir: Path, licence: Licence) -> None:
+    """Write the normalised code to <data>/licence.txt atomically. It inherits the data folder's permissions
+    (SYSTEM and Administrators only), set by the installer. Raises OSError."""
+    path = Path(data_dir) / LICENCE_FILE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    try:
+        with open(tmp, "w", encoding="utf-8", newline="\n") as f:
+            f.write(licence.code + "\n")
+            f.flush()
+            os.fsync(f.fileno())               # on disk before the rename, or a power cut can leave an empty file
+        os.replace(tmp, path)
+    finally:
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def game_name(game_id: str) -> str:
+    return GAME_NAMES.get(game_id, game_id)
+
+
+def summary(ent: Entitlements, problem: str | None = None) -> str:
+    """"Licensed to Apex Lounge · 6 rigs · F1 25", or why there is no licence (fallback)."""
+    if ent.source == "fallback":
+        return PROBLEMS.get(problem or "missing", NO_LICENCE)
+    rigs = "1 rig" if ent.rigs == 1 else f"{ent.rigs} rigs"
+    return f"Licensed to {ent.cafe_name} · {rigs} · {', '.join(game_name(g) for g in ent.games)}"

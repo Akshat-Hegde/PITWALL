@@ -16,6 +16,7 @@ from pydantic import ValidationError
 from ..core.analytics import Analytics
 from ..core.backup import TOO_LONG, BackupFailed, check_folder, last_backup
 from ..core.settings import CafeSettings, SettingsDamaged, SettingsStore
+from ..licence import INVALID, LicenceError
 from .pages import render_page
 from .staff import PinGuard
 
@@ -114,5 +115,21 @@ def owner_router(hub: Hub) -> APIRouter:
         config.set_owner_backup_dir(folder)
         log.info("Backup folder is now %s", config.backups_dir)
         return backup_status()
+
+    @router.get("/api/owner/licence", dependencies=[Depends(check)])
+    def licence_get() -> dict[str, Any]:
+        return hub.licence_info()
+
+    @router.post("/api/owner/licence", dependencies=[Depends(check)])
+    def licence_post(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+        """{"code": "PW1-..."}: a new licence code (add-ons). Applies at once; errors are plain sentences."""
+        code = body.get("code")
+        if not isinstance(code, str) or not code.strip():
+            raise HTTPException(400, INVALID)
+        try:
+            hub.apply_licence(code)
+        except LicenceError as exc:
+            raise HTTPException(400, str(exc)) from None
+        return hub.licence_info()
 
     return router

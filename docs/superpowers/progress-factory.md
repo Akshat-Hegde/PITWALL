@@ -12,7 +12,7 @@ Each session starts by reading this log and continues from the first task not ma
 
 ## Tasks
 - [x] C1 Licence core
-- [ ] C2 Licence storage, owner page, backups
+- [x] C2 Licence storage, owner page, backups
 - [ ] C3 Enforcement
 - [ ] C4 Dashboard
 - [ ] C5 Provisioning
@@ -37,6 +37,21 @@ Each session starts by reading this log and continues from the first task not ma
   - PyInstaller spec unchanged: pyinstaller-hooks-contrib bundles `cryptography` itself. **LOCAL** must confirm the built exe verifies a code (part of L1/L2).
   - C1 review: payload strings must be one visible line (no control characters, not blank; games/feature names ≤ 40); `v` is a strict int (`true`/`1.0` refused); `seq` ≤ 2³¹−1; pasted codes also drop zero-width characters and a BOM (Notepad); codes over 20,000 characters are refused unread; `verify(keys=<bytes>)` raises TypeError instead of silently failing; `encode_payload` accepts a `LicencePayload` or `date`, and new `check_payload(bytes)` lets C8 validate before signing; `licensed()` refuses bools. Tests: 84 in test_licence.py; hub `953 passed, 10 skipped, 5 failed` (same 5 pre-existing).
 
+- 2026-11-03 **C2 Licence storage, owner page, backups** (cloud). Hub: `980 passed, 10 skipped, 5 failed` (the same 5 pre-existing environment failures). New `hub/tests/test_licence_storage.py` (26 tests) and the shared helper `hub/tests/licence_helpers.py` (`trust(monkeypatch) -> Signer`, `Signer.code(**payload_overrides)`, `payload()`, `CAFE_ID`) for C3+.
+  - `licence.py`: `LICENCE_FILE = "licence.txt"`, `read_file(data_dir)` (None when missing, `LicenceError` when damaged/unreadable/not signed by a trusted key; tolerates a BOM, CRLF and wrapped lines), `write_file(data_dir, licence)` (atomic tmp + fsync + `os.replace`, like settings.json), `NO_LICENCE`, `DAMAGED`, `SAVE_FAILED`, `PROBLEMS`, `GAME_NAMES = {"f1_25": "F1 25"}` + `game_name(id)`, `summary(ent, problem)` ("Licensed to Apex Lounge · 6 rigs · F1 25", "1 rig").
+  - `Hub`: `entitlements` (property; `FALLBACK` until loaded, so tests and in-memory hubs are quiet), `licence_problem` ("missing"/"damaged"/None), `load_licence(warn_missing=True)`, `apply_licence(code)` (verify → `accept_new` against the current entitlements → write → swap; under a lock; raises `LicenceError`), `licence_warning()`, `licence_summary()`, `licence_info()` (owner card; never the code), **`entitlement_hooks: list[Callable[[Entitlements], None]]`** called by `_on_entitlements_changed()` on every load/apply (one failing hook is logged, never stops the licence) — **C3 hooks in here**, then `refresh_feed()`.
+  - Warnings: `admin_warnings()` adds `licence_missing` / `licence_damaged` (staff Health and /setup, never the TV feed). `__main__` loads the licence right after creating the Hub; only `run` (not `--demo`, not replay) warns about a *missing* file; a damaged one is always said.
+  - Feed refresh: `Hub.feed_epoch` is bumped by `refresh_feed()`; `FeedConnection.tick` then sends a fresh `snapshot` (seq carries on) which replaces the TV's state, exactly like a reconnect's. Documented as additive in `docs/WS_SCHEMA.md` (§1 "On connect" and the `snapshot` row). The dashboard already handles a snapshot at any seq (reducer replaces all state); no dashboard change.
+  - Owner API: `GET /api/owner/licence` → `{source, summary, cafe_name, rigs, games (display names), game_ids, features, variant, licence_id, seq, warning}`; `POST /api/owner/licence {code}` → same body, or 400 with the LicenceError message (non-string/blank code → INVALID). Both behind the owner `check` (feature flag 404, no PIN 403, `PinGuard` + shared `PinAttempts`).
+  - Owner page: Licence card (summary, "Licence <id>", "Enter new code" textarea + "Use this code", plain errors and "Done. The new licence is in use now."), all via `textContent`. The fallback summary is the warning text, shown in red. Setup page: one read-only line under "Rigs" from `/api/setup` `licence` (summary only, shown without PIN like the cafe name; never the code or licence id).
+  - Backups: `licence.txt` added to `BACKED_UP_FILES`; restore puts it back with the rest (the hub is stopped for restore and reads it at start). The data folder ACL is set on the folder by the installer and inherited, so no per-file work.
+  - LOCAL: check the Licence card on the owner page by eye, and that `licence.txt` in `C:\ProgramData\...\data` inherits the SYSTEM/Administrators-only permissions after a code is entered.
+
 ## Decisions to confirm
 - C1: the error messages end with a full stop ("This code isn't valid: check you copied all of it."), matching the hub's other owner messages.
 - C1: re-entering the exact code that is installed says "This code is already installed." instead of "older than the one installed" (a fourth plain message, not in spec §2.3). A different code with the same or a lower seq says "This code is older than the one installed."
+- C2: a **damaged** licence file counts as "no licence yet" when a new code is entered, so any validly signed code (even another cafe's) is accepted and the owner can recover without the seller. The signature still has to verify.
+- C2: a **restore** keeps this PC's licence when it verifies and the backup's is the same cafe's with a lower seq (or doesn't verify), so restoring an old backup never loses add-ons bought since. A missing or damaged current licence, or another cafe's, is replaced by the backup's.
+- C2: there is no `[features]` flag for the licence itself (it decides the flags; an owner switch would defeat it). Code entry lives on the owner page, so with `[features] owner = false` a new code can't be entered until it is switched back on (or the seller provisions it, C5).
+- C2: the hub refreshes TVs after a new code with a mid-connection `snapshot` (additive in WS v1) rather than closing the socket.
+- C2: a demo or replay with no licence file runs on the fallback without the "No licence found" warning; a damaged file is still reported.

@@ -186,6 +186,7 @@
 
     <section class="panel">
       <div class="title">Rigs</div>
+      <p class="muted" id="licence-line" hidden></p>
       <div class="rigbox">
         On every rig, in F1 25: Game Options › Settings › UDP Telemetry Settings: UDP Telemetry On,
         UDP Broadcast Mode Off, UDP IP Address = <strong id="hub-ip"></strong>, UDP Port <strong id="udp-port"></strong>,
@@ -276,6 +277,8 @@
     state = s;
     authed = !!s.authed;
     $("product").textContent = s.product;
+    $("licence-line").hidden = !s.licence;
+    $("licence-line").textContent = s.licence || "";   // "Licensed to ... · 6 rigs · F1 25"; new codes: owner page
     document.title = "Setup " + s.product;
     $("code-panel").hidden = !s.needs_code;
     renderWarnings(s.warnings || [], s.hidden_warnings || 0);

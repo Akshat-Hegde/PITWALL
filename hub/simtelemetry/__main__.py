@@ -775,6 +775,9 @@ def _run_command(args: argparse.Namespace, config: AppConfig, problems: list[Con
     for code, message in warnings:
         hub.add_startup_warning(code, message)
     hub.settings_from_older_version = from_older_version
+    # The licence (spec 2.2): missing or damaged runs on the fallback, never stops the hub. The demo and replays
+    # run on the fallback quietly unless their data folder holds a licence (the factory's preview writes one).
+    hub.load_licence(warn_missing=args.command == "run" and not getattr(args, "demo", False))
 
     selection = SourceSelection()
     if args.command == "replay":

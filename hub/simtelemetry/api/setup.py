@@ -116,6 +116,8 @@ def setup_router(hub: Hub) -> APIRouter:
             "hub_address": hub.hub_address(), "http_port": c.network.http_port, "udp_port": c.network.udp_port,
             # "Test from your phone": the /hello QR and whether a phone has reached the hub (U4)
             "phone_test": hub.phone_test.status(hub.hub_address(), c.network.http_port, _qr_svg),
+            # One read-only line ("Licensed to Apex Lounge · 6 rigs · F1 25"), never the code: shown before the PIN.
+            "licence": hub.licence_summary(),
             "authed": full,                         # rig addresses and editing need the owner PIN
             "rigs": rig_rows(full),
             # Start-up, address and settings problems only for the owner (or the setup code before setup); anyone

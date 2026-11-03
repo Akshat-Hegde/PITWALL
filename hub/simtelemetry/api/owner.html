@@ -85,6 +85,10 @@
   form.folder { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; }
   form.folder label { flex-basis: 100%; color: var(--text-secondary); font-size: 0.85rem; }
   form.folder input { flex: 1 1 220px; min-width: 0; padding: 8px 10px; font: inherit; color: var(--text-primary); background: var(--surface-2); border: 1px solid var(--line); }
+  form.code { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0 0; }
+  form.code label { flex-basis: 100%; color: var(--text-secondary); font-size: 0.85rem; }
+  form.code textarea { flex-basis: 100%; min-width: 0; padding: 8px 10px; font: 0.85rem/1.3 ui-monospace, Consolas, monospace; color: var(--text-primary); background: var(--surface-2); border: 1px solid var(--line); resize: vertical; word-break: break-all; }
+  #licence-card { margin-top: 12px; }
   .alert { margin: 0 0 12px; padding: 10px 14px; background: rgba(242, 194, 48, 0.12); border-left: 3px solid #f2c230; color: var(--text-primary); }
   @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
 </style>
@@ -169,6 +173,19 @@
       </form>
       <button class="btn" type="button" id="backup-now">Back up now</button>
       <span class="msg" id="backup-msg" role="status"></span>
+    </section>
+
+    <section class="card" id="licence-card">
+      <h2>Licence</h2>
+      <p id="licence-summary">Checking...</p>
+      <p class="sub" id="licence-id" hidden></p>
+      <form class="code" id="licence-form">
+        <label for="licence-code">Enter new code. Paste the whole code you were sent for more rigs, games or
+          features. It works at once: no restart.</label>
+        <textarea id="licence-code" rows="3" autocomplete="off" spellcheck="false" maxlength="20000"></textarea>
+        <button class="btn" type="submit">Use this code</button>
+        <span class="msg" id="licence-msg" role="status"></span>
+      </form>
     </section>
 
     <details>
@@ -445,10 +462,38 @@
     } catch (err) { $("backup-msg").textContent = err.message === "locked" ? "" : err.message; }
   });
 
+  // --- licence: every text from the hub goes in with textContent ---------------------------------
+  function showLicence(l) {
+    $("licence-summary").textContent = l.summary;
+    $("licence-id").hidden = !l.licence_id;
+    $("licence-id").textContent = l.licence_id ? `Licence ${l.licence_id}` : "";
+    $("licence-summary").className = l.warning ? "error" : "";     // "No licence found. Contact your supplier."
+  }
+  async function loadLicence() {
+    try { showLicence(await api("/api/owner/licence")); } catch { $("licence-summary").textContent = "Licence details unavailable"; }
+  }
+  $("licence-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const code = $("licence-code").value.trim();
+    if (!code) { $("licence-msg").textContent = "Paste the new code first."; $("licence-msg").className = "msg error"; return; }
+    $("licence-msg").textContent = "Checking the code...";
+    $("licence-msg").className = "msg";
+    try {
+      showLicence(await api("/api/owner/licence", { method: "POST", headers: { "Content-Type": "application/json" },
+                                                    body: JSON.stringify({ code }) }));
+      $("licence-code").value = "";
+      $("licence-msg").textContent = "Done. The new licence is in use now.";
+    } catch (err) {
+      $("licence-msg").textContent = err.message === "locked" ? "" : err.message;
+      $("licence-msg").className = "msg error";
+    }
+  });
+
   async function load() {
     try {
       data = await api(`/api/owner/report?days=${days}`);
       loadBackup();
+      loadLicence();
       $("report").hidden = false;
       $("msg").textContent = "";
       render();

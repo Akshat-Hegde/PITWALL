@@ -27,7 +27,7 @@ day or week starts, the hub sends one `leaderboard` message per period.
 | Direction | Server → client. Clients send nothing in v1 (anything received is ignored). |
 | Encoding | One JSON object per text frame, UTF-8. |
 | Frame rate | `frame` messages at a fixed rate, 15 Hz by default (configurable 10–20 Hz). |
-| On connect | The hub sends a `snapshot` first, then live messages. |
+| On connect | The hub sends a `snapshot` first, then live messages. *(Added in v1:)* the hub may send another `snapshot` on the same connection when something the whole screen depends on changes (a new licence code); `seq` carries on, and the client handles it exactly like the first one: it **replaces** all client state. |
 | Reconnect | Clients reconnect with backoff (e.g. 0.5 s doubling to 5 s). Every (re)connect starts with a fresh `snapshot` that **replaces** all client state. The TV also reconnects when no message arrives for 3 s (the hub sends a `status` every second), and after 10 s without frames shows every rig as no-data. |
 
 ## 2. Envelope and versioning
@@ -57,7 +57,7 @@ Compatibility rules:
 
 | `type` | When | Payload |
 |---|---|---|
-| `snapshot` | First message on every connection | Full state (3.1) |
+| `snapshot` | First message on every connection; again mid-connection when the hub asks every TV to refresh (a new licence) | Full state (3.1) |
 | `frame` | Every tick (15 Hz) | All rigs' live data + comparison (3.2) |
 | `rig_info` | A rig appears, or its name/colour/format changes | `{ "rig": RigInfo }` |
 | `status` | Once per second, and immediately on change | `{ "status": HubStatus }` |
