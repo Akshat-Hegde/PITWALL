@@ -527,6 +527,17 @@ program that knows it: send those cafes a new package (or rebuild theirs) before
   and features and shows a table of what happened. A cafe whose details changed since its last licence is left for
   you (use Issue upgrade or Build package for it).
 
+**Existing cafes (on 0.5.0 or earlier): upgrade them with their own package, not the generic installer.**
+A hub with no licence runs as a 4-rig licence (spec 2.2). So a cafe with **more than 4 rigs** that is upgraded
+with the generic installer keeps racing and recording laps on every rig, but its **TV shows only rigs 1 to 4**,
+and the staff and owner pages say "No licence found", until its licence code is entered on the owner page (an
+older hub has no Licence card, so the code can only be entered after the upgrade). Instead: make the cafe in the
+factory with its real rig count, games and features, **Build package**, and run that cafe's installer over its
+0.5.0 install. The installer finds the cafe's own settings and keeps them all (settings, PINs, rig names, logo,
+Wi-Fi, laps), installs the licence and registers the PC to that cafe, so the TV never loses a rig. If a generic
+upgrade already happened, send the cafe the code from its licence certificate (or **Issue upgrade**); every rig is
+back on the TV the moment the owner enters it.
+
 **Where things live.** Packages and cafe files go to the Shipments folder (default `Documents\Pitwall Shipments`;
 change it in **Settings…**, which also has the Microsoft Edge location and the key backup). Cafe files are in
 `<Shipments>\profiles`. Keep Shipments outside the repo; `.gitignore` also blocks `Shipments/`, `/profiles/` and

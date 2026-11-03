@@ -102,6 +102,15 @@ Reprint the stickers when you add a rig, when you press **New code** for a rig (
 
 Use this only on a PC that stays in the cafe. If the PC's BIOS has "Restore on AC power loss", set it to **Power On** too.
 
+## Your licence
+
+Your licence says how many rigs, which games and which features your cafe has. It is yours forever: it never expires and never needs the internet. The installer your supplier made for your cafe installs it; the owner page's **Licence** card shows it ("Licensed to Apex Lounge · 6 rigs · F1 25").
+
+- **Adding rigs, games or features.** Your supplier sends a new licence code. On the owner page, paste it into the **Enter new code** box on the Licence card and press **Use this code**. It works straight away; there is no reinstall and racing is not interrupted.
+- **More rigs than the licence covers.** Extra rigs still record laps and show on the staff page (marked "Not licensed"), but the TV shows only the licensed rigs. The staff and owner pages say so and who to contact.
+- **"No licence found. Contact your supplier."** The hub runs as a 4-rig licence until the code is entered. Ask your supplier for your code and enter it on the owner page.
+- **Installer for another cafe.** Each cafe's installer is made for that cafe. If it belongs to another cafe, it stops before changing anything and says so.
+
 ## Start-menu shortcuts (hub PC)
 
 | Shortcut | What it does |
@@ -146,6 +155,11 @@ Wrong PINs: after five wrong PINs a device is locked out for a minute; after rep
 ## Upgrading
 
 Run the newer installer on the hub PC, **when nobody is driving**: the hub restarts during the install. The cafe's data and setup are kept, and the last page says "Already set up: use your owner PIN." Upgrade the TV-only PCs too (choose "This PC only shows the TV" again); they keep working in the meantime. From 0.5.0 on, TVs reload themselves after an update. When upgrading from 0.4, restart each TV PC once (or press F5 on the TV).
+
+**Upgrading to the first version with licences (after 0.5.0):**
+
+- **Use the installer your supplier made for your cafe.** It keeps all your settings, PINs, rig names and laps, and installs your licence.
+- If a general installer was used instead, the staff and owner pages say "No licence found", and a cafe with **more than 4 rigs** sees only rigs 1 to 4 on the TV (the other rigs keep recording laps). Enter your licence code on the owner page and every rig is back on the TV at once.
 
 **Upgrading from 0.4:**
 
