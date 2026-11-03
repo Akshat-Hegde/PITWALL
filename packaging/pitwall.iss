@@ -98,6 +98,16 @@ Type: files; Name: "{autoprograms}\{#AppName} Open backups folder.lnk"; Componen
 Type: files; Name: "{autoprograms}\{#AppName} Open logs folder.lnk"; Components: tvonly
 
 [Files]
+#ifdef ProfileDir
+; The cafe's profile.json, logo and licence.txt. dontcopy: they are never installed as files; PrepareToInstall takes
+; them out into {tmp}\profile (ExtractProfile) so the installed hub program can check whose PC this is before
+; anything is replaced, and AfterAllFiles hands the same folder to the new program's "provision". {tmp} is deleted
+; when Setup ends, so nothing of the profile stays behind except what provision writes into the data folder.
+; (A normal [Files] entry to {tmp} would arrive only during the file copy, after PrepareToInstall.) No
+; recursesubdirs: the folder is flat. First in [Files]: with SolidCompression, Setup must decompress every entry
+; listed before a file to take it out early, so the profile is listed before the large program files.
+Source: "{#ProfileDir}\*"; DestDir: "{tmp}\profile"; Flags: dontcopy
+#endif
 Source: "..\dist\{#ExeName}\*"; DestDir: "{app}"; Excludes: "build-stamp.json"; Components: hub; Flags: recursesubdirs createallsubdirs ignoreversion
 Source: "..\tools\windows\*"; DestDir: "{app}\tools"; Flags: recursesubdirs createallsubdirs ignoreversion
 Source: "pitwall.ico"; DestDir: "{app}"; DestName: "{#ExeName}.ico"; Flags: ignoreversion
@@ -105,15 +115,6 @@ Source: "pitwall.ico"; DestDir: "{app}"; DestName: "{#ExeName}.ico"; Flags: igno
 Source: "..\config\hub.example.toml"; DestDir: "{commonappdata}\{#AppName}\config"; Components: hub; Flags: ignoreversion uninsneveruninstall
 ; A commented starter config for a fresh install; an existing hub.toml (even after an uninstall) is never touched.
 Source: "..\config\hub.example.toml"; DestDir: "{commonappdata}\{#AppName}\config"; DestName: "hub.toml"; Components: hub; Flags: onlyifdoesntexist uninsneveruninstall
-#ifdef ProfileDir
-; The cafe's profile.json, logo and licence.txt. dontcopy: they are never installed as files; PrepareToInstall takes
-; them out into {tmp}\profile (ExtractProfile) so the installed hub program can check whose PC this is before
-; anything is replaced, and AfterAllFiles hands the same folder to the new program's "provision". {tmp} is deleted
-; when Setup ends, so nothing of the profile stays behind except what provision writes into the data folder.
-; (A normal [Files] entry to {tmp} would arrive only during the file copy, after PrepareToInstall.) No
-; recursesubdirs: the folder is flat.
-Source: "{#ProfileDir}\*"; DestDir: "{tmp}\profile"; Flags: dontcopy
-#endif
 ; Last, so AfterInstall runs once the exe and everything else is in place. It writes the task XML, sets the data
 ; folder's permissions, makes the setup code, sets up the firewall and the boot task, and starts the hub.
 Source: "pitwall-task.xml"; DestDir: "{tmp}"; Components: hub; Flags: ignoreversion deleteafterinstall; AfterInstall: AfterAllFiles
@@ -524,7 +525,8 @@ begin
 end;
 
 // Takes the cafe's baked files ([Files], dontcopy) out of the installer into {tmp}\profile, once. The pattern is
-// matched against the entry's DestDir as written, so {tmp} stays unexpanded here; the files land in {tmp}\profile.
+// matched against the entry's destination as written, so {tmp} stays unexpanded here; Setup drops the leading
+// {tmp}\ of a match, so the files land in {tmp}\profile.
 function ExtractProfile: Boolean;
 begin
   if not ProfileExtracted then

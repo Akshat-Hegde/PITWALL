@@ -36,7 +36,8 @@ if ($Vendor -match '[{}"\r\n]') { throw "-Vendor can't contain braces, quotes or
 if ($ProfileDir) {
   if (-not $CafeSlug) { throw "-ProfileDir needs -CafeSlug (the installer's file name)" }
   if (-not (Test-Path -LiteralPath $ProfileDir -PathType Container)) { throw "Profile folder $ProfileDir not found" }
-  $ProfileDir = (Resolve-Path -LiteralPath $ProfileDir).Path
+  # No trailing backslash: in a quoted argument (a path with spaces) it would escape the closing quote.
+  $ProfileDir = (Resolve-Path -LiteralPath $ProfileDir).Path.TrimEnd("\")
   if ($ProfileDir -match '[{}"]') { throw "The profile folder's path can't contain braces or quotes: $ProfileDir" }
   foreach ($f in @("profile.json", "licence.txt")) {
     if (-not (Test-Path -LiteralPath (Join-Path $ProfileDir $f) -PathType Leaf)) { throw "$f is missing from $ProfileDir" }

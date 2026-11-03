@@ -309,7 +309,10 @@ def test_cafe_installer_needs_its_names_and_bakes_the_profile():
     files = _section("Files")
     (baked,) = [ln for ln in iss.splitlines() if "{#ProfileDir}" in ln and ln.startswith("Source:")]
     assert baked == r'Source: "{#ProfileDir}\*"; DestDir: "{tmp}\profile"; Flags: dontcopy'
-    # before the task XML line, whose AfterInstall must stay last
+    # the first file (solid compression: taking it out early decompresses everything listed before it), and before
+    # the task XML line, whose AfterInstall must stay last
+    sources = [ln for ln in iss.split("[Files]", 1)[1].split("\n[", 1)[0].splitlines() if ln.startswith("Source:")]
+    assert sources[0] == baked
     assert files.index("{#ProfileDir}") < files.index('Source: "pitwall-task.xml"')
     # taken out in PrepareToInstall (dontcopy files are only in the installer until then), literally '{tmp}\...'
     assert "ExtractTemporaryFiles('{tmp}\\profile\\*')" in _proc(iss, "function ExtractProfile")
@@ -394,6 +397,7 @@ def test_build_script_cafe_parameters_and_program_stamp():
     assert 'if ($Vendor -eq "none") { $Vendor = "" }' in build
     assert '"/DProfileDir=$ProfileDir"' in build and '"/DCafeSlug=$CafeSlug"' in build
     assert "-ProfileDir needs -CafeSlug" in build and "'^[A-Za-z0-9][A-Za-z0-9-]{0,59}$'" in build
+    assert '(Resolve-Path -LiteralPath $ProfileDir).Path.TrimEnd("\\")' in build   # no trailing backslash before a quote
     assert '"$root\\dist\\$($brand.EXE_NAME)-Setup-$CafeSlug.exe"' in build
     # the stamp: removed before a program build, written last after the smoke test, compared for -InstallerOnly
     assert "build-stamp.json" in build
