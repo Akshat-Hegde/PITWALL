@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>${title}</title>
+<style>
+${css}
+</style>
+</head>
+<body>
+<div class="page">
+${header}
+
+<h1>${product} licence certificate</h1>
+
+<table>
+  <tr><th>Licensed to</th><td>${cafe}</td></tr>
+  <tr><th>Licence number</th><td>${licence_id}</td></tr>
+  <tr><th>Date</th><td>${date}</td></tr>
+  <tr><th>Rigs</th><td>${rigs}</td></tr>
+  <tr><th>Games</th><td>${games}</td></tr>
+  <tr><th>Features</th><td>${features}</td></tr>
+</table>
+
+<h2>Price</h2>
+<table>
+${price_rows}
+</table>
+${price_note}
+
+<p class="forever">Licensed forever. Add rigs or games any time.</p>
+<p>There is no expiry date and nothing to renew. To add rigs, games or features, contact ${supplier}: you get a new
+code to enter on the owner page (Licence card, Enter new code), with no reinstall.</p>
+
+<section>
+<h2>Your licence code</h2>
+<p>Your installer already contains this code. Keep this certificate: you may need the code if the hub PC is
+replaced.</p>
+<div class="code-wrap">
+  <div class="code">${code}</div>
+  <div class="qr">${qr}</div>
+</div>
+</section>
+
+<footer class="fine">${issuer}This certificate is not a tax invoice.</footer>
+</div>
+</body>
+</html>

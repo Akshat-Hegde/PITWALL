@@ -11,7 +11,9 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
+from simtelemetry import licence, rig_setup
 from simtelemetry.api.app import create_app
+from simtelemetry.config import NetworkConfig
 from simtelemetry.core import feed as feed_mod
 from simtelemetry.core.address import AddressWatch
 from simtelemetry.core.health import SilentRigWatch, opened_at
@@ -296,9 +298,24 @@ def test_setup_and_staff_pages_carry_the_game_settings_word_for_word(tmp_path):
           "UDP IP Address = ")
     for page in ("/setup", "/staff"):
         text = " ".join(client.get(page).text.split())
-        assert u1 in text, page
-        assert "UDP Send Rate 20Hz, UDP Format 2025" in text, page
+        assert "{{" not in text, page
+        assert "On every rig, in F1 25: " + u1 in text, page
+        assert "UDP Send Rate 20Hz, UDP Format 2025. Your Telemetry may stay Restricted." in text, page
         assert "not 127.0.0.1" in text, page
+        # one source (rig_setup.py) for the pages and the factory's printed guide
+        assert rig_setup.BEFORE_ADDRESS == u1 and rig_setup.BEFORE_ADDRESS in text, page
+        assert '</strong>' + rig_setup.BEFORE_PORT + '<strong id=' in text, page
+        assert '</strong>' + rig_setup.AFTER_PORT in text, page
+
+
+def test_rig_setup_sentence_is_u1_word_for_word():
+    assert rig_setup.sentence() == (
+        "Game Options › Settings › UDP Telemetry Settings: UDP Telemetry On, UDP Broadcast Mode Off, "
+        "UDP IP Address = the hub PC's address, UDP Port 20777, UDP Send Rate 20Hz, UDP Format 2025.")
+    assert rig_setup.sentence("192.168.1.10", 20778).endswith("= 192.168.1.10, UDP Port 20778, UDP Send Rate 20Hz, "
+                                                              "UDP Format 2025.")
+    assert rig_setup.PORT == NetworkConfig.model_fields["udp_port"].default
+    assert rig_setup.GAME == licence.game_name("f1_25")
 
 
 # --- K6: silent rigs ----------------------------------------------------------------------------

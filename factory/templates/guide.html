@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>${title}</title>
+<style>
+${css}
+</style>
+</head>
+<body>
+<div class="page">
+${header}
+
+<h1>Setup guide</h1>
+<p>This guide is for <strong>${cafe}</strong>. Your installer is made for your cafe: it already holds your licence
+for ${rigs_text} and your cafe's ${prefilled}. Follow these steps in order.</p>
+
+<section>
+<h2>1. What you need</h2>
+<ul>
+  <li><strong>One hub PC.</strong> Windows 10 or 11 (64-bit), connected to the router with a cable, and switched on
+    whenever the cafe is open. It does not need the internet. Every rig sends its data to this PC, and the TV,
+    the staff page and the guests' phones get their pages from it.</li>
+  <li><strong>Your ${rigs_text}</strong>, each with ${game} installed, on the same router as the hub PC.</li>
+  <li><strong>A TV</strong> connected to the hub PC or to another PC in the cafe.</li>
+  <li><strong>A USB stick</strong> for the backups (step ${backup_step}).</li>
+</ul>
+<p>Install ${product} on <strong>one PC only</strong>. Another PC that only drives a TV gets the "TV only" install
+(step ${tv_step}).</p>
+</section>
+
+<section>
+<h2>2. Fix the addresses in your router</h2>
+<p>Every rig is told the hub PC's address, so it must never change. In your router's admin page, find
+<span class="quote">DHCP reservation</span> (some routers call it "static lease" or "address reservation") and
+reserve the current address of the hub PC and of each of your ${rigs_text}.</p>
+</section>
+
+<section>
+<h2>3. Run the installer on the hub PC</h2>
+<ol>
+  <li>Copy <strong>${installer}</strong> to the hub PC and double-click it.</li>
+  <li>If a blue window says <span class="quote">Windows protected your PC</span>, click <strong>More info</strong>,
+    then <strong>Run anyway</strong>. If Windows asks "Do you want to allow this app to make changes to your
+    device?", click <strong>Yes</strong>.</li>
+  <li>Choose <strong>Hub PC</strong>. Leave <strong>Keep this PC awake</strong> ticked. Tick <strong>Open the TV
+    page when this PC signs in</strong> if this PC also drives the TV.</li>
+  <li>On the last page, <strong>write down the setup code</strong>. It is shown once, in large type. If you lose
+    it, use the Start-menu shortcut <strong>${product} Show setup code</strong>.</li>
+  <li>Leave <strong>Open the setup page</strong> ticked and click <strong>Finish</strong>.</li>
+</ol>
+<p>If Windows Security or another antivirus blocks ${product}, contact ${supplier}.</p>
+</section>
+
+<section>
+<h2>4. The setup page and your PINs</h2>
+<p>Enter the setup code. ${prefilled_check}</p>
+<div class="box">
+  <p><strong>Your hub address is shown on the setup page.</strong> Write it down: you type it on every rig
+    (step 5).</p>
+</div>
+<p>Then choose two PINs (4 to 8 digits each):</p>
+<ul>
+  <li><strong>Owner PIN</strong>: opens the owner page and the setup page. Only the owner should know it.</li>
+  <li><strong>Staff PIN</strong>: opens the staff page, which staff use every day. Make it different from the owner
+    PIN.</li>
+  <li>Don't use easy PINs like 1234, 0000 or a birthday. Keep a copy somewhere safe, away from the counter.</li>
+  <li>Forgot the owner PIN? On the hub PC, use the Start-menu shortcut <strong>${product} Reset owner PIN</strong>.
+    Laps, rigs and settings are kept.</li>
+</ul>
+</section>
+
+<section>
+<h2>5. Point every rig at the hub</h2>
+<p>On each of your ${rigs_text}, in ${game}:</p>
+<div class="box"><p class="quote">${u1}</p></div>
+<table>
+${settings_rows}
+</table>
+<p>${restricted} ${same_pc}</p>
+<p>Then drive on one rig at a time: on the setup page that rig says <strong>Moving now</strong>. ${rig_names}</p>
+</section>
+
+${stickers}
+
+<section>
+<h2>${wifi_step}. Test the guest Wi-Fi from a phone</h2>
+<p>Guests' phones must be on a Wi-Fi that can reach the hub PC. ${wifi_text}</p>
+<ol>
+  <li>On the setup page (or the staff page's <strong>Health</strong> tab), find
+    <strong>Test from your phone</strong>.</li>
+  <li>Join the guest Wi-Fi on a phone and scan the QR code with its camera.</li>
+  <li>The phone should say <span class="quote">${phone_ok}</span></li>
+</ol>
+<p>If the page doesn't open on the phone, guests can't check in or open their driver cards. Turn off
+"guest isolation" (sometimes "AP isolation") in the router, or use your main Wi-Fi.</p>
+</section>
+
+<section>
+<h2>${tv_step}. The TV</h2>
+<p><strong>TV on the hub PC:</strong> use the Start-menu shortcut <strong>${product} TV</strong>, or tick
+"Open the TV page when this PC signs in" in the installer.</p>
+<p><strong>TV on another PC:</strong> run the same installer on that PC and choose <strong>This PC only shows the
+TV</strong>. Type the hub address from the setup page.</p>
+</section>
+
+<section>
+<h2>${backup_step}. Backups to a USB stick</h2>
+<p>Every night the hub saves a backup of your laps, settings and rig names. Keep them on a USB stick that stays
+plugged into the hub PC, so they survive if the PC breaks:</p>
+<ol>
+  <li>Plug the USB stick into the hub PC and note its drive letter (for example E:).</li>
+  <li>Open the owner page (Start-menu shortcut <strong>${product} Owner</strong>) and find the
+    <strong>Backups</strong> card.</li>
+  <li>Type a folder on the stick, for example <strong>E:\Backups</strong>, and press
+    <strong>Use this folder</strong>. Then press <strong>Back up now</strong>.</li>
+</ol>
+<p>Backups hold guests' phone numbers and the Wi-Fi password: keep the stick safe.</p>
+</section>
+
+<section>
+<h2>${licence_step}. Your licence</h2>
+<p>Your licence covers <strong>${rigs_text}</strong> and <strong>${games}</strong>. It is yours forever: there is
+nothing to renew. The licence code is on your licence certificate, and the installer has already put it in.</p>
+<p>To add rigs, games or features later, contact ${supplier}. You get a new code: on the owner page, find the
+<strong>Licence</strong> card, choose <strong>Enter new code</strong> and paste it. It works at once, with no
+reinstall. Racing is never stopped: a rig beyond your licence still records laps, but isn't shown on the TV.</p>
+</section>
+
+<section>
+<h2>Need help?</h2>
+<p>Contact ${supplier}. If you are asked for the logs, use the Start-menu shortcut
+<strong>${product} Open logs folder</strong> on the hub PC.</p>
+</section>
+
+<footer class="fine">${footer}</footer>
+</div>
+</body>
+</html>

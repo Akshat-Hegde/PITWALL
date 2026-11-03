@@ -86,6 +86,30 @@ PRESETS: dict[str, dict[str, bool]] = {
 }
 PRESET_NAMES = {"full": "Full", "basic": "Basic"}
 
+# Plain names for the [features] flags, for the form (C12) and the licence certificate. A test checks every
+# FeaturesConfig flag has one; a flag added later without one still shows, as its own name.
+FEATURE_LABELS: dict[str, str] = {
+    "moments": "Big-screen moments (now driving, new record)",
+    "battles": "Battle pop-ups on the TV",
+    "podium": "Podium screen",
+    "attract": "Attract screen when nobody is driving",
+    "portrait": "Portrait TV layout",
+    "head_to_head": "Head-to-head view",
+    "onboard": "Multiview (every rig on one screen)",
+    "sharing": "Driver cards with a QR code",
+    "challenges": "Weekly challenges",
+    "events": "Corporate events (teams and team board)",
+    "owner": "Owner page business figures",
+    "race_podium": "Race podium and race cards",
+    "self_checkin": "Guest check-in from phones",
+    "auto_end_sessions": "Sessions end by themselves at closing time",
+    "backup_warning": "Backup reminders",
+}
+
+
+def feature_label(name: str) -> str:
+    return FEATURE_LABELS.get(name) or name.replace("_", " ").capitalize()
+
 
 def feature_defaults() -> dict[str, bool]:
     return {name: bool(f.default) for name, f in FeaturesConfig.model_fields.items()}

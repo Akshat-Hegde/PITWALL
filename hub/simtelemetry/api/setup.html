@@ -188,9 +188,8 @@
       <div class="title">Rigs</div>
       <p class="muted" id="licence-line" hidden></p>
       <div class="rigbox">
-        On every rig, in F1 25: Game Options › Settings › UDP Telemetry Settings: UDP Telemetry On,
-        UDP Broadcast Mode Off, UDP IP Address = <strong id="hub-ip"></strong>, UDP Port <strong id="udp-port"></strong>,
-        UDP Send Rate 20Hz, UDP Format 2025. Your Telemetry may stay Restricted.
+        On every rig, in {{RIG_SETUP_GAME}}: {{RIG_SETUP_BEFORE_ADDRESS}}<strong id="hub-ip"></strong>{{RIG_SETUP_BEFORE_PORT}}<strong
+        id="udp-port"></strong>{{RIG_SETUP_AFTER_PORT}} {{RIG_SETUP_RESTRICTED}}
         <div class="muted">This includes a rig on this PC: use the address above, not 127.0.0.1.</div>
       </div>
       <div class="warn">Reserve this address for the hub PC in your router (DHCP reservation), or rigs lose the hub when the router restarts.</div>
