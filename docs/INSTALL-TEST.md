@@ -5,7 +5,7 @@ Never run the installer on the development PC: it registers a boot task and fire
 1. **Prepare the test machine.**
    - Spare PC: Windows 10/11, on the same LAN as the rigs and your phone.
    - VM: Hyper-V "Quick Create" (Windows Pro) or VirtualBox. Use a **bridged** network adapter so rigs and phones on the LAN can reach it. Give it 4 GB RAM and 2 CPUs.
-2. **Copy** `dist\Pitwall-Setup-0.5.0.exe` to it (USB stick or network share). No internet is needed.
+2. **Copy** `dist\Pitwall-Setup-0.6.0.exe` to it (USB stick or network share). No internet is needed.
 3. **Install.** Right-click, Run as administrator. If "Windows protected your PC" appears, click More info, then Run anyway (expected: the installer is not signed yet); the next prompt may say Publisher: Unknown. On the first page choose "Hub PC". Leave "Keep this PC awake" ticked. On the last page **write down the setup code**. Leave "Open the setup page" ticked and click Finish. Then check that Task Scheduler shows the task "Pitwall Hub" (Ready or Running) and that Windows Defender Firewall with Advanced Security (`wf.msc`, Inbound Rules) shows the 3 rules "Pitwall hub", "Pitwall telemetry" and "Pitwall pages".
 4. **Setup page** (opens in the browser):
    - first type a wrong code and check it is refused;
@@ -18,7 +18,7 @@ Never run the installer on the development PC: it registers a boot task and fire
 8. **Firewall.** The dev PC's `replay` command can only play into a hub on the same machine (it has no flag to send to another host), so use a real rig: set it up as in docs/RIG_SETUP.md with the test machine's address as UDP IP Address, and drive. The staff page shows the rig. If it does not, note whether the network profile is Public or Private (Settings, Network).
 9. **Upgrade.** Run the same installer again. The Ready page says "Install updates when nobody is driving: the hub restarts." The last page says "Already set up: use your owner PIN." Data and setup are kept.
 10. **Uninstall** via Settings, Apps. `C:\ProgramData\Pitwall` is still there, and the message at the end says so. Reinstall: setup is remembered (no setup code asked).
-11. **Version 0.5.0 checks** (new in this version; never on the dev PC):
+11. **Version 0.5.0 checks** (added in 0.5.0, still checked; never on the dev PC):
     - **Keep awake:** after install, Settings, System, Power: "When plugged in, turn off my screen" and "put my device to sleep" both say Never.
     - **Start-menu shortcuts:** "Pitwall Show setup code" asks for administrator rights (Yes), shows one explanation line and the code (or "Setup is done; use the owner PIN."), and the window stays open. "Pitwall Reset owner PIN" asks for administrator rights, explains, waits for a key (closing the window cancels), then prints a new code; the setup page then asks for it. "Pitwall Open logs folder" opens Explorer without asking, with no window flashing. "Pitwall Open backups folder" asks for administrator rights (Yes), then opens Explorer (if Explorer says "You don't currently have permission", Continue works); with the backup folder on an unplugged USB stick it shows a plain message instead.
     - **Permissions:** right-click each folder, Properties, Security, and check:
@@ -43,18 +43,18 @@ Never run the installer on the development PC: it registers a boot task and fire
       - [ ] Afterwards: no "Pitwall Hub" task in Task Scheduler, no Pitwall rules in `wf.msc`, no `Pitwall.exe` and no `_internal` folder in `C:\Program Files\Pitwall`, and no Staff, Owner, Setup or other admin shortcuts in the Start menu (only TV and Uninstall).
       - [ ] `C:\ProgramData\Pitwall` is still there.
     - **Silent TV-only install:** from an administrator Command Prompt:
-      - [ ] `Pitwall-Setup-0.5.0.exe /VERYSILENT /TYPE=tv /HUB=<hub ip>` installs with no windows, and a "Pitwall TV" shortcut opens the TV page when any user signs in.
+      - [ ] `Pitwall-Setup-0.6.0.exe /VERYSILENT /TYPE=tv /HUB=<hub ip>` installs with no windows, and a "Pitwall TV" shortcut opens the TV page when any user signs in.
       - [ ] Without `/HUB=...` it installs nothing and ends with exit code 7 (`echo %ERRORLEVEL%` shows 7); the install log (`%TEMP%\Setup Log *.txt`) says the hub address is missing.
     - **Only one TV window:** on a PC that already has a TV start-up shortcut from the old launcher (`powershell -ExecutionPolicy Bypass -File tv-launcher.ps1 -StartOnLogin`, which puts "Pitwall TV.lnk" in your own Startup folder, `shell:startup`), run the installer with "Open the TV page when this PC signs in" ticked.
       - [ ] The old "Pitwall TV.lnk" is gone from `shell:startup`.
       - [ ] Sign out and in again: exactly one TV window opens.
     - **Installer file details:** right-click the installer, Properties, Details: company 9T7 Racing, product Pitwall, version 0.6.0. Right-click `Pitwall.exe` too: product Pitwall, version 0.6.0, and **no** company or copyright (the program's own details are neutral in every build, so an unbranded cafe's program never names 9T7 Racing).
-    - **Real upgrade from 0.4.0:** on a clean spare PC or VM (or uninstall and delete `C:\ProgramData\Pitwall` first), install `dist\Pitwall-Setup-0.4.0.exe` as a hub. On its setup page choose a cafe name, owner PIN `2468`, **no staff PIN**, and opening hours 10:00 to 24:00 (midnight). Drive a lap or two (or replay a capture into it) so the boards have laps, open the TV on this PC or a TV-only PC, and back up once on the owner page. Then run `Pitwall-Setup-0.5.0.exe` over it and check:
+    - **Real upgrade from 0.4.0:** on a clean spare PC or VM (or uninstall and delete `C:\ProgramData\Pitwall` first), install `dist\Pitwall-Setup-0.4.0.exe` as a hub. On its setup page choose a cafe name, owner PIN `2468`, **no staff PIN**, and opening hours 10:00 to 24:00 (midnight). Drive a lap or two (or replay a capture into it) so the boards have laps, open the TV on this PC or a TV-only PC, and back up once on the owner page. Then run `Pitwall-Setup-0.6.0.exe` over it and check:
       - [ ] The last page says "Already set up: use your owner PIN." (no setup code).
       - [ ] Staff page: the owner PIN `2468` opens it, with the red "Set a staff PIN" banner.
       - [ ] Staff Health tab and the setup page (after the owner PIN) say "Sessions now end automatically at closing time (midnight). Check your opening hours on the setup page — if you close after midnight, choose the next-day time." Without the owner PIN the setup page shows only "1 thing needs attention".
       - [ ] Save the setup page once with a staff PIN `1357`: the hours reminder and the red banner go away, and stay gone after restarting the PC.
-      - [ ] TV: it does not reload by itself this once (0.4 TVs don't know how). Press F5 on the TV, or restart the TV PC: it shows the 0.5.0 TV. Upgrade the hub again (same installer): this time the TV reloads by itself within a minute.
+      - [ ] TV: it does not reload by itself this once (0.4 TVs don't know how). Press F5 on the TV, or restart the TV PC: it shows the new TV. Upgrade the hub again (same installer): this time the TV reloads by itself within a minute.
       - [ ] Permissions as in "Permissions" above: `data` and `backups` (including the backup zip made by 0.4.0) SYSTEM and Administrators only; `C:\ProgramData\Pitwall` and `config` Users "Read & execute"; `data\logs` Users "Read & execute".
       - [ ] Data kept: the cafe name, logo, rig names and the laps from before the upgrade are on the boards and the owner page.
     - **Disabled-task check in any Windows language:** with the task disabled in Task Scheduler and the hub stopped, `Pitwall.exe restore <zip>` from an administrator prompt must not print the warning; with it enabled, it must.

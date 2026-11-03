@@ -157,7 +157,7 @@ Wrong PINs: after five wrong PINs a device is locked out for a minute; after rep
 
 Run the newer installer on the hub PC, **when nobody is driving**: the hub restarts during the install. The cafe's data and setup are kept, and the last page says "Already set up: use your owner PIN." Upgrade the TV-only PCs too (choose "This PC only shows the TV" again); they keep working in the meantime. From 0.5.0 on, TVs reload themselves after an update. When upgrading from 0.4, restart each TV PC once (or press F5 on the TV).
 
-**Upgrading to the first version with licences (after 0.5.0):**
+**Upgrading to 0.6.0, the first version with licences:**
 
 - **Use the installer your supplier made for your cafe.** It keeps all your settings, PINs, rig names and laps, and installs your licence.
 - If a general installer was used instead, the staff and owner pages say "No licence found", and a cafe with **more than 4 rigs** sees only rigs 1 to 4 on the TV (the other rigs keep recording laps). Enter your licence code on the owner page and every rig is back on the TV at once.

@@ -24,6 +24,7 @@ Each session starts by reading this log and continues from the first task not ma
 - [x] C11 Preview
 - [x] C12 Form app
 - [x] C13 Whole-branch review and LOCAL hand-off list
+- [x] L6.1 Factory suite green on Windows (crash fixed; see the log)
 - [ ] L1–L6 LOCAL (Windows PC)
 
 ## Log
@@ -187,6 +188,18 @@ Each session starts by reading this log and continues from the first task not ma
   - **Docs (Important, fixed):** the 0.5.0 → licences upgrade was not explained anywhere a seller or owner reads. README "Factory" now has **"Existing cafes (on 0.5.0 or earlier): upgrade them with their own package, not the generic installer"** (a >4-rig cafe upgraded generically shows only rigs 1–4 on the TV and "No licence found" until the code is entered; a cafe package adopts the PC, keeps everything and installs the licence, so the TV never loses a rig). `docs/INSTALL.md` (owner-facing) gains **"Your licence"** (Licence card, entering add-on codes, the soft limit, "No licence found", wrong-cafe installers) and an **"Upgrading to the first version with licences (after 0.5.0)"** note. See Decisions 9.1.
   - No Critical findings. No code changes outside the new test and docs.
 
+- 2026-11-03 **L6.1 Windows test crash + the user's decisions** (LOCAL, the developer's Windows PC, Python 3.11 from the Store, `--basetemp X:/_pytest_tmp/...`, `-p no:cacheprovider`).
+  - **Root cause of the crash:** `test_controller.py::test_open_folder_uses_the_desktop_opener` patched `os.name` to `"posix"`, then `open_folder` built a `Path`. On Windows pathlib can't make a `PosixPath` (`NotImplementedError`), and pytest builds the failure report (`pytest_runtest_makereport`, more `Path`s) *before* fixture teardown undoes the patch. So the run stopped part-way with an INTERNALERROR, and `sessionfinish` crashed with the same error. Reproduced in isolation with a two-line scratch test. `test_main_message_without_a_console_doesnt_fail` patched `os.name` the same way (harmless by luck). Fix: `controller._desktop()` ("windows"/"mac"/"other") and `__main__._windows()` pick the platform, and the tests patch those, never `os.name`. Both branches (including `os.startfile`, faked) are tested on every system.
+  - **Desktop safety (checked before any test ran):** `factory/tests/conftest.py` has an autouse fixture. On Windows, `keys._run` is a fake that succeeds, so icacls never runs (the C8 tests that check the icacls command set their own fake). On every system, `os.startfile` and `webbrowser.open*` fail any test that reaches them. `preview.start_preview`'s default `opener` now resolves `webbrowser.open` at call time (the old default was bound at import, before any patch could reach it), and the preview tests pass a fake opener. Skipped on Windows: `test_real_preview_runs_the_demo_with_the_cafe` (it starts a real hub; L4 covers it) and the Tk smoke test unless `PITWALL_GUI_TESTS=1` (it puts real windows, dialogs and clipboard changes on the desktop; L1.2 checks the window by hand). The settings-load test points `PITWALL_FACTORY_KEYS` at tmp, so the seller's real key folder is never read. Job objects: `WinJob.add` only ever gets the `Popen` the Runner just started, never the test runner. On Windows the real-Runner tests start the **base** interpreter (`sys._base_executable`): a venv `python.exe` is a launcher, and its child could start before the job holds it. The two fake-job Runner tests now run on Windows too (the fake ends only its own child).
+  - **Made portable:** the icacls command tests clear `SystemRoot` (Windows sets it, so the System32 path was used). The "link into Shipments" check uses a directory junction on Windows (symlinks need a privilege). The UTF-8 output test writes UTF-8 bytes itself (a Windows child prints in the ANSI code page). Linux behaviour is unchanged (by reasoning): the same assertions run there, `PY` is `sys.executable` off Windows, and the fixture's icacls fake is Windows-only.
+  - **Results on Windows:** factory `378 passed, 4 skipped`, twice in a row (skips: the Tk smoke test, the real-hub preview, 2 POSIX-mode key tests); hub `1094 passed` (no failures: the 5 cloud-only environment failures pass on Windows, L1.1); dashboard `128` vitest passed, `tsc -b` clean.
+  - **Decisions answered by the user (see "Decisions to confirm"):**
+    - 9.2 refuse another cafe's code: `licence.OtherCafeError` and `licence.other_cafe()`; `Hub.apply_licence` reads `cafe.json` via `provision.read_stamp`. 3 unit tests and 4 hub/owner-page tests are new, the e2e test is updated. Docs: INSTALL.md "Code for another cafe", spec 2.2 storage text.
+    - 4.1 the unbranded TV keeps "POWERED BY" + the product wordmark: `Pitwall.tsx`, 3 reworked vitest tests, WS_SCHEMA wording, spec 2.3.
+    - 8.8 `Pitwall.exe` VersionInfo without CompanyName/LegalCopyright: `pitwall.spec`, new `test_program_file_details_name_no_company`, INSTALL-TEST.
+    - 9.3 version `0.6.0`: pyproject, `simtelemetry.__version__`, `test_version_is_0_6_0`, the ISPP test defines, the dashboard sample feed, INSTALL-TEST installer names, INSTALL.md "Upgrading to 0.6.0, the first version with licences".
+  - Commits: de7f769 (crash), bccbe92 (9.2), 46de649 (4.1), 040a695 (8.8), then the 0.6.0 + log commit.
+
 ## LOCAL hand-off list (user's Windows PC)
 
 Everything below was mocked or checked statically in the cloud. Do these in order, on the seller's PC (L1–L4, L6) and a spare PC or VM (L5): **never** run an installer, `schtasks`, `netsh`, `icacls` or `taskkill` on the developer's PC, and never touch port 8000.
@@ -204,7 +217,7 @@ Everything below was mocked or checked statically in the cloud. Do these in orde
 2. Generic `build.ps1` (no parameters): `dist\Pitwall-Setup-<version>.exe` is made; its Properties › Details and Add or remove programs show publisher 9T7 Racing; `dist\Pitwall\build-stamp.json` exists and is not installed into `{app}`.
 3. Through the factory: **Apex Lounge** (9t7, 6 rigs, list price ₹30,000) and **Kart Hub** (unbranded, 4 rigs, a typed price), with the Shipments folder on a path with spaces, plus one cafe with a Devanagari name. Each build ends with the five files in `<Cafe> (<date>)`; PowerShell got `-Vendor "9T7 Racing"` as one argument (Show details); the output in Show details is readable.
 4. A second build right after says "Reusing the program…" and takes about a minute; a commit or a local edit makes it rebuild the program.
-5. Installer properties: the 9t7 installer shows publisher 9T7 Racing; the unbranded one shows **no** company, publisher or copyright (Properties › Details, Add or remove programs; this also proves an empty `/DVendor=` compiles). Known: the installed `Pitwall.exe`'s own details still say 9T7 Racing (Decisions 8.8). For an unbranded cafe, unset `PITWALL_SIGN_CERT` if your certificate's name must not show.
+5. Installer properties: the 9t7 installer shows publisher 9T7 Racing; the unbranded one shows **no** company, publisher or copyright (Properties › Details, Add or remove programs; this also proves an empty `/DVendor=` compiles). The installed `Pitwall.exe`'s own details show the product name and version only, with no company or copyright, in every build (Decision 8.8). For an unbranded cafe, unset `PITWALL_SIGN_CERT` if your certificate's name must not show.
 6. PDFs by eye: certificate on one A4 page with the right price lines; guide about three pages; no browser header/footer; Devanagari shaped correctly (Nirmala UI); logos sharp; the unbranded PDFs and README show no 9T7 mark anywhere. Scan the certificate's QR with a phone: it reads the whole code.
 7. Cancel during a program build and again during ISCC: within a few seconds no `powershell.exe`, `node.exe`, `python.exe` or `ISCC.exe` of the build is left in Task Manager, nothing is left in Shipments or `dist`, and the cafe's history is unchanged. Force an Edge timeout once: no `msedge.exe` left.
 8. The final rename works while Windows Defender scans the new installer; the default Shipments folder works when Documents is redirected to OneDrive.
@@ -216,7 +229,7 @@ Everything below was mocked or checked statically in the cloud. Do these in orde
 2. Copy both videos to `factory\assets\video\9t7.mp4` and `unbranded.mp4` (git-ignored). Build package for a variant whose video is missing is refused with a plain message; with both present the package's `Pitwall guide video.mp4` is the right one.
 
 **L4. Preview**
-1. Preview Apex Lounge and Kart Hub: TV, staff page and a phone-sized check-in window open as separate Edge app windows beside the seller's own Edge (which is untouched); the cafe's name, logo and colour show on all three; the unbranded TV has no "POWERED BY" block and the LIVE header row stays aligned on the 1920×1080 stage.
+1. Preview Apex Lounge and Kart Hub: TV, staff page and a phone-sized check-in window open as separate Edge app windows beside the seller's own Edge (which is untouched); the cafe's name, logo and colour show on all three; the unbranded TV shows "POWERED BY" + the product wordmark and no 9T7 mark, like the 9t7 TV (Decision 4.1).
 2. Preview with the built `dist\Pitwall\Pitwall.exe` (stamp matches) and from source.
 3. **Stop preview** closes all three windows and the hub: no preview `msedge.exe`, `python.exe` or `Pitwall.exe` left in Task Manager and `%TEMP%\pitwall-preview-*` is gone. Closing the factory window while a preview runs does the same. Build package and Rebuild all wait ("Press Stop preview first.") while it runs.
 4. The live hub on port 8000 keeps running throughout.
@@ -225,7 +238,7 @@ Everything below was mocked or checked statically in the cloud. Do these in orde
 1. **Fresh install** of Apex Lounge's package: the Preparing page passes quickly; the install log says "No hub program on this PC yet" and "provision -> 0"; the last page shows the setup code. /setup shows the cafe's name, logo, colour, Wi-Fi and hours pre-filled and the licence line, and asks for both PINs with the setup code. Rig names appear as rigs start sending.
 2. `C:\ProgramData\Pitwall\data\cafe.json`, `settings.json`, `branding\logo-*` and `licence.txt` have only SYSTEM and Administrators (inherited).
 3. Owner page: the Licence card reads "Licensed to Apex Lounge · 6 rigs · F1 25" with the licence number. With a 7th rig sending (or Kart Hub with a 5th): the TV shows only the licensed rigs, the staff rig card says "Not licensed", Health and the owner page show the "This licence covers N rigs…" warning; laps still record.
-4. Paste the upgrade code from L2.9 (once copied from the factory, once from the PDF with its line breaks) and press **Use this code**: "Done…" at once, the TV shows rigs 7 and 8 without a reload. Entering an older code or Kart Hub's code gives the plain refusals.
+4. Paste the upgrade code from L2.9 (once copied from the factory, once from the PDF with its line breaks) and press **Use this code**: "Done…" at once, the TV shows rigs 7 and 8 without a reload. An older code gives the plain refusal. Kart Hub's code says "This code is for Kart Hub. This PC belongs to Apex Lounge." (Decision 9.2), even after `licence.txt` is deleted (cafe.json still names the cafe).
 5. Run the same installer again: nothing changes except a newer licence (settings, PINs, rig names, logo, Wi-Fi kept).
 6. **Over a 0.5.0 install** (with 6 rigs and PINs): the cafe package's check runs the old exe, which exits 2, and the install goes on; provision adopts the PC (everything kept, licence installed, TV still shows all 6). Separately, a generic upgrade of a 6-rig 0.5.0 cafe shows rigs 1–4 on the TV and "No licence found" until the code is entered (as documented in README and INSTALL.md).
 7. **Wrong cafe:** Kart Hub's installer on Apex Lounge's PC stops on the Preparing page with "This installer is for Kart Hub. This PC belongs to Apex Lounge." and "Nothing was changed…"; the hub kept running; with `/VERYSILENT` the exit code is 7; with `/FORCEOTHERCAFE` it installs and `cafe.json` names Kart Hub.
@@ -235,78 +248,78 @@ Everything below was mocked or checked statically in the cloud. Do these in orde
 11. An owner-page **Back up now**, then restore that backup: the licence comes back; restoring an older backup never lowers the licence.
 
 **L6. Merge**
-1. All suites green on Windows (hub with `--basetemp`, factory, `npx vitest run --maxWorkers=2`, `npx tsc -b`).
-2. Answer the "Decisions to confirm" below (at least 9.1 and 9.3), record L1–L5 results in this log, merge `factory` into `packager` and push.
+1. **Done 2026-11-03** (see the L6.1 log entry): all suites green on Windows (hub with `--basetemp`, factory twice, `npx vitest run --maxWorkers=2`, `npx tsc -b`).
+2. The "Decisions to confirm" were answered on 2026-11-03 (see below). Still to do: record L1–L5 results in this log, merge `factory` into `packager` and push.
 
 ## Decisions to confirm
 
-Each was chosen as the safest option that matches the spec; the chosen option is stated.
+Each was chosen as the safest option that matches the spec; the chosen option is stated. **2026-11-03: the user answered 4.1, 8.8, 9.2 and 9.3 (marked ANSWERED, with the change made). The user accepted every other decision as written.**
 
 **1. Licence codes and the owner page**
-1. Error messages end with a full stop, like the hub's other owner messages.
-2. Re-entering the installed code says "This code is already installed." (a fourth message, not in spec 2.3); a different code with the same or a lower number says "This code is older than the one installed."
-3. A damaged licence file counts as "no licence yet", so any validly signed code is accepted and the owner can recover without the seller.
-4. There is no `[features]` flag for the licence itself (it decides the flags). With hub.toml `owner = false` the owner page is closed, so a code can't be entered until it is switched back on (or the seller provisions it).
-5. The licence never turns off the owner page's Licence card and backups; only the business figures need the licensed `owner` feature.
-6. After a new code, TVs refresh through a mid-connection `snapshot` (additive in WS v1) instead of a reconnect.
+1. Error messages end with a full stop, like the hub's other owner messages. *Accepted by the user 2026-11-03.*
+2. Re-entering the installed code says "This code is already installed." (a fourth message, not in spec 2.3); a different code with the same or a lower number says "This code is older than the one installed." *Accepted by the user 2026-11-03.*
+3. A damaged licence file counts as "no licence yet", so any validly signed code is accepted and the owner can recover without the seller. *Accepted by the user 2026-11-03.*
+4. There is no `[features]` flag for the licence itself (it decides the flags). With hub.toml `owner = false` the owner page is closed, so a code can't be entered until it is switched back on (or the seller provisions it). *Accepted by the user 2026-11-03.*
+5. The licence never turns off the owner page's Licence card and backups; only the business figures need the licensed `owner` feature. *Accepted by the user 2026-11-03.*
+6. After a new code, TVs refresh through a mid-connection `snapshot` (additive in WS v1) instead of a reconnect. *Accepted by the user 2026-11-03.*
 
 **2. Fallback and demo**
-1. A demo or replay with no licence file runs on the fallback without the "No licence found" warning; a damaged file is still reported.
-2. `run --demo` with no licence file widens the fallback to its six simulated rigs (it opens no telemetry port); a demo folder holding a licence (the preview) uses it.
+1. A demo or replay with no licence file runs on the fallback without the "No licence found" warning; a damaged file is still reported. *Accepted by the user 2026-11-03.*
+2. `run --demo` with no licence file widens the fallback to its six simulated rigs (it opens no telemetry port); a demo folder holding a licence (the preview) uses it. *Accepted by the user 2026-11-03.*
 
 **3. Enforcement**
-1. The licensed rigs are the N lowest-numbered rigs; a rig PC that got a new address counts as an extra rig until the owner uses "Same rig as…" (the warning says so); a new lower-numbered rig can push the highest licensed rig off the TV when over the count.
-2. The rigs warning shows only while a rig beyond N is in the rig list.
-3. The safety switches `auto_end_sessions` and `backup_warning` are not licensed products: only hub.toml turns them off.
-4. Every packet format the F1 adapter reads (2025, 2026) counts as "f1_25"; a separate "F1 26" licence is a later decision.
-5. The TV's challenge board and challenge-winner moment leave out laps from rigs beyond the licence; the staff page keeps them. Head to head and mini-sector owners use each driver's best lap, so a driver whose best was on a hidden rig drops out of those two TV views that day.
+1. The licensed rigs are the N lowest-numbered rigs; a rig PC that got a new address counts as an extra rig until the owner uses "Same rig as…" (the warning says so); a new lower-numbered rig can push the highest licensed rig off the TV when over the count. *Accepted by the user 2026-11-03.*
+2. The rigs warning shows only while a rig beyond N is in the rig list. *Accepted by the user 2026-11-03.*
+3. The safety switches `auto_end_sessions` and `backup_warning` are not licensed products: only hub.toml turns them off. *Accepted by the user 2026-11-03.*
+4. Every packet format the F1 adapter reads (2025, 2026) counts as "f1_25"; a separate "F1 26" licence is a later decision. *Accepted by the user 2026-11-03.*
+5. The TV's challenge board and challenge-winner moment leave out laps from rigs beyond the licence; the staff page keeps them. Head to head and mini-sector owners use each driver's best lap, so a driver whose best was on a hidden rig drops out of those two TV views that day. *Accepted by the user 2026-11-03.*
 
 **4. TV and branding**
-1. An unbranded TV hides the whole "POWERED BY" block, including the product wordmark. There is no `[features]` switch for the mark: it follows the licence variant only.
+1. **ANSWERED (user, 2026-11-03): the unbranded TV shows "POWERED BY" + the product wordmark (from brand), with no 9T7 mark; the 9t7 TV is unchanged** (`Pitwall.tsx`, vitest, WS_SCHEMA). `hub.vendor_mark` stays in the feed. Was: an unbranded TV hid the whole block. There is no `[features]` switch for the mark.
 
 **5. Provisioning and the installer**
-1. A PC with no `cafe.json` counts as fresh only when settings.json is missing or left by an interrupted provisioning (setup not done and no PINs); otherwise it is adopted (licence and `cafe.json` only, nothing else touched). A PC whose hub.toml holds PINs is adopted too.
-2. With no (or a damaged) `cafe.json`, a verifying installed licence tells whose PC it is, so another cafe's installer is still refused.
-3. A baked licence that doesn't verify doesn't stop the install: the cafe's details are provisioned and the hub runs on the fallback, with a plain note. A missing licence.txt, or one for another cafe, is a broken package (exit 2, nothing written).
-4. `--force-other-cafe` (`/FORCEOTHERCAFE`, command line only) re-stamps the PC and installs the new licence, but keeps settings, PINs, rig names, logo, Wi-Fi and hub.toml. The whose-PC check is then skipped.
-5. An upgrade keeps the name in `cafe.json` as it was at the fresh install.
-6. A hub.toml that can't be read or safely edited is left alone (exit 0, plain note); unknown profile flags are ignored and logged.
-7. `cafe.json` is not backed up; a restored PC is adopted by the next cafe installer or recognised by its licence.
-8. There is no `[features]` flag for provisioning: it only runs from a cafe installer.
-9. A provision failure after the files are in never stops the install (the hub starts on the PC's own details); only the early whose-PC check refuses. A check that ends in exit 2 (bad files, or an old 0.5.0 program) does not refuse; an installer whose baked files can't be extracted refuses before changing anything.
-10. TV-only installs of a cafe installer never check or provision.
-11. `-InstallerOnly` treats any uncommitted change (untracked files too) as "rebuild the program": safe but slower while editing.
+1. A PC with no `cafe.json` counts as fresh only when settings.json is missing or left by an interrupted provisioning (setup not done and no PINs); otherwise it is adopted (licence and `cafe.json` only, nothing else touched). A PC whose hub.toml holds PINs is adopted too. *Accepted by the user 2026-11-03.*
+2. With no (or a damaged) `cafe.json`, a verifying installed licence tells whose PC it is, so another cafe's installer is still refused. *Accepted by the user 2026-11-03.*
+3. A baked licence that doesn't verify doesn't stop the install: the cafe's details are provisioned and the hub runs on the fallback, with a plain note. A missing licence.txt, or one for another cafe, is a broken package (exit 2, nothing written). *Accepted by the user 2026-11-03.*
+4. `--force-other-cafe` (`/FORCEOTHERCAFE`, command line only) re-stamps the PC and installs the new licence, but keeps settings, PINs, rig names, logo, Wi-Fi and hub.toml. The whose-PC check is then skipped. *Accepted by the user 2026-11-03.*
+5. An upgrade keeps the name in `cafe.json` as it was at the fresh install. *Accepted by the user 2026-11-03.*
+6. A hub.toml that can't be read or safely edited is left alone (exit 0, plain note); unknown profile flags are ignored and logged. *Accepted by the user 2026-11-03.*
+7. `cafe.json` is not backed up; a restored PC is adopted by the next cafe installer or recognised by its licence. *Accepted by the user 2026-11-03.*
+8. There is no `[features]` flag for provisioning: it only runs from a cafe installer. *Accepted by the user 2026-11-03.*
+9. A provision failure after the files are in never stops the install (the hub starts on the PC's own details); only the early whose-PC check refuses. A check that ends in exit 2 (bad files, or an old 0.5.0 program) does not refuse; an installer whose baked files can't be extracted refuses before changing anything. *Accepted by the user 2026-11-03.*
+10. TV-only installs of a cafe installer never check or provision. *Accepted by the user 2026-11-03.*
+11. `-InstallerOnly` treats any uncommitted change (untracked files too) as "rebuild the program": safe but slower while editing. *Accepted by the user 2026-11-03.*
 
 **6. Factory profile and pricing**
-1. A cafe's colour may be any #RRGGBB (as /setup allows); the six swatches are offered first.
-2. The logo is optional; logos are stored in `<Shipments>/profiles/logos/`, named by cafe id.
-3. The baked profile writes every licensed feature as on (safety switches as set), so only the licence keeps unbought features off and an add-on code switches them on without a reinstall.
-4. Add-on games and features have no list price: the seller types it. A 9t7 price above the list shows as "other add-ons", below it as a discount; ₹0 is allowed.
-5. The 9t7 price follows the rig count until the seller types one ("Use list price" goes back); switching to unbranded drops an automatic price and keeps a typed one; switching to 9T7 Racing with no price fills the list price.
-6. A cafe name without Latin letters gets the installer name `cafe-<8 hex>`; its folder and PDF names keep the real name.
-7. Rig names beyond the rig count are a problem to fix, never dropped silently.
+1. A cafe's colour may be any #RRGGBB (as /setup allows); the six swatches are offered first. *Accepted by the user 2026-11-03.*
+2. The logo is optional; logos are stored in `<Shipments>/profiles/logos/`, named by cafe id. *Accepted by the user 2026-11-03.*
+3. The baked profile writes every licensed feature as on (safety switches as set), so only the licence keeps unbought features off and an add-on code switches them on without a reinstall. *Accepted by the user 2026-11-03.*
+4. Add-on games and features have no list price: the seller types it. A 9t7 price above the list shows as "other add-ons", below it as a discount; ₹0 is allowed. *Accepted by the user 2026-11-03.*
+5. The 9t7 price follows the rig count until the seller types one ("Use list price" goes back); switching to unbranded drops an automatic price and keeps a typed one; switching to 9T7 Racing with no price fills the list price. *Accepted by the user 2026-11-03.*
+6. A cafe name without Latin letters gets the installer name `cafe-<8 hex>`; its folder and PDF names keep the real name. *Accepted by the user 2026-11-03.*
+7. Rig names beyond the rig count are a problem to fix, never dropped silently. *Accepted by the user 2026-11-03.*
 
 **7. Keys and licence issue**
-1. The private key is stored unencrypted, protected by file permissions only (no passphrase); the USB copy is readable by whoever holds the stick.
-2. A new key is added to `licence_pubkey.py`; old keys are never removed, so every code already issued keeps working.
-3. `issue()` refuses a number lower than the cafe's next one; `copy_backup` never overwrites a different key in the chosen folder and sets no ACL on the copy (USB sticks are usually FAT32/exFAT).
+1. The private key is stored unencrypted, protected by file permissions only (no passphrase); the USB copy is readable by whoever holds the stick. *Accepted by the user 2026-11-03.*
+2. A new key is added to `licence_pubkey.py`; old keys are never removed, so every code already issued keeps working. *Accepted by the user 2026-11-03.*
+3. `issue()` refuses a number lower than the cafe's next one; `copy_backup` never overwrites a different key in the chosen folder and sets no ACL on the copy (USB sticks are usually FAT32/exFAT). *Accepted by the user 2026-11-03.*
 
 **8. Documents, builds, upgrades and preview**
-1. The upgrade certificate is refused when there is no earlier licence on record or nothing is added; an upgrade's price defaults to the rigs' list price only for 9t7 rigs-only upgrades.
-2. The guide's sticker step appears only when check-in is licensed; the certificate leaves out the two safety switches; the guide advises a staff PIN different from the owner's and says "contact <supplier>" for antivirus problems.
-3. The QR uses error correction L at 40 mm (L2.6 checks a phone reads it).
-4. A licence issued for a build that then fails or is cancelled is discarded and its number reused (it never left the PC).
-5. History records the package folder name, not a full path; if the profile can't be saved after the package is placed, the package is taken back out.
-6. Rebuild all skips cafes never built and fails (does not rebuild) a cafe whose rigs, games, licensed features or branding changed since its last licence. Issue upgrade refuses a change that takes anything away or changes the branding.
-7. The cafe installer is deleted from `dist\` once copied into the package; `repo_root` and the video folder are not saved settings.
-8. **The program's own file details** (`Pitwall.exe` Properties › Details) still say 9T7 Racing in an unbranded install, because one program build serves both variants; only the installer's publisher follows the variant (spec F5/2.5). If that matters, the safest change is a neutral company for every build. Code signing is unchanged: unset `PITWALL_SIGN_CERT` for an unbranded build if the certificate's name must not show.
-9. The preview licence is really signed (number 0, never recorded, only in the preview's temp folder) when this build trusts the key; otherwise the preview runs on the demo's licence and says so. Its pages listen on 127.0.0.1 only. `run --demo` on a folder holding settings.json shows that cafe's details. The preview prefers the built program only when its stamp is this version.
+1. The upgrade certificate is refused when there is no earlier licence on record or nothing is added; an upgrade's price defaults to the rigs' list price only for 9t7 rigs-only upgrades. *Accepted by the user 2026-11-03.*
+2. The guide's sticker step appears only when check-in is licensed; the certificate leaves out the two safety switches; the guide advises a staff PIN different from the owner's and says "contact <supplier>" for antivirus problems. *Accepted by the user 2026-11-03.*
+3. The QR uses error correction L at 40 mm (L2.6 checks a phone reads it). *Accepted by the user 2026-11-03.*
+4. A licence issued for a build that then fails or is cancelled is discarded and its number reused (it never left the PC). *Accepted by the user 2026-11-03.*
+5. History records the package folder name, not a full path; if the profile can't be saved after the package is placed, the package is taken back out. *Accepted by the user 2026-11-03.*
+6. Rebuild all skips cafes never built and fails (does not rebuild) a cafe whose rigs, games, licensed features or branding changed since its last licence. Issue upgrade refuses a change that takes anything away or changes the branding. *Accepted by the user 2026-11-03.*
+7. The cafe installer is deleted from `dist\` once copied into the package; `repo_root` and the video folder are not saved settings. *Accepted by the user 2026-11-03.*
+8. **ANSWERED (user, 2026-11-03): neutral program details for every build.** `Pitwall.exe` Properties › Details show the product name (from brand) and the version only, with no company or copyright (`pitwall.spec`). The 9T7 installer's publisher stays "9T7 Racing" via the Vendor define; the unbranded installer names no company. Was: the exe said 9T7 Racing in every build. Code signing is unchanged: unset `PITWALL_SIGN_CERT` for an unbranded build if the certificate's name must not show.
+9. The preview licence is really signed (number 0, never recorded, only in the preview's temp folder) when this build trusts the key; otherwise the preview runs on the demo's licence and says so. Its pages listen on 127.0.0.1 only. `run --demo` on a folder holding settings.json shows that cafe's details. The preview prefers the built program only when its stamp is this version. *Accepted by the user 2026-11-03.*
 
 **9. The form app, and upgrading existing cafes (C13)**
-1. **Existing 0.5.0 cafes with more than 4 rigs:** kept spec 2.2 (no licence = 4 rigs) rather than adding a "grandfather the rigs already known" rule, which would need a new trust rule and could be abused by deleting licence.txt. Racing and lap recording are never interrupted; only the TV shows 4 rigs until a code is entered. The safe path is documented prominently: upgrade each existing cafe with its own factory package (the installer adopts the PC, keeps everything and installs the licence), never the generic installer; INSTALL.md tells owners to enter their code if a generic installer was used.
-2. **Another cafe's code on a PC with no licence:** as spec 2.2 says, a valid code is accepted when there is no licence yet (or it is damaged), even if `cafe.json` names another cafe. Using `cafe.json` to refuse it would stop code-sharing between cafes but could lock out a PC that legitimately changed hands; left for the user to decide.
-3. **Version number:** the branch is still `0.5.0`. Bump it (e.g. 0.6.0) before L2 so cafes and Rebuild all can tell the licensed version apart; INSTALL.md calls it "the first version with licences (after 0.5.0)" until then.
-4. The factory uses explicit Save (no autosave) and asks before leaving unsaved changes; Build package, Issue upgrade and Rebuild all save first, Preview doesn't. A new cafe is written only on its first Save.
-5. The safety switches are shown ticked and locked "always on".
-6. The Shipments folder and the Edge location are editable in Settings; the key folder is not (it follows %APPDATA%, or `PITWALL_FACTORY_KEYS`).
-7. One job at a time: while it runs the form is locked, and the window can't close until it ends (Cancel first); a running preview is stopped when the window closes.
+1. **Existing 0.5.0 cafes with more than 4 rigs:** kept spec 2.2 (no licence = 4 rigs) rather than adding a "grandfather the rigs already known" rule, which would need a new trust rule and could be abused by deleting licence.txt. Racing and lap recording are never interrupted; only the TV shows 4 rigs until a code is entered. The safe path is documented prominently: upgrade each existing cafe with its own factory package (the installer adopts the PC, keeps everything and installs the licence), never the generic installer; INSTALL.md tells owners to enter their code if a generic installer was used. *Accepted by the user 2026-11-03.*
+2. **ANSWERED (user, 2026-11-03): REFUSE.** A validly signed code for a different cafe is refused on a PC whose `cafe.json` names another cafe (or, without `cafe.json`, whose installed licence does): "This code is for {other}. This PC belongs to {cafe}." A PC with neither accepts any valid code (first time). When a PC changes hands, the seller reinstalls it with the new cafe's package and `/FORCEOTHERCAFE`. Was: such a code was accepted when there was no licence yet.
+3. **ANSWERED (user, 2026-11-03): version 0.6.0** everywhere the version lives (pyproject, `simtelemetry.__version__`, the installer name via build.ps1, INSTALL-TEST, the dashboard sample feed). INSTALL.md: "Upgrading to 0.6.0, the first version with licences".
+4. The factory uses explicit Save (no autosave) and asks before leaving unsaved changes; Build package, Issue upgrade and Rebuild all save first, Preview doesn't. A new cafe is written only on its first Save. *Accepted by the user 2026-11-03.*
+5. The safety switches are shown ticked and locked "always on". *Accepted by the user 2026-11-03.*
+6. The Shipments folder and the Edge location are editable in Settings; the key folder is not (it follows %APPDATA%, or `PITWALL_FACTORY_KEYS`). *Accepted by the user 2026-11-03.*
+7. One job at a time: while it runs the form is locked, and the window can't close until it ends (Cancel first); a running preview is stopped when the window closes. *Accepted by the user 2026-11-03.*

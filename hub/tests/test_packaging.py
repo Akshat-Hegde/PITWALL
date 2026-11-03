@@ -257,7 +257,7 @@ def test_program_file_details_name_no_company():
 
 # --- Factory C6: cafe installers (spec 2.4, 2.5, F5) --------------------------------------------------------------
 
-GENERIC = {"AppName": "Pitwall", "ExeName": "Pitwall", "TaskName": "Pitwall Hub", "AppVersion": "0.5.0",
+GENERIC = {"AppName": "Pitwall", "ExeName": "Pitwall", "TaskName": "Pitwall Hub", "AppVersion": "0.6.0",
            "Vendor": "9T7 Racing"}
 CAFE = {**GENERIC, "ProfileDir": r"C:\Shipments\profiles\apex", "CafeSlug": "Apex-Lounge"}
 UNBRANDED = {**CAFE, "Vendor": ""}

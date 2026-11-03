@@ -241,6 +241,6 @@ def _settings(backup_dir: str):
     return CafeSettings(name="Cafe", owner_pin="2468", setup_done=True, backup_dir=backup_dir)
 
 
-def test_version_is_0_5_0():
+def test_version_is_0_6_0():
     import simtelemetry
-    assert simtelemetry.__version__ == "0.5.0"
+    assert simtelemetry.__version__ == "0.6.0"   # the first version with licences
