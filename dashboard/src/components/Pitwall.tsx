@@ -187,10 +187,9 @@ export function PitwallPage({ store, state, trackKey, mapDisplay = null, pinnedR
             <span className="pw-cafe__name">{cafe}</span>
           </div>
           <div className="pw-head__clockrow">
-            {state.vendorMark && <>
-              <span className="pw-powered">POWERED BY</span>
-              <PitwallLogo height={18} />
-            </>}
+            {/* The product's own wordmark, on every TV (Decision 4.1): unbranded too, as it carries no 9T7 mark. */}
+            <span className="pw-powered">POWERED BY</span>
+            <PitwallLogo height={18} />
             <span className="pw-clock">{clock}</span>
           </div>
         </div>

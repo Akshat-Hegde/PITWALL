@@ -391,7 +391,7 @@ class FeedBuilder:
                     "features": self.hub.features.model_dump(exclude={"auto_end_sessions", "backup_warning"}),
                     "moments": {"battle_margin_ms": self.hub.config.moments.battle_margin_ms},
                     "sounds": self.hub.config.sounds.model_dump(),
-                    # The supplier's mark ("POWERED BY" on the TV): off for an unbranded licence.
+                    # The supplier (9T7) may be shown; off when unbranded. The TV shows "POWERED BY" + wordmark always.
                     "vendor_mark": self.hub.entitlements.vendor_mark},
             "cafe": self.cafe(),
             "status": self.status(now, tv=True),

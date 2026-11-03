@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-// The licence on the TV (factory spec 2.3): the vendor mark follows hub.vendor_mark, and the TV never shows a rig
-// the hub didn't describe in rig_info (rigs beyond the licence are left out of the feed; this is the TV's guard).
+// The licence on the TV (factory spec 2.3): the "POWERED BY" + product wordmark block shows for every variant with
+// no 9T7 mark (Decision 4.1), and the TV never shows a rig the hub didn't describe in rig_info (rigs beyond the
+// licence are left out of the feed; this is the TV's guard).
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -82,41 +83,44 @@ function withVendorMark(value: boolean | undefined) {
 }
 
 describe("vendor mark", () => {
+  // Decision 4.1 (user, 2026-11-03): the "POWERED BY" block is the product's own wordmark (no 9T7 mark), so every
+  // TV shows it, unbranded included; hub.vendor_mark still reaches the state for the supplier's own mark.
   test.each([
     [true, true],
     [false, false],
-    [undefined, true], // an older hub that doesn't send it: keep the mark
-  ])("hub.vendor_mark %s: POWERED BY shown is %s", (value, shown) => {
+    [undefined, true], // an older hub that doesn't send it
+  ])("hub.vendor_mark %s: vendorMark is %s and POWERED BY + the wordmark show", (value, mark) => {
     const { store } = fedStore({ edit: withVendorMark(value) });
-    expect(store.getState().vendorMark).toBe(shown);
+    expect(store.getState().vendorMark).toBe(mark);
     act(() => root.render(<App store={store} />));
     expect(host.querySelector(".app__view > main")?.className).toContain("live");
-    expect(host.querySelector(".pw-powered") !== null).toBe(shown);
-    expect(host.querySelector(".pwlogo") !== null).toBe(shown);
-    expect(host.textContent?.includes("POWERED BY")).toBe(shown);
+    expect(host.querySelector(".pw-powered")?.textContent).toBe("POWERED BY");
+    expect(host.querySelector(".pwlogo")?.getAttribute("aria-label")).toBe(__PRODUCT_NAME__);
     // The rest of the header stays: the cafe's name and the clock.
     expect(host.querySelector(".pw-cafe__name")?.textContent).toBe("SIM RACING CAFE");
     expect(host.querySelector(".pw-clock")).not.toBeNull();
   });
 
-  test("no view shows the mark when vendor_mark is false", () => {
+  test("an unbranded TV shows no 9T7 mark in any view", () => {
     const { store } = fedStore({ edit: withVendorMark(false) });
     act(() => root.render(<App store={store} />));
     for (const key of ["2", "1"]) {
       act(() => { window.dispatchEvent(new KeyboardEvent("keydown", { key })); });
       act(() => { vi.advanceTimersByTime(WIPE_MS + 50); });
-      expect(host.textContent).not.toContain("POWERED BY");
-      expect(host.querySelector(".pwlogo, .pwmark")).toBeNull();
+      expect(host.textContent ?? "").not.toMatch(/9\s*T\s*7/i);
+      expect(host.innerHTML).not.toMatch(/9t7/i);
     }
   });
 
-  test("a fresh snapshot (new licence code) switches the mark on the same connection", () => {
+  test("a fresh snapshot (new licence code) updates vendorMark on the same connection; the block stays", () => {
     const { store } = fedStore({ edit: withVendorMark(true) });
     act(() => root.render(<App store={store} />));
     expect(host.querySelector(".pw-powered")).not.toBeNull();
     const hub = new MockHub({ ...DEFAULT_MOCK_OPTIONS, rigs: 2 }, () => 1_791_300_100_000);
     act(() => store.dispatch(withVendorMark(false)(hub.snapshot() as SnapshotMessage)));
-    expect(host.querySelector(".pw-powered")).toBeNull();
+    expect(store.getState().vendorMark).toBe(false);
+    expect(host.querySelector(".pw-powered")).not.toBeNull();
+    expect(host.querySelector(".pwlogo")).not.toBeNull();
   });
 });
 

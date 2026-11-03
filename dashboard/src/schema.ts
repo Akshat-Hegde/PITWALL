@@ -518,7 +518,8 @@ export interface SnapshotMessage extends Envelope<"snapshot"> {
     features?: Partial<Features>;
     moments?: { battle_margin_ms: number };
     sounds?: { enabled: boolean; volume: number };
-    /** Added in v1 (optional, default true): show the supplier's "POWERED BY" mark; false when unbranded. */
+    /** Added in v1 (optional, default true): the supplier (9T7 Racing) may be shown; false when unbranded. The
+     *  "POWERED BY" + product wordmark block is the product's own and shows on every TV. */
     vendor_mark?: boolean;
   };
   cafe: CafeInfo;

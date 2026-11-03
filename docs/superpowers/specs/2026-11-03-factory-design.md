@@ -144,7 +144,7 @@ The checks are plain English ("Choose a logo under 1 MB", "An unbranded build ne
   - Unlicensed features behave exactly like switched-off flags.
 - **Games:** an unlicensed game's packets are dropped. Its rigs get a Health line: "This licence doesn't include <game>."
 - **Variant:**
-  - The 9T7 mark (the TV's "POWERED BY" block and any "by 9T7 Racing" text on pages) shows only for `variant == "9t7"`. The feed tells the TV through a new additive `hub.vendor_mark: bool`, documented in WS_SCHEMA.
+  - The 9T7 mark (any "by 9T7 Racing" text or 9T7 logo) shows only for `variant == "9t7"`. Decision 4.1 (user, 2026-11-03): the TV's "POWERED BY" block shows the product wordmark from brand.py and no 9T7 mark, so it stays on unbranded TVs too. The feed tells the TV through a new additive `hub.vendor_mark: bool`, documented in WS_SCHEMA.
   - `brand.COMPANY` stays in the exe's version details, because the program is built once. The **installer's** publisher and version details come from the variant at installer build time.
 - **Owner page:** a Licence card shows:
   - "Licensed to {cafe} · {rigs} rigs · {games}";

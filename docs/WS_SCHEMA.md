@@ -105,9 +105,10 @@ Compatibility rules:
 - `hub.sounds` *(added in v1, optional)*: `{ "enabled": false, "volume": 0.6 }`.
 - `hub.steering_rotation_deg` *(added in v1, optional, default 360)*: lock-to-lock wheel rotation for the
   steering wheel graphic, from `[dashboard] steering_wheel_rotation_deg`.
-- `hub.vendor_mark` *(added in v1, optional, default true)*: whether the TV shows the supplier's mark (the
-  "POWERED BY" block). `false` for an unbranded licence. A new licence code sends every TV a fresh snapshot,
-  so the value can change on a connection.
+- `hub.vendor_mark` *(added in v1, optional, default true)*: whether the TV may show the supplier's (9T7 Racing)
+  mark. `false` for an unbranded licence. A new licence code sends every TV a fresh snapshot, so the value can
+  change on a connection. The "POWERED BY" block shows the product's own wordmark (no 9T7 mark), so it shows on
+  every TV, unbranded included (Decision 4.1, 2026-11-03); no TV view draws a 9T7 mark today.
 - **Licensed rigs** *(v1, additive)*: the licence covers the N lowest-numbered rigs. The feed leaves the other
   rigs out everywhere: `rigs` / `rig_info`, `frame.rigs` (and so `comparison`), the leaderboards, `recent_laps`,
   `session_story`, `head_to_head`, the challenge board in `competition`, `lap_completed`, and moments about those

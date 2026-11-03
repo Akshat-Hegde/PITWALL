@@ -71,7 +71,8 @@ export interface DashboardState {
   cards: CardMoment[];
   /** A battle pop-up sent by the hub (demo director), shown before any the TV found itself. */
   battle: BattleMoment | null;
-  /** Show the supplier's "POWERED BY" mark (hub.vendor_mark; an older hub that doesn't send it keeps it on). */
+  /** The supplier (9T7 Racing) may be shown (hub.vendor_mark; an older hub that doesn't send it: true). No TV view
+   *  draws a 9T7 mark today; the "POWERED BY" + product wordmark block shows on every TV (Decision 4.1). */
   vendorMark: boolean;
 }
 
