@@ -28,6 +28,7 @@ LAYOUTS = FORMATS[2025]
 GAME_NAMES = ["Apex_Hunter", "LateBraker77", "Sofia_K", "TurboTom", "Mika H", "DRS_Daisy"]
 PACES = [0.995, 0.982, 0.99, 0.986, 0.978, 0.992]
 PRO = [True, False, True, False, False, False]  # every assist off on these rigs
+DEMO_RIGS = 6                    # simulated rigs in `run --demo` (its fallback licence covers them all)
 
 
 def rig_ip(n: int) -> str:
@@ -235,7 +236,7 @@ class VirtualRig:
 class DemoSimulator:
     """Drives `rigs` virtual rigs into the hub at 20 Hz until cancelled."""
 
-    def __init__(self, hub: Hub, rigs: int = 6, seed: int = 11) -> None:
+    def __init__(self, hub: Hub, rigs: int = DEMO_RIGS, seed: int = 11) -> None:
         self.hub = hub
         self.circuit = Circuit.build()
         rng = random.Random(seed)

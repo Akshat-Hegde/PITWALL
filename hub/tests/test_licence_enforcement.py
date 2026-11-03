@@ -177,19 +177,22 @@ async def test_pinned_rig_beyond_the_licence_reads_as_automatic(tmp_path, signer
 
 
 async def test_a_rig_the_tv_has_that_falls_outside_the_licence_gets_a_fresh_snapshot(tmp_path, signer):
-    hub = await three_rigs(tmp_path, signer, rigs=3)
+    hub = await three_rigs(tmp_path, signer, rigs=2)
     conn = FeedConnection(FeedBuilder(hub))
-    assert len(conn.start(last_seen(hub))["rigs"]) == 3
+    assert [r["rig_id"] for r in conn.start(last_seen(hub))["rigs"]] == [RIG_A, RIG_B]
     assert conn.tick(last_seen(hub))[-1]["type"] == "frame"
-    hub.registry.get(RIG_B).auto_name = "Rig 7"           # e.g. "same rig as…" moved a number
-    (snap,) = conn.tick(last_seen(hub))
-    assert snap["type"] == "snapshot" and [r["rig_id"] for r in snap["rigs"]] == [RIG_A, RIG_C]
-    # New rigs: number 2 (free again) is sent; number 4, beyond the licence, is simply never sent (no snapshot).
-    await feed(hub, driving_rig("192.168.1.24", uid=0x14) + driving_rig("192.168.1.25", uid=0x15))
-    assert [hub.registry.get(ip).number for ip in ("192.168.1.24", "192.168.1.25")] == [2, 4]
+    hub.registry.get(RIG_A).auto_name = "Rig 7"           # e.g. "same rig as…" moved a number
+    (snap,) = conn.tick(last_seen(hub))                   # rig 1 is now the highest number: off the TV
+    assert snap["type"] == "snapshot" and [r["rig_id"] for r in snap["rigs"]] == [RIG_B, RIG_C]
+    # A new rig beyond the licence (rigs 1 and 2 are taken) is simply never sent: no snapshot.
+    hub.registry.get(RIG_C).auto_name = "Rig 1"
+    conn.tick(last_seen(hub))
+    await feed(hub, driving_rig("192.168.1.24", uid=0x14))
+    assert hub.registry.get("192.168.1.24").number == 3
     msgs = conn.tick(last_seen(hub))
     assert "snapshot" not in [m["type"] for m in msgs]
-    assert [m["rig"]["rig_id"] for m in msgs if m["type"] == "rig_info"] == ["192.168.1.24"]
+    assert [m["rig"]["rig_id"] for m in msgs if m["type"] == "rig_info"] == []
+    assert hub.tv_hidden_rigs() == {RIG_A, "192.168.1.24"}
 
 
 async def test_new_code_applies_live(tmp_path, signer):
@@ -237,6 +240,46 @@ async def test_rigs_warning_only_when_a_rig_beyond_the_licence_exists(tmp_path, 
     assert "licence_rigs" not in [w["code"] for w in hub.admin_warnings()]
     hub.apply_licence(signer.code(rigs=1, seq=2))
     assert hub.licence_rigs_warning().startswith("This licence covers 1 rig. Rig 2 and up")
+
+
+async def test_rigs_warning_says_how_to_fix_a_rig_pc_with_a_new_address(tmp_path, signer):
+    """C3 review: a rig PC whose address changed registers as a new, higher number (beyond the licence) while its
+    old entry sits idle; the warning says how to give it its old number back instead of only "buy more rigs"."""
+    hub = await three_rigs(tmp_path, signer)
+    assert hub.licence_rigs_warning().endswith("to add rigs.")                 # rigs 1 and 2 are sending
+    hub.health.get(RIG_B).last_seen = time.monotonic() - 3600   # rig 2 has gone quiet while "Rig 3" sends
+    text = hub.licence_rigs_warning()
+    assert text.startswith("This licence covers 2 rigs. Rig 3 and up aren't shown on the TV.")
+    assert text.endswith('open the setup page and choose "Same rig as…" for it.')
+    hub.registry.merge(RIG_B, RIG_C)                      # the owner does that: rig 3 becomes rig 2 again
+    assert hub.tv_hidden_rigs() == frozenset() and hub.licence_rigs_warning() is None
+
+
+async def test_a_gap_in_rig_numbers_never_hides_a_rig_within_the_count(tmp_path, signer):
+    """C3 review: rig 1 renamed "Rig 2" before rig 2 registered makes the next rigs "Rig 3" and "Rig 4"; with
+    three rigs and a three-rig licence (or the 4-rig fallback) all three are on the TV, as in 0.5.0."""
+    hub = make_hub(tmp_path, owner={"pin": "2468"})
+    await feed(hub, driving_rig(RIG_A))
+    hub.registry.rename(RIG_A, "Rig 2")
+    await feed(hub, driving_rig(RIG_B, uid=0x12, name=b"Kofi") + driving_rig(RIG_C, uid=0x13, name=b"Zed"))
+    assert [hub.registry.get(ip).number for ip in (RIG_A, RIG_B, RIG_C)] == [1, 3, 4]
+    assert hub.tv_hidden_rigs() == frozenset() and hub.licence_rigs_warning() is None    # fallback
+    hub.apply_licence(signer.code(rigs=3))
+    assert hub.tv_hidden_rigs() == frozenset() and hub.licence_rigs_warning() is None
+    hub.apply_licence(signer.code(rigs=2, seq=2))
+    assert hub.tv_hidden_rigs() == {RIG_C} and not hub.rig_licensed(RIG_C)
+    assert hub.licence_rigs_warning().startswith("This licence covers 2 rigs. Rig 4 and up aren't shown on the TV.")
+
+
+def test_demo_without_a_licence_shows_all_its_rigs(tmp_path):
+    """C3 review: `run --demo` (no telemetry port) keeps 0.5.0's six rigs on the TV; a real run stays at 4."""
+    from simtelemetry.__main__ import demo_fallback
+    from simtelemetry.tools.demo_sim import DEMO_RIGS, DemoSimulator
+    hub = make_hub(tmp_path)
+    ent = hub.load_licence(warn_missing=False, fallback=demo_fallback())
+    assert ent.source == "fallback" and ent.rigs >= DEMO_RIGS == len(DemoSimulator(hub).rigs)
+    assert hub.licence_problem is None and ent.features == licence.FALLBACK.features
+    assert make_hub(tmp_path / "real").load_licence().rigs == licence.FALLBACK.rigs == 4
 
 
 # --- features ------------------------------------------------------------------------------------

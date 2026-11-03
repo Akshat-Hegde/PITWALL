@@ -27,6 +27,8 @@ log = logging.getLogger(__name__)
 QUEUE_MAX = 20_000  # ~10 rigs x 60 Hz x 6 packets for >5 s of backlog
 DROP_QUEUE_FULL = "queue_full"
 DROP_GAME_NOT_LICENSED = "game_not_licensed"
+MOVED_RIG_HINT = (" If one of those is a rig PC that got a new address, open the setup page and choose "
+                  "\"Same rig as…\" for it.")
 NOT_LICENSED = "Not licensed"          # the staff page's mark on a rig beyond the licensed rig count
 GAME_LINE_SHOW_S = 60.0                # a rig sending a game the licence doesn't include stays on Health this long
 WRONG_SENDER_SHOW_S = 60.0   # a non-rig sending wrong-format packets is listed on staff Health this long
@@ -609,13 +611,16 @@ class Hub:
     def entitlements(self) -> licence.Entitlements:
         return self._entitlements
 
-    def load_licence(self, warn_missing: bool = True) -> licence.Entitlements:
+    def load_licence(self, warn_missing: bool = True,
+                     fallback: licence.Entitlements = licence.FALLBACK) -> licence.Entitlements:
         """Read <data>/licence.txt at start-up. Missing or damaged: the fallback, and staff Health, /setup and the
-        owner page say so (never the TV). `warn_missing=False` (demo) runs on the fallback quietly."""
+        owner page say so (never the TV). `warn_missing=False` (demo) runs on the fallback quietly. `fallback`:
+        the demo's own (every simulated rig on the TV, as in 0.5.0; the demo takes no real telemetry)."""
         with self._licence_lock:
-            return self._load_licence(warn_missing)
+            return self._load_licence(warn_missing, fallback)
 
-    def _load_licence(self, warn_missing: bool) -> licence.Entitlements:
+    def _load_licence(self, warn_missing: bool,
+                      fallback: licence.Entitlements = licence.FALLBACK) -> licence.Entitlements:
         try:
             found = licence.read_file(self.config.data_dir)
         except licence.LicenceError:
@@ -626,8 +631,8 @@ class Hub:
             problem = None if found is not None or not warn_missing else "missing"
         if found is None:
             if problem == "missing":
-                log.warning("No licence file; using the fallback licence (%d rigs)", licence.FALLBACK.rigs)
-            self._set_entitlements(licence.FALLBACK, problem)
+                log.warning("No licence file; using the fallback licence (%d rigs)", fallback.rigs)
+            self._set_entitlements(fallback, problem)
         else:
             log.info("Licence %s: %s", found.payload.licence_id, licence.summary(licence.entitlements_from(found)))
             self._set_entitlements(licence.entitlements_from(found), None)
@@ -706,25 +711,38 @@ class Hub:
         return raw.model_copy(update=off) if off else raw
 
     def rig_licensed(self, rig_id: str) -> bool:
-        """Rig numbers 1..N are licensed. An address that is no rig now (laps from a forgotten rig) counts as
-        licensed: it is history, not a rig being raced."""
-        rig = self.registry.get(rig_id)
-        return rig is None or self._entitlements.licensed(rig.number)
+        """The N lowest-numbered rigs are licensed. An address that is no rig now (laps from a forgotten rig) counts
+        as licensed: it is history, not a rig being raced."""
+        return rig_id not in self.tv_hidden_rigs()
+
+    def _rigs_by_number(self) -> list[Rig]:
+        """Every rig, lowest number first (a rig without a number, from a hand-edited rigs.json, last)."""
+        return sorted(self.registry.all(), key=lambda r: (r.number is None, r.number or 0, r.ip))
 
     def tv_hidden_rigs(self) -> frozenset[str]:
-        """Rigs beyond the licensed rig count: they still record laps and show on the staff page, but the TV feed
-        leaves them out (frames, rig_info, boards, moments)."""
-        ent = self._entitlements
-        return frozenset(rig.ip for rig in self.registry.all() if not ent.licensed(rig.number))
+        """Rigs beyond the licensed rig count: the first N by rig number are licensed, the rest still record laps
+        and show on the staff page, but the TV feed leaves them out (frames, rig_info, boards, moments). By rank,
+        not by the number itself, so a gap in the numbers (a rig renamed "Rig 3" before rig 3 registered pushes
+        it to "Rig 4") never hides a rig while the cafe has no more rigs than the licence covers."""
+        rigs = self._rigs_by_number()
+        return frozenset(rig.ip for rig in rigs[self._entitlements.rigs:])
 
     def licence_rigs_warning(self) -> str | None:
         """Staff Health, /setup and the owner page (never the TV), only while a rig beyond the licence exists."""
         ent = self._entitlements
-        if not self.tv_hidden_rigs():
+        rigs = self._rigs_by_number()
+        if len(rigs) <= ent.rigs:
             return None
+        first = rigs[ent.rigs].number or ent.rigs + 1        # the first rig the TV leaves out (N+1 without gaps)
         covers = "1 rig" if ent.rigs == 1 else f"{ent.rigs} rigs"
-        return (f"This licence covers {covers}. Rig {ent.rigs + 1} and up aren't shown on the TV. "
+        text = (f"This licence covers {covers}. Rig {first} and up aren't shown on the TV. "
                 f"Contact {ent.supplier} to add rigs.")
+        # A rig PC that got a new network address registers as a new, higher-numbered rig while its old entry
+        # sits idle: say how to give it its old number back before the owner buys a rig they already have.
+        now = time.monotonic()
+        if any(self.health.state(rig.ip, now) is RigState.NO_DATA for rig in rigs[:ent.rigs]):
+            text += MOVED_RIG_HINT
+        return text
 
     def game_warnings(self, now: float | None = None) -> list[dict[str, Any]]:
         """"Rig 2: This licence doesn't include F1 25." for rigs sending a game the licence lacks (last minute)."""

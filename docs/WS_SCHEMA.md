@@ -108,7 +108,7 @@ Compatibility rules:
 - `hub.vendor_mark` *(added in v1, optional, default true)*: whether the TV shows the supplier's mark (the
   "POWERED BY" block). `false` for an unbranded licence. A new licence code sends every TV a fresh snapshot,
   so the value can change on a connection.
-- **Licensed rigs** *(v1, additive)*: the licence covers rigs 1 to N by rig number. The feed leaves the other
+- **Licensed rigs** *(v1, additive)*: the licence covers the N lowest-numbered rigs. The feed leaves the other
   rigs out everywhere: `rigs` / `rig_info`, `frame.rigs` (and so `comparison`), the leaderboards, `recent_laps`,
   `session_story`, `head_to_head`, the challenge board in `competition`, `lap_completed`, and moments about those
   rigs (a podium or race podium loses their lines; a `tv.pinned_rig` beyond the licence reads as `null`;

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import dataclasses
 import datetime as dt
 import json
 import logging
@@ -32,6 +33,7 @@ from .core.rigs import RigRegistry
 from .core.settings import SettingsStore, apply_settings, recover_damaged_settings
 from .core.setup_code import SetupCode
 from .hub import Hub
+from .licence import FALLBACK, Entitlements
 from .logging_setup import setup_logging, teardown_logging
 from .net.udp import PortInUseError, UdpListener, bind_socket, port_shadows
 from .core.store import LapStore, open_lap_store
@@ -678,6 +680,13 @@ def save_outline(args: argparse.Namespace, config: AppConfig) -> int:
     return 0
 
 
+def demo_fallback() -> Entitlements:
+    """`run --demo` with no licence file: the fallback, covering every simulated rig so the demo TV shows all of
+    them as in 0.5.0 (the demo opens no telemetry port, so no real rig can use it)."""
+    from .tools.demo_sim import DEMO_RIGS
+    return dataclasses.replace(FALLBACK, rigs=max(FALLBACK.rigs, DEMO_RIGS))
+
+
 def prepare_demo(args: argparse.Namespace, config: AppConfig) -> None:
     """`run --demo`: re-seed the demo folder (dates move with today) and set demo-friendly settings."""
     from .tools.demo_sim import DEMO_TRACK_NAME, TRACK_ID
@@ -777,7 +786,8 @@ def _run_command(args: argparse.Namespace, config: AppConfig, problems: list[Con
     hub.settings_from_older_version = from_older_version
     # The licence (spec 2.2): missing or damaged runs on the fallback, never stops the hub. The demo and replays
     # run on the fallback quietly unless their data folder holds a licence (the factory's preview writes one).
-    hub.load_licence(warn_missing=args.command == "run" and not getattr(args, "demo", False))
+    demo = getattr(args, "demo", False)
+    hub.load_licence(warn_missing=args.command == "run" and not demo, fallback=demo_fallback() if demo else FALLBACK)
 
     selection = SourceSelection()
     if args.command == "replay":
