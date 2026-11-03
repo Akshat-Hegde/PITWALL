@@ -908,7 +908,10 @@ class SettingsDialog(_Dialog):
         row.grid(row=8, column=0, columnspan=3, sticky="e", pady=(PAD * 2, 0))
         ttk.Button(row, text="Cancel", command=self.destroy).pack(side="right")
         ttk.Button(row, text="Save", command=self.save).pack(side="right", padx=PAD)
-        self.grab_set()
+        try:
+            self.grab_set()                        # modal; a window manager that refuses the grab is fine too
+        except tk.TclError:
+            pass
 
     def choose_ship(self) -> None:
         folder = filedialog.askdirectory(parent=self, title="Choose the Shipments folder")

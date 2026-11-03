@@ -516,7 +516,8 @@ program that knows it: send those cafes a new package (or rebuild theirs) before
 
 **Workflow.**
 - **New cafe:** New cafe → fill in the four tabs → Save → **Preview** (the cafe's TV, staff page and a phone-sized
-  check-in window open on this PC with demo cars; **Stop preview** closes them) → **Build package** → send the
+  check-in window open on this PC with demo cars; **Stop preview** closes them, and Build package waits until
+  you do) → **Build package** → send the
   whole package folder to the cafe (installer, setup guide, licence certificate, guide video, README).
 - **Add-on** (more rigs, a game or a feature): open the cafe, change the rigs, games or features, Save, then
   **Issue upgrade**. Type the add-ons' price (rigs alone get the list price for 9T7 Racing). The new code is shown

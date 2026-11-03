@@ -70,13 +70,16 @@ PRICE_BAD = "Type the price in whole rupees, for example 20000."
 RIGS_BAD = "Type the number of rigs, for example 6."
 BUSY = "Wait for the current job to finish, or press Cancel."
 NO_CAFE = "Choose a cafe on the left, or press New cafe."
+# A running preview may be using the program a build replaces (Windows can't replace a program that is running).
+STOP_PREVIEW_FIRST = "Press Stop preview first."
 
 BANNER_NO_KEYS = ("There's no signing key on this PC yet. Press Set up keys: it makes the key that signs every "
                   "cafe's licence.")
 BANNER_NOT_TRUSTED = (f"Your signing key isn't in this copy of {brand.PRODUCT_NAME} yet, so cafes would refuse its "
                       "licences. Press Set up keys to add it.")
-BANNER_BACKUP = ("Back up your signing key. If this PC is lost or breaks, you can't make add-on codes for your "
-                 "cafes any more. Press Copy key to… and choose a USB drive, then keep it safe.")
+BANNER_BACKUP = ("Back up your signing key. If this PC is lost or breaks without a copy, every cafe needs a new "
+                 "package before you can sell it an add-on. Press Copy key to… and choose a USB drive, then keep it "
+                 "safe.")
 
 SETUP_DONE = (
     "Your signing key is ready (key {fingerprint}).\n\n"
@@ -800,7 +803,8 @@ class Controller:
         video = ""
         if self.profile is not None:
             video = self.backend.video_problem(self.settings, self.profile.variant) or ""
-        out["build"] = act(ready, settings, key, edge, video)
+        previewing = STOP_PREVIEW_FIRST if self.preview is not None else ""
+        out["build"] = act(ready, settings, key, edge, video, previewing)
         upgrade = ""
         if not ready:
             if not self.profile.history:
@@ -812,7 +816,7 @@ class Controller:
                     upgrade = str(exc)
         out["upgrade"] = act(ready, upgrade, settings, key, edge)
         built = any(e.profile is not None and e.profile.history for e in self.entries)
-        out["rebuild"] = act("" if built else "No cafe has a package yet.", settings, key, edge)
+        out["rebuild"] = act("" if built else "No cafe has a package yet.", settings, key, edge, previewing)
         out["shipments"] = Action(True)
         out["settings"] = act()
         out["setup_keys"] = act()
@@ -850,10 +854,14 @@ class Controller:
             else:
                 q.put(("done", result, ""))
 
+        job.thread = threading.Thread(target=run, name=f"factory-{kind}", daemon=True)
+        try:
+            job.thread.start()
+        except RuntimeError:                          # no thread could be started: nothing is running
+            log.error("couldn't start the %s job", kind, exc_info=True)
+            raise ControllerError("The job couldn't be started. Close other programs and try again.") from None
         self.job = job
         self.status = title
-        job.thread = threading.Thread(target=run, name=f"factory-{kind}", daemon=True)
-        job.thread.start()
         return job
 
     def cancel_job(self) -> None:
@@ -966,22 +974,30 @@ class Controller:
         pv = self.preview
         if pv is None:
             raise ControllerError("No preview is running.")
+        job = self._start("stop_preview", "Stopping the preview…", lambda cancel, progress: pv.stop(),
+                          cancellable=False)
         self.preview = None
-        return self._start("stop_preview", "Stopping the preview…", lambda cancel, progress: pv.stop(),
-                           cancellable=False)
+        return job
 
     def shutdown(self) -> None:
         """The window is closing: end a preview now (it also ends at exit)."""
         pv, self.preview = self.preview, None
         if pv is not None:
-            try:
-                pv.stop()
-            except Exception:
-                log.warning("couldn't stop the preview", exc_info=True)
+            self.shutdown_preview(pv)
+
+    @staticmethod
+    def shutdown_preview(pv: Any) -> None:
+        """Stop a preview here and now (on the window's thread)."""
+        try:
+            pv.stop()
+        except Exception:
+            log.warning("couldn't stop the preview", exc_info=True)
 
     def close_prompt(self) -> str | None:
         """Why the window shouldn't close yet, or None."""
         if self.job is not None:
+            if not self.job.cancellable:
+                return "The factory is finishing a job. Wait a moment, then close it."
             return "A job is still running. Press Cancel and wait for it to stop, then close the factory."
         return None
 
@@ -1007,11 +1023,22 @@ class Controller:
                     self.status = text
             else:
                 self.job = None
-                notices.extend(self._finish(job, event[1], event[2], ok=kind == "done"))
+                try:
+                    notices.extend(self._finish(job, event[1], event[2], ok=kind == "done"))
+                except Exception:                 # never lose the outcome: say so, with the details
+                    trace = traceback.format_exc()
+                    log.error("finishing the %s job failed:\n%s", job.kind, trace)
+                    self.status = "Something went wrong at the end of the job."
+                    notices.append(Notice("error", "Factory", "Something went wrong at the end of the job. "
+                                          "Check the Shipments folder; Show details has what happened.",
+                                          details=trace))
         if self.preview is not None and self.job is None and not self.preview.running:
             pv, self.preview = self.preview, None
             self.status = "The preview has stopped."
-            self._start("stop_preview", "Cleaning up the preview…", lambda c, p: pv.stop(), cancellable=False)
+            try:
+                self._start("stop_preview", "Cleaning up the preview…", lambda c, p: pv.stop(), cancellable=False)
+            except ControllerError:
+                self.shutdown_preview(pv)
         return notices
 
     def _finish(self, job: JobState, result: Any, trace: str, ok: bool) -> list[Notice]:

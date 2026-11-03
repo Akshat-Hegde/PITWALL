@@ -792,6 +792,76 @@ def test_preview_error_shows_details(env):
                                                        "hub said no")
 
 
+def test_build_and_rebuild_wait_for_the_preview_to_stop(env):
+    # The preview may run the built program, which a build replaces (Windows can't replace a running program).
+    c = env.make()
+    keys_ready(c, env)
+    p = ready_cafe(c)
+    p.history = [history()]
+    c.save()
+    assert c.actions()["build"].enabled and c.actions()["rebuild"].enabled
+    pv = FakePreview()
+    env.backend.start_preview = lambda *a, **k: pv
+    c.toggle_preview()
+    run(c)
+    a = c.actions()
+    assert not a["build"].enabled and a["build"].reason == C.STOP_PREVIEW_FIRST
+    assert not a["rebuild"].enabled and a["rebuild"].reason == C.STOP_PREVIEW_FIRST
+    assert c.hint() == "Build package: Press Stop preview first."
+    with pytest.raises(ControllerError, match="Stop preview"):
+        c.start_build()
+    c.toggle_preview()
+    run(c)
+    assert c.actions()["build"].enabled and c.actions()["rebuild"].enabled
+
+
+def test_a_job_that_cant_start_leaves_the_window_usable(env, monkeypatch):
+    c = env.make()
+    ready_cafe(c)
+    pv = FakePreview()
+    env.backend.start_preview = lambda *a, **k: pv
+    c.toggle_preview()
+    run(c)
+
+    def no_thread(self):
+        raise RuntimeError("can't start new thread")
+
+    monkeypatch.setattr(threading.Thread, "start", no_thread)
+    with pytest.raises(ControllerError, match="couldn't be started"):
+        c.toggle_preview()                                # Stop preview
+    assert c.job is None and c.preview is pv              # still running, so it can still be stopped
+    pv.alive = False
+    assert c.poll() == []                                 # the clean-up job can't start either: stopped here
+    assert c.preview is None and c.job is None and pv.stopped == 1
+
+
+def test_a_failure_while_finishing_a_job_is_shown_and_the_window_is_free(env):
+    c = env.make()
+    keys_ready(c, env)
+    ready_cafe(c)
+    env.backend.build_package = lambda *a, **k: object()        # a result without .path
+    c.start_build()
+    (n,) = run(c)
+    assert n.kind == "error" and "end of the job" in n.message and "AttributeError" in n.details
+    assert c.job is None and c.actions()["build"].enabled
+
+
+def test_close_prompt_while_a_short_clean_up_runs(env):
+    c = env.make()
+    ready_cafe(c)
+    pv = FakePreview()
+    go = threading.Event()
+    pv.stop = lambda: (go.wait(5), setattr(pv, "stopped", pv.stopped + 1))
+    env.backend.start_preview = lambda *a, **k: pv
+    c.toggle_preview()
+    run(c)
+    c.toggle_preview()
+    assert c.close_prompt() == "The factory is finishing a job. Wait a moment, then close it."
+    go.set()
+    run(c)
+    assert c.close_prompt() is None
+
+
 def test_shutdown_stops_a_running_preview(env):
     c = env.make()
     ready_cafe(c)
@@ -875,3 +945,25 @@ def test_main_says_plainly_when_tkinter_is_missing(capsys, monkeypatch):
     assert entry.main() == 1
     out = capsys.readouterr().out
     assert "tcl/tk" in out and "Traceback" not in out
+
+
+def test_main_message_without_a_console_doesnt_fail(monkeypatch):
+    # pythonw (the launcher) has no console: sys.stdout is None. On Windows a message box shows instead.
+    from factory import __main__ as entry
+    shown = []
+    monkeypatch.setattr(entry.sys, "stdout", None)
+    monkeypatch.setattr(entry.os, "name", "posix")
+    entry._tell("hello")                                   # nothing to print to: no error
+    if hasattr(__import__("ctypes"), "windll"):
+        return
+    import ctypes
+
+    class User32:
+        @staticmethod
+        def MessageBoxW(_h, text, title, _flags):
+            shown.append((text, title))
+
+    monkeypatch.setattr(ctypes, "windll", type("W", (), {"user32": User32})(), raising=False)
+    monkeypatch.setattr(entry.os, "name", "nt")
+    entry._tell("hello")
+    assert shown == [("hello", "Factory")]

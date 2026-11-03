@@ -51,7 +51,11 @@ def display():
     finally:
         os.environ.pop("DISPLAY", None)
         proc.terminate()
-        proc.wait(5)
+        try:
+            proc.wait(5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait(5)
 
 
 @pytest.fixture
