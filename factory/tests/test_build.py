@@ -745,3 +745,133 @@ def test_runner_cancel_stops_the_command(tmp_path):
 def test_runner_timeout(tmp_path):
     r = B.Runner().run([sys.executable, "-c", "import time; time.sleep(30)"], cwd=tmp_path, timeout=0.5)
     assert r.stopped == "timeout"
+
+
+# --- C10 review: process tree, decoding, recording, key needles ----------------------------------------------
+
+class FakeKernel32:
+    def __init__(self, assign=1):
+        self.calls, self.assign = [], assign
+
+    def CreateJobObjectW(self, attrs, name):
+        self.calls.append("create")
+        return 42
+
+    def SetInformationJobObject(self, handle, cls, info, size):
+        flags = info._obj.BasicLimitInformation.LimitFlags
+        self.calls.append(("set", handle, cls, flags, size))
+        return 1
+
+    def AssignProcessToJobObject(self, handle, proc_handle):
+        self.calls.append(("assign", handle, proc_handle))
+        return self.assign
+
+    def TerminateJobObject(self, handle, code):
+        self.calls.append(("terminate", handle))
+        return 1
+
+    def CloseHandle(self, handle):
+        self.calls.append(("close", handle))
+        return 1
+
+
+def test_win_job_kills_the_tree_on_close_and_terminate():
+    k = FakeKernel32()
+    job = B.WinJob(k)
+
+    class Proc:
+        _handle = 7
+    assert job.add(Proc())
+    job.terminate()
+    job.close()
+    job.close()                                           # closing twice is harmless
+    size = 144 if sys.maxsize > 2 ** 32 else 112
+    assert k.calls == ["create", ("set", 42, 9, 0x2000, size), ("assign", 42, 7), ("terminate", 42), ("close", 42)]
+
+
+class FakeJob:
+    made: list = []
+
+    def __init__(self, assign=True):
+        self.assign, self.proc, self.terminated, self.closed = assign, None, False, False
+        FakeJob.made.append(self)
+
+    def add(self, proc):
+        self.proc = proc
+        return self.assign
+
+    def terminate(self):
+        self.terminated = True
+        os.killpg(self.proc.pid, 9)
+
+    def close(self):
+        self.closed = True
+
+
+@pytest.mark.skipif(os.name == "nt", reason="the Windows path is faked on Linux")
+def test_runner_on_windows_cancel_ends_the_job(tmp_path):
+    FakeJob.made = []
+    r = B.Runner()
+    r.windows, r.job_factory = True, FakeJob
+    cancel = threading.Event()
+    threading.Timer(0.3, cancel.set).start()
+    out = r.run([sys.executable, "-c", "import time; time.sleep(30)"], cwd=tmp_path, cancel=cancel)
+    job = FakeJob.made[0]
+    assert out.stopped == "cancelled" and job.terminated and job.closed
+
+
+@pytest.mark.skipif(os.name == "nt", reason="the Windows path is faked on Linux")
+def test_runner_on_windows_without_a_job_still_runs(tmp_path):
+    FakeJob.made = []
+    r = B.Runner()
+    r.windows, r.job_factory = True, lambda: FakeJob(assign=False)
+    out = r.run([sys.executable, "-c", "print('ok')"], cwd=tmp_path)
+    assert out.returncode == 0 and "ok" in out.output and FakeJob.made[0].closed and not FakeJob.made[0].terminated
+    r.job_factory = lambda: (_ for _ in ()).throw(OSError("no jobs"))
+    assert r.run([sys.executable, "-c", "print('ok')"], cwd=tmp_path).returncode == 0
+
+
+def test_decode_mixed_output_line_by_line():
+    data = "Python ü ok\r\n".encode("utf-8") + "ISCC é\r\n".encode("cp850") + b"\xff\xfe broken\n"
+    text = B._decode(data, fallback="cp850")
+    assert text.startswith("Python ü ok\r\nISCC é\r\n") and "broken" in text
+
+
+@pytest.mark.parametrize("error", [ValueError("odd"), RuntimeError("odd")])
+def test_history_save_unexpected_error_takes_the_package_back_out(env, monkeypatch, error):
+    p = cafe(env)
+    monkeypatch.setattr(env.store, "save", lambda profile: (_ for _ in ()).throw(error))
+    with pytest.raises(BuildError) as e:
+        build(env, p)
+    assert e.value.message == B.NOT_RECORDED
+    monkeypatch.undo()
+    assert_nothing_left(env, p)
+
+
+def test_history_written_but_save_reports_failure_keeps_the_package(env, monkeypatch):
+    p = cafe(env)
+    real = env.store.save
+
+    def half(profile):                    # the new file is written, then removing an old one fails
+        real(profile)
+        raise ProfileError("The cafe couldn't be saved.")
+    monkeypatch.setattr(env.store, "save", half)
+    result = build(env, p)
+    monkeypatch.undo()
+    assert result.path.is_dir()
+    assert [h.licence_id for h in load(env.store.find(p.cafe_id)).history] == [result.licence_id]
+
+
+@pytest.mark.parametrize("form", ["b64", "urlsafe", "HEX"])
+def test_verification_catches_other_key_encodings(env, monkeypatch, form):
+    import base64
+    raw = env.keys.private.private_bytes(Encoding.Raw, PrivateFormat.Raw, NoEncryption())
+    leaked = {"b64": base64.b64encode(raw), "urlsafe": base64.urlsafe_b64encode(raw),
+              "HEX": raw.hex().upper().encode()}[form]
+    real = docs.render_readme
+    monkeypatch.setattr(docs, "render_readme", lambda *a, **k: real(*a, **k) + leaked.decode())
+    p = cafe(env)
+    with pytest.raises(BuildError) as e:
+        build(env, p)
+    assert "signing key" in e.value.message
+    assert_nothing_left(env, p)

@@ -32,6 +32,8 @@ fakes. `FactorySettings` is the factory app's settings file (not in the repo, no
 
 from __future__ import annotations
 
+import base64
+import ctypes
 import datetime as dt
 import json
 import locale
@@ -239,11 +241,100 @@ class RunResult:
     stopped: Literal["cancelled", "timeout"] | None = None
 
 
-def _decode(data: bytes) -> str:
-    try:
-        return data.decode("utf-8")
-    except UnicodeDecodeError:
-        return data.decode(locale.getpreferredencoding(False) or "latin-1", errors="replace")
+def _fallback_encoding() -> str:
+    """What a line that isn't UTF-8 is read as: on Windows the console's OEM code page (PowerShell writes to a pipe
+    in it), else the locale's; never fails."""
+    names = []
+    if os.name == "nt":
+        try:
+            names.append(f"cp{ctypes.windll.kernel32.GetOEMCP()}")          # type: ignore[attr-defined]
+        except Exception:
+            pass
+    names += [locale.getpreferredencoding(False) or "", "latin-1"]
+    for name in names:
+        try:
+            if name and "".encode(name) == b"":
+                return name
+        except LookupError:
+            continue
+    return "latin-1"
+
+
+def _decode(data: bytes, fallback: str | None = None) -> str:
+    """The captured output for "Show details", line by line: UTF-8 where it is (Python, npm), else the console's
+    code page (PowerShell, ISCC), with anything unreadable replaced, so mixed output never fails or garbles it all."""
+    fallback = fallback or _fallback_encoding()
+    out = []
+    for line in data.splitlines(keepends=True):
+        try:
+            out.append(line.decode("utf-8"))
+        except UnicodeDecodeError:
+            out.append(line.decode(fallback, errors="replace"))
+    return "".join(out)
+
+
+class _BasicLimits(ctypes.Structure):
+    _fields_ = [("PerProcessUserTimeLimit", ctypes.c_int64), ("PerJobUserTimeLimit", ctypes.c_int64),
+                ("LimitFlags", ctypes.c_uint32), ("MinimumWorkingSetSize", ctypes.c_size_t),
+                ("MaximumWorkingSetSize", ctypes.c_size_t), ("ActiveProcessLimit", ctypes.c_uint32),
+                ("Affinity", ctypes.c_size_t), ("PriorityClass", ctypes.c_uint32),
+                ("SchedulingClass", ctypes.c_uint32)]
+
+
+class _IoCounters(ctypes.Structure):
+    _fields_ = [(name, ctypes.c_uint64) for name in ("ReadOperationCount", "WriteOperationCount",
+                                                      "OtherOperationCount", "ReadTransferCount",
+                                                      "WriteTransferCount", "OtherTransferCount")]
+
+
+class _ExtendedLimits(ctypes.Structure):
+    _fields_ = [("BasicLimitInformation", _BasicLimits), ("IoInfo", _IoCounters),
+                ("ProcessMemoryLimit", ctypes.c_size_t), ("JobMemoryLimit", ctypes.c_size_t),
+                ("PeakProcessMemoryUsed", ctypes.c_size_t), ("PeakJobMemoryUsed", ctypes.c_size_t)]
+
+
+class WinJob:
+    """A Windows Job Object holding a command and every program it starts (PowerShell, npm, PyInstaller, ISCC), so
+    Cancel or a timeout ends the whole tree without taskkill. KILL_ON_JOB_CLOSE also ends them when the job is
+    closed: after the command, or if the factory itself closes. `kernel32` is injectable for tests."""
+
+    EXTENDED_LIMIT_INFORMATION = 9
+    KILL_ON_JOB_CLOSE = 0x2000
+
+    def __init__(self, kernel32: Any = None) -> None:
+        if kernel32 is None:
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)          # type: ignore[attr-defined]
+            kernel32.CreateJobObjectW.restype = ctypes.c_void_p
+            kernel32.CreateJobObjectW.argtypes = (ctypes.c_void_p, ctypes.c_wchar_p)
+            for fn in ("SetInformationJobObject", "AssignProcessToJobObject", "TerminateJobObject", "CloseHandle"):
+                getattr(kernel32, fn).restype = ctypes.c_int
+            kernel32.SetInformationJobObject.argtypes = (ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p,
+                                                         ctypes.c_uint32)
+            kernel32.AssignProcessToJobObject.argtypes = (ctypes.c_void_p, ctypes.c_void_p)
+            kernel32.TerminateJobObject.argtypes = (ctypes.c_void_p, ctypes.c_uint)
+            kernel32.CloseHandle.argtypes = (ctypes.c_void_p,)
+        self.k = kernel32
+        self.handle = self.k.CreateJobObjectW(None, None)
+        if not self.handle:
+            raise OSError("CreateJobObject failed")
+        info = _ExtendedLimits()
+        info.BasicLimitInformation.LimitFlags = self.KILL_ON_JOB_CLOSE
+        if not self.k.SetInformationJobObject(self.handle, self.EXTENDED_LIMIT_INFORMATION, ctypes.byref(info),
+                                              ctypes.sizeof(info)):
+            self.close()
+            raise OSError("SetInformationJobObject failed")
+
+    def add(self, proc: subprocess.Popen) -> bool:
+        """Put a just-started process in the job (programs it starts from now on join it too)."""
+        return bool(self.k.AssignProcessToJobObject(self.handle, int(proc._handle)))   # type: ignore[attr-defined]
+
+    def terminate(self) -> None:
+        self.k.TerminateJobObject(self.handle, 1)
+
+    def close(self) -> None:
+        if self.handle:
+            self.k.CloseHandle(self.handle)
+            self.handle = None
 
 
 class Runner:
@@ -254,6 +345,26 @@ class Runner:
     """
 
     poll_s = 0.2
+    windows = os.name == "nt"
+    job_factory: Callable[[], Any] = WinJob
+
+    def _job_for(self, proc: subprocess.Popen) -> Any:
+        """On Windows, a job holding the process tree (None if Windows refuses: then only PowerShell is stopped)."""
+        if not self.windows:
+            return None
+        try:
+            job = self.job_factory()
+        except Exception:
+            log.warning("no job object for the build; Cancel stops only PowerShell", exc_info=True)
+            return None
+        try:
+            if job.add(proc):
+                return job
+        except Exception:
+            pass
+        log.warning("couldn't put the build in a job object; Cancel stops only PowerShell")
+        job.close()
+        return None
 
     def run(self, args: list[str], *, cwd: Path | None = None, timeout: float = BUILD_TIMEOUT_S,
             cancel: threading.Event | None = None) -> RunResult:
@@ -264,6 +375,7 @@ class Runner:
         else:
             kwargs["start_new_session"] = True              # so a cancel stops the whole group
         proc = subprocess.Popen(args, **kwargs)              # OSError: the caller says it couldn't start
+        job = self._job_for(proc)
         chunks: list[bytes] = []
         reader = threading.Thread(target=lambda: chunks.extend(iter(lambda: proc.stdout.read(65536), b"")),
                                   daemon=True)
@@ -281,24 +393,32 @@ class Runner:
             elif time.monotonic() > deadline:
                 stopped = "timeout"
             if stopped:
-                _stop(proc)
+                _stop(proc, job)
                 break
+        if job is not None:
+            job.close()                                      # KILL_ON_JOB_CLOSE: nothing it started outlives it
         reader.join(timeout=10)
-        try:
-            proc.stdout.close()
-        except OSError:
-            pass
-        return RunResult(proc.returncode if proc.returncode is not None else -1, _decode(b"".join(chunks)), stopped)
+        if not reader.is_alive():
+            try:
+                proc.stdout.close()
+            except OSError:
+                pass
+        # else a program it started still holds the pipe: closing it now could block this thread for good, so the
+        # daemon reader is left to end with that program.
+        return RunResult(proc.returncode if proc.returncode is not None else -1, _decode(b"".join(list(chunks))),
+                         stopped)
 
     def edge(self, args: list[str], **kwargs: Any) -> Any:
         return subprocess.run(args, **kwargs)
 
 
-def _stop(proc: subprocess.Popen) -> None:
-    """Stop a command we started. On Windows only the PowerShell process itself is ended (no taskkill): a program
-    it started (ISCC) finishes on its own and writes only into dist\\, never into Shipments."""
+def _stop(proc: subprocess.Popen, job: Any = None) -> None:
+    """Stop a command we started and everything it started: on Windows by ending its job object (no taskkill), or
+    PowerShell alone when there is no job; elsewhere its process group."""
     try:
-        if os.name != "nt":
+        if job is not None:
+            job.terminate()
+        elif os.name != "nt":
             os.killpg(proc.pid, signal.SIGKILL)
         else:
             proc.kill()
@@ -477,11 +597,25 @@ def _record(profile: CafeProfile, store: ProfileStore, entry: HistoryEntry, fina
     updated.history.append(entry)
     try:
         store.save(updated)
-    except (ProfileError, OSError):
-        _unpublish(final, staging)
-        raise _error(job, NOT_RECORDED) from None
+    except Exception as exc:
+        if not isinstance(exc, (ProfileError, OSError)):
+            job.log.add(traceback.format_exc())
+        if not _recorded(store, profile.cafe_id, entry.licence_id):
+            _unpublish(final, staging)
+            raise _error(job, NOT_RECORDED) from None
+        # the new file was written (only removing a renamed cafe's old file failed): the package stays with it
+        job.log.add(f"Note: {type(exc).__name__}: {exc}")
     profile.history.append(entry)
     job.log.add(f"Recorded in the history: licence {entry.licence_id}, number {entry.seq}, folder {entry.package}")
+
+
+def _recorded(store: ProfileStore, cafe_id: str, licence_id: str) -> bool:
+    """True when a saved profile of this cafe already holds that licence in its history."""
+    try:
+        return any(e.profile is not None and e.profile.cafe_id == cafe_id
+                   and any(h.licence_id == licence_id for h in e.profile.history) for e in store.list())
+    except Exception:
+        return False
 
 
 # --- checks ------------------------------------------------------------------------------------------
@@ -491,7 +625,8 @@ def _private_needles(keys: Keys) -> list[bytes]:
     raw = keys.private.private_bytes(Encoding.Raw, PrivateFormat.Raw, NoEncryption())
     pem = keys.private.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption())
     body = b"".join(line for line in pem.splitlines() if line and not line.startswith(b"-----"))
-    return [raw, raw.hex().encode(), body]
+    b64 = base64.b64encode(raw)[:43]                       # 43 characters: the same with or without "="
+    return [raw, raw.hex().encode(), raw.hex().upper().encode(), body, b64, base64.urlsafe_b64encode(raw)[:43]]
 
 
 def _file_contains(path: Path, needles: list[bytes], chunk: int = 4 * 1024 * 1024) -> bool:
