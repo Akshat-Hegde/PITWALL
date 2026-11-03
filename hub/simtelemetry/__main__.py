@@ -745,12 +745,30 @@ def prepare_demo(args: argparse.Namespace, config: AppConfig) -> None:
         config.backup.directory = paths.home() / "backups-demo"
     counts = seed(config.data_dir)
     config.track_names[TRACK_ID] = DEMO_TRACK_NAME
+    apply_demo_settings(config, args)
     if not config.owner.pin:
         config.owner.pin = "0000"
     if not config.staff.pin:
         config.staff.pin = config.owner.pin          # a staff PIN is required; the demo uses the same one
     log.info("Demo: %d sessions and %d laps of history in %s; six simulated rigs; owner and staff PIN %s; "
              "Director panel on /staff", counts["sessions"], counts["laps"], config.data_dir, config.owner.pin)
+
+
+def apply_demo_settings(config: AppConfig, args: argparse.Namespace) -> bool:
+    """`run --demo` on a folder with a settings.json (the factory's preview provisions one): show that cafe's name,
+    tagline, logo, colour, Wi-Fi and hours. A provisioned folder has no PINs yet, so the demo's own PINs (hub.toml,
+    --owner-pin, else 0000) stay; the backup folder never comes from the file, so "Back up now" in a demo can't
+    prune real backups. True when settings were applied."""
+    saved = SettingsStore(config.data_dir).load()
+    if saved is None:
+        return False
+    owner_pin, staff_pin = config.owner.pin, config.staff.pin
+    apply_settings(config, saved)
+    config.set_owner_backup_dir(None)
+    config.owner.pin = getattr(args, "owner_pin", None) or saved.owner_pin or owner_pin
+    config.staff.pin = saved.staff_pin or staff_pin
+    log.info("Demo: using the cafe details in %s", config.data_dir / "settings.json")
+    return True
 
 
 def run_command(args: argparse.Namespace, config: AppConfig, problems: list[ConfigProblem] = ()) -> int:

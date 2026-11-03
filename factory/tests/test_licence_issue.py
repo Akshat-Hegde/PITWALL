@@ -7,7 +7,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption, PrivateFormat
 
 from factory import keys as K
-from factory.licence_issue import IssueError, issue
+from factory.licence_issue import PREVIEW_PREFIX, IssueError, is_preview, issue, issue_preview
 from factory.profile import CafeProfile, Contact, HistoryEntry
 from simtelemetry import licence, licence_pubkey
 
@@ -129,3 +129,24 @@ def test_no_contact_or_key_material_in_code_or_logs(keys, caplog):
         assert "98765" not in text
     assert raw not in decoded
     assert payload.licence_id in caplog.text
+
+
+# --- the preview licence (C11) ----------------------------------------------------------------------
+
+def test_preview_licence_is_marked_and_never_blocks_a_real_one(keys):
+    p = cafe(history=[history(1), history(2)])
+    code, payload = issue_preview(p, keys, issued=DAY)
+    lic = licence.verify(code, keys=(keys.public,))
+    assert lic.payload == payload and is_preview(payload)
+    assert payload.seq == 0 and payload.licence_id.startswith(PREVIEW_PREFIX) and payload.rigs == 6
+    assert [h.seq for h in p.history] == [1, 2] and p.next_seq() == 3          # nothing recorded
+    real = licence.verify(issue(p, keys)[0], keys=(keys.public,))
+    assert not is_preview(real.payload)
+    ent = licence.entitlements_from(lic)
+    assert licence.accept_new(ent, real).seq == 3                      # any real code replaces it
+
+
+def test_preview_licence_refuses_a_profile_with_problems(keys):
+    with pytest.raises(IssueError) as exc:
+        issue_preview(cafe(name=""), keys)
+    assert "can't be previewed yet" in str(exc.value)

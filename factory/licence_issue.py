@@ -27,6 +27,9 @@ from .profile import CafeProfile
 
 log = logging.getLogger(__name__)
 
+PREVIEW_PREFIX = "preview-"     # a preview licence's id (factory preview, never sold or recorded)
+PREVIEW_SEQ = 0                 # below every real licence (they start at 1), so any real code replaces it
+
 
 class IssueError(ValueError):
     """The licence couldn't be made; the message is plain English for the factory window."""
@@ -55,13 +58,42 @@ def issue(profile: CafeProfile, keys: Keys | Ed25519PrivateKey, seq: int | None 
     if not isinstance(seq, int) or isinstance(seq, bool) or seq < next_seq:
         raise IssueError(f"This cafe's next licence number is {next_seq}; an older number would be refused "
                          "by the cafe's hub.")
+    issued_code = _sign(profile, keys, seq, licence_id or new_licence_id(), issued or dt.date.today())
+    log.info("Licence %s (number %d) issued for cafe %s", issued_code.payload.licence_id, issued_code.payload.seq,
+             issued_code.payload.cafe_id)
+    return issued_code
+
+
+def issue_preview(profile: CafeProfile, keys: Keys | Ed25519PrivateKey, issued: dt.date | None = None,
+                  logo_dir: Path | None = None) -> Issued:
+    """A licence for the factory's preview only (C11): licence number 0 and a `preview-` licence id, so it is
+    plainly not a sold licence and any real code for the cafe replaces it. Never recorded in the history; the
+    preview keeps it in a temporary folder that Stop preview deletes."""
+    problems = profile.problems(logo_dir)
+    if problems:
+        raise IssueError("This cafe can't be previewed yet. Fix these first:\n"
+                         + "\n".join(f"- {message}" for _, message in problems))
+    out = _sign(profile, keys, PREVIEW_SEQ, new_preview_id(), issued or dt.date.today())
+    log.info("Preview licence %s made for cafe %s (not recorded)", out.payload.licence_id, out.payload.cafe_id)
+    return out
+
+
+def new_preview_id() -> str:
+    return PREVIEW_PREFIX + secrets.token_hex(8)
+
+
+def is_preview(payload: licence.LicencePayload) -> bool:
+    return payload.licence_id.startswith(PREVIEW_PREFIX)
+
+
+def _sign(profile: CafeProfile, keys: Keys | Ed25519PrivateKey, seq: int, licence_id: str,
+          issued: dt.date) -> Issued:
     private = keys.private if isinstance(keys, Keys) else keys
     if not isinstance(private, Ed25519PrivateKey):
         raise TypeError("keys must be factory.keys.Keys or an Ed25519 private key")
     public = private.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
 
-    data = licence.encode_payload(profile.licence_payload(seq=seq, licence_id=licence_id or new_licence_id(),
-                                                          issued=issued or dt.date.today()))
+    data = licence.encode_payload(profile.licence_payload(seq=seq, licence_id=licence_id, issued=issued))
     try:
         payload = licence.check_payload(data)                      # before signing: never sign what the hub refuses
     except licence.LicenceError:
@@ -73,5 +105,4 @@ def issue(profile: CafeProfile, keys: Keys | Ed25519PrivateKey, seq: int | None 
         raise IssueError("The new code didn't pass its own check, so it wasn't used. Try again.") from None
     if checked.payload != payload:
         raise IssueError("The new code didn't pass its own check, so it wasn't used. Try again.")
-    log.info("Licence %s (number %d) issued for cafe %s", payload.licence_id, payload.seq, payload.cafe_id)
     return Issued(code=code, payload=payload)

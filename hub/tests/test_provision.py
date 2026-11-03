@@ -535,3 +535,49 @@ def test_cli_uses_the_installed_data_folder_by_default(tmp_path, signer, monkeyp
     assert main(["provision", str(bake(tmp_path / "baked", signer))]) == 0
     assert (tmp_path / "home" / "data" / "cafe.json").exists()
     assert (tmp_path / "home" / "config" / "hub.toml").exists()
+
+
+# --- the factory's preview: `run --demo` on a provisioned folder ------------------------------------------
+
+def test_demo_shows_a_provisioned_cafe(tmp_path, pc, signer, monkeypatch):
+    """C11: the preview provisions a demo folder; `run --demo` shows that cafe's details and uses its licence,
+    keeps the demo PINs (a provisioned folder has none) and never takes a backup folder from the file."""
+    import argparse
+    import simtelemetry.__main__ as cli
+    from simtelemetry.tools import seed_demo
+    data, config = pc
+    (data / seed_demo.MARKER).write_text("demo", encoding="utf-8")
+    assert provision(bake(tmp_path / "baked", signer, variant="unbranded", rigs=2), data, config).code == EXIT_OK
+    s = SettingsStore(data).load()
+    SettingsStore(data).save(s.model_copy(update={"backup_dir": str(tmp_path / "real-backups")}))
+    monkeypatch.setattr(seed_demo, "seed", lambda d, *a, **k: {"sessions": 0, "laps": 0})
+    monkeypatch.setenv("PITWALL_HOME", str(tmp_path))
+
+    cfg = load_config(config)
+    cfg.data_dir = data
+    cli.prepare_demo(argparse.Namespace(data_dir=data), cfg)
+    assert cfg.cafe.name == "Apex Lounge" and cfg.cafe.tagline == "Race the city"
+    assert cfg.cafe.logo and (data / "branding" / cfg.cafe.logo).is_file()
+    assert cfg.cafe.branding["--brand-accent"].lower() == "#ff2a6d"
+    assert cfg.cafe.wifi_ssid == "Apex Guests"
+    assert cfg.owner.pin == "0000" and cfg.staff.pin == "0000"
+    assert cfg.backups_dir == tmp_path / "backups-demo"            # never the folder in settings.json
+    assert cfg.features.events is False and cfg.features.moments is True    # hub.toml written by provision
+
+    hub = make_hub(tmp_path / "hub")
+    hub.config.data_dir = data
+    ent = hub.load_licence(warn_missing=False, fallback=cli.demo_fallback())
+    assert ent.source == "licence" and ent.rigs == 2 and ent.variant == "unbranded" and not ent.vendor_mark
+
+
+def test_demo_without_settings_is_unchanged(tmp_path, monkeypatch):
+    import argparse
+    import simtelemetry.__main__ as cli
+    from simtelemetry.tools import seed_demo
+    monkeypatch.setattr(seed_demo, "seed", lambda d, *a, **k: {"sessions": 0, "laps": 0})
+    cfg = AppConfig()
+    cfg.data_dir = tmp_path / "demo"
+    cfg.owner.pin = "2468"
+    cli.prepare_demo(argparse.Namespace(data_dir=cfg.data_dir), cfg)
+    assert cfg.cafe.name == AppConfig().cafe.name
+    assert cfg.owner.pin == "2468" and cfg.staff.pin == "2468"
