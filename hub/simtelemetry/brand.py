@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 
 PRODUCT_NAME = "Pitwall"
-COMPANY = "9T7 Racing"                                           # publisher: exe and installer details
+COMPANY = "9T7 Racing"                                           # the 9T7 installer's publisher, 9t7 supplier
 
 SLUG = re.sub(r"[^a-z0-9]+", "-", PRODUCT_NAME.lower()).strip("-")
 EXE_NAME = re.sub(r"[^A-Za-z0-9]+", "", PRODUCT_NAME)          # Pitwall.exe

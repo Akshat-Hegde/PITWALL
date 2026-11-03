@@ -10,17 +10,17 @@ from simtelemetry import __version__, brand  # noqa: E402  (the exe and folder n
 from PyInstaller.utils.win32.versioninfo import (FixedFileInfo, StringFileInfo, StringStruct,  # noqa: E402
                                                  StringTable, VarFileInfo, VarStruct, VSVersionInfo)
 
-# Windows file details (Properties > Details): company, product, version.
+# Windows file details (Properties > Details): product and version only. No company or copyright: one program build
+# serves every variant, and an unbranded cafe's Pitwall.exe must not name 9T7 Racing (Decision 8.8, 2026-11-03). The
+# 9T7 installer's publisher still comes from the Vendor define in pitwall.iss.
 _nums = tuple(int(n) for n in (__version__.split(".") + ["0", "0", "0"])[:4])
 VERSION_INFO = VSVersionInfo(
     ffi=FixedFileInfo(filevers=_nums, prodvers=_nums),
     kids=[
         StringFileInfo([StringTable("040904B0", [
-            StringStruct("CompanyName", brand.COMPANY),
             StringStruct("FileDescription", f"{brand.PRODUCT_NAME} hub"),
             StringStruct("FileVersion", __version__),
             StringStruct("InternalName", brand.EXE_NAME),
-            StringStruct("LegalCopyright", brand.COMPANY),
             StringStruct("OriginalFilename", f"{brand.EXE_NAME}.exe"),
             StringStruct("ProductName", brand.PRODUCT_NAME),
             StringStruct("ProductVersion", __version__),

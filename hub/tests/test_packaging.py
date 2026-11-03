@@ -240,7 +240,19 @@ def test_version_info_and_optional_signing():
     sign = (PKG / "sign.ps1").read_text(encoding="utf-8")
     assert "if ($env:SIGN_CERT_PASS)" in sign                                     # a .pfx without a password works
     spec = (PKG / "pitwall.spec").read_text(encoding="utf-8")
-    assert "version=VERSION_INFO" in spec and "brand.COMPANY" in spec and "brand.PRODUCT_NAME" in spec
+    assert "version=VERSION_INFO" in spec and "brand.PRODUCT_NAME" in spec
+
+
+def test_program_file_details_name_no_company():
+    """Decision 8.8 (user, 2026-11-03): Pitwall.exe's own details are neutral for every build (one program serves
+    both variants): product name from brand, no company or copyright. The 9T7 installer's publisher stays."""
+    spec = (PKG / "pitwall.spec").read_text(encoding="utf-8")
+    code = "\n".join(line.split("#", 1)[0] for line in spec.splitlines())       # the code, not the comments
+    assert "brand.COMPANY" not in code and "9T7" not in code.upper()
+    assert "CompanyName" not in code and "LegalCopyright" not in code
+    assert 'StringStruct("ProductName", brand.PRODUCT_NAME)' in code
+    iss = (PKG / "pitwall.iss").read_text(encoding="utf-8")
+    assert "AppPublisher={#Vendor}" in iss and "VersionInfoCompany={#Vendor}" in iss
 
 
 # --- Factory C6: cafe installers (spec 2.4, 2.5, F5) --------------------------------------------------------------

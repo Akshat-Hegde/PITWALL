@@ -48,7 +48,7 @@ Never run the installer on the development PC: it registers a boot task and fire
     - **Only one TV window:** on a PC that already has a TV start-up shortcut from the old launcher (`powershell -ExecutionPolicy Bypass -File tv-launcher.ps1 -StartOnLogin`, which puts "Pitwall TV.lnk" in your own Startup folder, `shell:startup`), run the installer with "Open the TV page when this PC signs in" ticked.
       - [ ] The old "Pitwall TV.lnk" is gone from `shell:startup`.
       - [ ] Sign out and in again: exactly one TV window opens.
-    - **Installer file details:** right-click the installer and `Pitwall.exe`, Properties, Details: company 9T7 Racing, product Pitwall, version 0.5.0.
+    - **Installer file details:** right-click the installer, Properties, Details: company 9T7 Racing, product Pitwall, version 0.6.0. Right-click `Pitwall.exe` too: product Pitwall, version 0.6.0, and **no** company or copyright (the program's own details are neutral in every build, so an unbranded cafe's program never names 9T7 Racing).
     - **Real upgrade from 0.4.0:** on a clean spare PC or VM (or uninstall and delete `C:\ProgramData\Pitwall` first), install `dist\Pitwall-Setup-0.4.0.exe` as a hub. On its setup page choose a cafe name, owner PIN `2468`, **no staff PIN**, and opening hours 10:00 to 24:00 (midnight). Drive a lap or two (or replay a capture into it) so the boards have laps, open the TV on this PC or a TV-only PC, and back up once on the owner page. Then run `Pitwall-Setup-0.5.0.exe` over it and check:
       - [ ] The last page says "Already set up: use your owner PIN." (no setup code).
       - [ ] Staff page: the owner PIN `2468` opens it, with the red "Set a staff PIN" banner.
