@@ -1,23 +1,50 @@
 # Build dist\<exe>\<exe>.exe: dashboard first, then PyInstaller, a smoke test on spare ports, then the Inno Setup installer.
 # Every product name comes from hub\simtelemetry\brand.py.
 # Needs a python.org Python 3.11 venv at .venv-build (see README, "Building the installer").
+#
+# With no parameters: the program and the generic installer, exactly as before.
+# A cafe's installer (the factory, spec 2.4/2.5):
+#   -ProfileDir <folder>  bakes that cafe's profile.json, logo and licence.txt into the installer (needs -CafeSlug)
+#   -CafeSlug <slug>      the installer becomes dist\<exe>-Setup-<slug>.exe (letters, digits and dashes)
+#   -Vendor <name>        the installer's publisher; "none" (or empty) for an unbranded build: no company at all.
+#                         Default: brand.COMPANY.
+#   -InstallerOnly        reuse dist\<exe>\ when its build-stamp.json matches this version and git commit (a clean
+#                         tree); otherwise the program is built first, as usual.
+param(
+  [string]$ProfileDir = "",
+  [string]$CafeSlug = "",
+  [string]$Vendor = $null,
+  [switch]$InstallerOnly
+)
 $ErrorActionPreference = "Stop"
 $root = Split-Path $PSScriptRoot -Parent
 $py = "$root\.venv-build\Scripts\python.exe"
-Push-Location "$root\dashboard"
+
+# The names and version straight from the source (hub\ on the path), so -InstallerOnly can decide before any build.
+$oldPythonPath = $env:PYTHONPATH
+$env:PYTHONPATH = "$root\hub"
 try {
-  npm ci
-  if ($LASTEXITCODE -ne 0) { throw "npm ci failed (exit $LASTEXITCODE)" }
-  npm run build
-  if ($LASTEXITCODE -ne 0) { throw "npm run build failed (exit $LASTEXITCODE)" }
-} finally { Pop-Location }
-if (-not (Test-Path "$root\dashboard\dist\index.html")) { throw "dashboard\dist\index.html missing after the dashboard build" }
-& $py -m pip install -q -e "$root[build]"
-if ($LASTEXITCODE -ne 0) { throw "pip install failed (exit $LASTEXITCODE)" }
-$brand = & $py -c "import json; from simtelemetry import brand; print(json.dumps(brand.as_dict()))" | ConvertFrom-Json
-& $py -m PyInstaller --noconfirm --clean --distpath "$root\dist" --workpath "$root\build" "$root\packaging\pitwall.spec"
-if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed" }
-$exe = "$root\dist\$($brand.EXE_NAME)\$($brand.EXE_NAME).exe"
+  $brand = & $py -c "import json; from simtelemetry import brand, __version__; d = brand.as_dict(); d['VERSION'] = __version__; print(json.dumps(d))" | ConvertFrom-Json
+  if ($LASTEXITCODE -ne 0 -or -not $brand) { throw "Could not read hub\simtelemetry\brand.py (exit $LASTEXITCODE)" }
+} finally { $env:PYTHONPATH = $oldPythonPath }
+$sourceVersion = $brand.VERSION
+
+# The installer's publisher (spec F5): brand.COMPANY unless -Vendor says otherwise; "none" or empty = unbranded.
+if (-not $PSBoundParameters.ContainsKey("Vendor")) { $Vendor = $brand.COMPANY }
+if ($Vendor -eq "none") { $Vendor = "" }
+if ($Vendor -match '[{}"\r\n]') { throw "-Vendor can't contain braces, quotes or line breaks" }
+if ($ProfileDir) {
+  if (-not $CafeSlug) { throw "-ProfileDir needs -CafeSlug (the installer's file name)" }
+  if (-not (Test-Path -LiteralPath $ProfileDir -PathType Container)) { throw "Profile folder $ProfileDir not found" }
+  $ProfileDir = (Resolve-Path -LiteralPath $ProfileDir).Path
+  if ($ProfileDir -match '[{}"]') { throw "The profile folder's path can't contain braces or quotes: $ProfileDir" }
+  foreach ($f in @("profile.json", "licence.txt")) {
+    if (-not (Test-Path -LiteralPath (Join-Path $ProfileDir $f) -PathType Leaf)) { throw "$f is missing from $ProfileDir" }
+  }
+}
+if ($CafeSlug -and $CafeSlug -notmatch '^[A-Za-z0-9][A-Za-z0-9-]{0,59}$') {
+  throw "-CafeSlug must be letters, digits and dashes (at most 60): $CafeSlug"
+}
 
 # Optional code signing (U8): only when <EXE_NAME>_SIGN_CERT (a .pfx file) is set, e.g. PITWALL_SIGN_CERT;
 # <EXE_NAME>_SIGN_PASS is its password (leave it unset for a .pfx without one). <EXE_NAME>_SIGN_TIMESTAMP names the
@@ -51,39 +78,101 @@ if ($signCert) {
   $env:SIGN_CERT_FILE = (Resolve-Path $signCert).Path
   $env:SIGN_CERT_PASS = if ($signPass) { $signPass } else { "" }
   $env:SIGN_TS_URL = $signTs
-  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $signScript $exe
-  if ($LASTEXITCODE -ne 0) { throw "Signing $exe failed (exit $LASTEXITCODE)" }
-  Write-Host "Signed $exe"
 }
 
-& $exe --version
-if ($LASTEXITCODE -ne 0) { throw "$exe --version failed (exit $LASTEXITCODE)" }
-$smokeHome = Join-Path $env:TEMP "$($brand.SLUG)-smoke"
-if (Test-Path $smokeHome) { Remove-Item $smokeHome -Recurse -Force }   # a fresh home, so setup is not done yet
-Set-Item "env:$($brand.HOME_ENV)" $smokeHome
-$p = Start-Process $exe -ArgumentList "run --demo --duration 25 --http-port 8199" -PassThru -WindowStyle Hidden
+# The program build is stamped with its version and commit (dist\<exe>\build-stamp.json, never installed). It is
+# reused only when -InstallerOnly is given, the stamp matches this version and commit, the tree was clean then and is
+# now (git status), signing is as it was, and the exe is there. Anything unsure builds the program again.
+$exe = "$root\dist\$($brand.EXE_NAME)\$($brand.EXE_NAME).exe"
+$stampFile = "$root\dist\$($brand.EXE_NAME)\build-stamp.json"
+$commit = ""
+$dirty = $true
 try {
-  Start-Sleep -Seconds 12
-  $h = Invoke-RestMethod http://127.0.0.1:8199/api/health
-  $page = Invoke-WebRequest http://127.0.0.1:8199/ -UseBasicParsing
-  if ($page.Content -notmatch "<div id=`"root`"") { throw "dashboard not served" }
-  Write-Host "Smoke test OK: $($h | ConvertTo-Json -Compress)"
-  # (--demo keeps its data in data-demo, so the code is made there.) The logo upload needs python-multipart, which PyInstaller only bundles via hiddenimports: prove it is in the exe.
-  $code = (& $exe setup-code --data-dir "$smokeHome\data-demo" | Select-Object -Last 1).Trim()
-  $png = Join-Path $env:TEMP "$($brand.SLUG)-smoke-logo.png"
-  [IO.File]::WriteAllBytes($png, [Convert]::FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg=="))
-  $up = curl.exe -s -S -X POST -H "X-Setup-Code: $code" -F "file=@$png;type=image/png" http://127.0.0.1:8199/api/setup/logo
-  if ($LASTEXITCODE -ne 0 -or $up -notmatch '"logo"\s*:\s*"logo-') { throw "Logo upload failed in the frozen exe: $up" }
-  Write-Host "Logo upload OK: $up"
-} finally { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
+  $commit = (& git -C $root rev-parse HEAD 2>$null | Select-Object -First 1)
+  if ($LASTEXITCODE -ne 0 -or -not $commit) { $commit = "" } else {
+    $commit = $commit.Trim()
+    $dirty = [bool](& git -C $root status --porcelain 2>$null)
+  }
+} catch { $commit = "" }
+$reuse = $false
+if ($InstallerOnly) {
+  $why = "no build stamp"
+  if ((Test-Path -LiteralPath $stampFile) -and (Test-Path -LiteralPath $exe)) {
+    try {
+      $stamp = Get-Content -LiteralPath $stampFile -Raw -Encoding UTF8 | ConvertFrom-Json
+      if (-not $commit) { $why = "git can't tell the current commit" }
+      elseif ($dirty) { $why = "the source has uncommitted changes" }
+      elseif ($stamp.version -ne $sourceVersion) { $why = "the program is version $($stamp.version), the source $sourceVersion" }
+      elseif ($stamp.commit -ne $commit -or $stamp.dirty) { $why = "the program was built from another commit" }
+      elseif ([bool]$stamp.signed -ne [bool]$signCert) { $why = "code signing was switched on or off since" }
+      else { $reuse = $true }
+    } catch { $why = "the build stamp can't be read" }
+  }
+  if ($reuse) { Write-Host "Reusing the program in dist\$($brand.EXE_NAME) (version $sourceVersion, commit $commit)" }
+  else { Write-Host "Building the program first: $why" }
+}
+
+if (-not $reuse) {
+  # An unfinished build must never look reusable.
+  if (Test-Path -LiteralPath $stampFile) { Remove-Item -LiteralPath $stampFile -Force }
+  Push-Location "$root\dashboard"
+  try {
+    npm ci
+    if ($LASTEXITCODE -ne 0) { throw "npm ci failed (exit $LASTEXITCODE)" }
+    npm run build
+    if ($LASTEXITCODE -ne 0) { throw "npm run build failed (exit $LASTEXITCODE)" }
+  } finally { Pop-Location }
+  if (-not (Test-Path "$root\dashboard\dist\index.html")) { throw "dashboard\dist\index.html missing after the dashboard build" }
+  & $py -m pip install -q -e "$root[build]"
+  if ($LASTEXITCODE -ne 0) { throw "pip install failed (exit $LASTEXITCODE)" }
+  & $py -m PyInstaller --noconfirm --clean --distpath "$root\dist" --workpath "$root\build" "$root\packaging\pitwall.spec"
+  if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed" }
+
+  if ($signtool) {
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $signScript $exe
+    if ($LASTEXITCODE -ne 0) { throw "Signing $exe failed (exit $LASTEXITCODE)" }
+    Write-Host "Signed $exe"
+  }
+
+  & $exe --version
+  if ($LASTEXITCODE -ne 0) { throw "$exe --version failed (exit $LASTEXITCODE)" }
+  $smokeHome = Join-Path $env:TEMP "$($brand.SLUG)-smoke"
+  if (Test-Path $smokeHome) { Remove-Item $smokeHome -Recurse -Force }   # a fresh home, so setup is not done yet
+  Set-Item "env:$($brand.HOME_ENV)" $smokeHome
+  $p = Start-Process $exe -ArgumentList "run --demo --duration 25 --http-port 8199" -PassThru -WindowStyle Hidden
+  try {
+    Start-Sleep -Seconds 12
+    $h = Invoke-RestMethod http://127.0.0.1:8199/api/health
+    $page = Invoke-WebRequest http://127.0.0.1:8199/ -UseBasicParsing
+    if ($page.Content -notmatch "<div id=`"root`"") { throw "dashboard not served" }
+    Write-Host "Smoke test OK: $($h | ConvertTo-Json -Compress)"
+    # (--demo keeps its data in data-demo, so the code is made there.) The logo upload needs python-multipart, which PyInstaller only bundles via hiddenimports: prove it is in the exe.
+    $code = (& $exe setup-code --data-dir "$smokeHome\data-demo" | Select-Object -Last 1).Trim()
+    $png = Join-Path $env:TEMP "$($brand.SLUG)-smoke-logo.png"
+    [IO.File]::WriteAllBytes($png, [Convert]::FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg=="))
+    $up = curl.exe -s -S -X POST -H "X-Setup-Code: $code" -F "file=@$png;type=image/png" http://127.0.0.1:8199/api/setup/logo
+    if ($LASTEXITCODE -ne 0 -or $up -notmatch '"logo"\s*:\s*"logo-') { throw "Logo upload failed in the frozen exe: $up" }
+    Write-Host "Logo upload OK: $up"
+  } finally { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
+
+  # Last, once the program is built, signed and smoke-tested: the stamp -InstallerOnly compares with (UTF-8, no BOM).
+  $stampJson = [ordered]@{ version = $sourceVersion; commit = $commit; dirty = $dirty; signed = [bool]$signtool;
+                           built = (Get-Date).ToString("s") } |
+               ConvertTo-Json
+  [IO.File]::WriteAllText($stampFile, $stampJson, (New-Object Text.UTF8Encoding $false))
+}
 
 # The installer. Inno Setup 6 is installed machine-wide or per user (winget); take whichever exists.
 $version = (& $exe --version).Split(" ")[-1]
+if ($LASTEXITCODE -ne 0) { throw "$exe --version failed (exit $LASTEXITCODE)" }
+if ($version -ne $sourceVersion) { throw "$exe is version $version, the source is $sourceVersion" }
 $iscc = @("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
           "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $iscc) { throw "Inno Setup 6 not found. Install it: winget install -e --id JRSoftware.InnoSetup" }
 $isccArgs = @("/DAppName=$($brand.PRODUCT_NAME)", "/DExeName=$($brand.EXE_NAME)", "/DTaskName=$($brand.TASK_NAME)",
-               "/DCompany=$($brand.COMPANY)", "/DAppVersion=$version")
+               "/DVendor=$Vendor", "/DAppVersion=$version")
+if ($ProfileDir) { $isccArgs += @("/DProfileDir=$ProfileDir") }
+if ($CafeSlug) { $isccArgs += @("/DCafeSlug=$CafeSlug") }
 if ($signtool) {
   # Inno Setup replaces $f with the quoted file to sign and $q with a quote; a literal $ is written $$. No literal
   # quotes in the value: Windows PowerShell would pass them to ISCC unescaped.
@@ -92,6 +181,6 @@ if ($signtool) {
 }
 & $iscc @isccArgs "$root\packaging\pitwall.iss"
 if ($LASTEXITCODE -ne 0) { throw "ISCC failed (exit $LASTEXITCODE)" }
-$installer = "$root\dist\$($brand.EXE_NAME)-Setup-$version.exe"
+$installer = if ($CafeSlug) { "$root\dist\$($brand.EXE_NAME)-Setup-$CafeSlug.exe" } else { "$root\dist\$($brand.EXE_NAME)-Setup-$version.exe" }
 if (-not (Test-Path $installer)) { throw "$installer was not produced" }
 Write-Host "Installer: $installer"

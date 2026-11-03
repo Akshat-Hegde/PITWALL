@@ -476,6 +476,13 @@ these environment variables before running `build.ps1` to sign `Pitwall.exe`, th
 - `PITWALL_SIGN_TIMESTAMP` (optional): timestamp server, default `http://timestamp.digicert.com`. `none` skips the
   timestamp, but then the signature stops being valid when the certificate expires.
 
+**For the builder: a cafe's installer.** The factory normally runs this for you. `build.ps1 -ProfileDir <folder>
+-CafeSlug <slug>` bakes a cafe's `profile.json`, logo and `licence.txt` into `dist\Pitwall-Setup-<slug>.exe`; the
+installer refuses a PC that belongs to another cafe (the seller can override with `/FORCEOTHERCAFE` on the
+installer's command line) and runs `Pitwall.exe provision` before the hub starts. `-Vendor none` builds an
+unbranded installer (no publisher); the default publisher is `brand.COMPANY`. `-InstallerOnly` reuses `dist\Pitwall\`
+when its `build-stamp.json` matches this version and a clean git commit, and only compiles the installer.
+
 Double-clicking `Pitwall.exe` (no arguments) starts the hub, same as `run`.
 
 ## Docs

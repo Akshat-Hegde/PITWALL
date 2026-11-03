@@ -16,7 +16,7 @@ def _iss() -> str:
 
 def test_installer_takes_every_name_from_the_build():
     iss = _iss()
-    for define in ("AppName", "ExeName", "TaskName", "AppVersion"):
+    for define in ("AppName", "ExeName", "TaskName", "AppVersion", "Vendor"):
         assert f"#ifndef {define}" in iss, define           # build.ps1 passes /D<name>=...; no defaults baked in
     assert r"{commonappdata}\{#AppName}" in iss             # cafe files outside Program Files
     assert "[UninstallDelete]" not in iss                   # uninstall never deletes the cafe's data
@@ -111,8 +111,8 @@ def test_keep_awake_task_is_ticked_and_sets_power_to_never():
 def test_tv_only_install_has_no_hub_parts():
     assert _lines("Components", 'Name: "tvonly"', "This PC only shows the TV (the hub runs on another PC)")
     # Everything that makes a PC a hub is limited to the hub component.
-    for line in _lines("Files"):
-        if r"..\tools\windows" not in line and "pitwall.ico" not in line:
+    for line in _lines("Files", "Source:"):
+        if r"..\tools\windows" not in line and "pitwall.ico" not in line and "dontcopy" not in line:
             assert "Components: hub" in line, line
     assert "Components: hub" in _lines("Files", "pitwall-task.xml")[0]           # no task, firewall or hub start
     assert "if IsHub then StopHub" in _iss()
@@ -230,10 +230,10 @@ def test_ready_page_warns_about_updates():
 
 def test_version_info_and_optional_signing():
     setup = _section("Setup")
-    assert "VersionInfoCompany={#Company}" in setup and "VersionInfoProductName={#AppName}" in setup
-    assert "AppPublisher={#Company}" in setup and "#ifdef SignInstaller" in setup
+    assert "VersionInfoCompany={#Vendor}" in setup and "VersionInfoProductName={#AppName}" in setup
+    assert "AppPublisher={#Vendor}" in setup and "#ifdef SignInstaller" in setup
     build = (PKG / "build.ps1").read_text(encoding="utf-8")
-    assert "/DCompany=$($brand.COMPANY)" in build
+    assert "/DVendor=$Vendor" in build and "$Vendor = $brand.COMPANY" in build
     assert "_SIGN_CERT" in build and "_SIGN_PASS" in build and "if ($signCert) {" in build
     assert "timestamp.digicert.com" in build and '-eq "none"' in build
     assert "$q" in build and "sign.ps1" in build and "/p `\"" not in build        # password never on ISCC's line
@@ -241,3 +241,178 @@ def test_version_info_and_optional_signing():
     assert "if ($env:SIGN_CERT_PASS)" in sign                                     # a .pfx without a password works
     spec = (PKG / "pitwall.spec").read_text(encoding="utf-8")
     assert "version=VERSION_INFO" in spec and "brand.COMPANY" in spec and "brand.PRODUCT_NAME" in spec
+
+
+# --- Factory C6: cafe installers (spec 2.4, 2.5, F5) --------------------------------------------------------------
+
+GENERIC = {"AppName": "Pitwall", "ExeName": "Pitwall", "TaskName": "Pitwall Hub", "AppVersion": "0.5.0",
+           "Vendor": "9T7 Racing"}
+CAFE = {**GENERIC, "ProfileDir": r"C:\Shipments\profiles\apex", "CafeSlug": "Apex-Lounge"}
+UNBRANDED = {**CAFE, "Vendor": ""}
+
+
+def _preprocess(defines: dict[str, str]) -> str:
+    """The installer script as Inno Setup's preprocessor leaves it for these /D defines: only the #ifdef / #ifndef /
+    #if Vendor / #else / #endif lines it uses here (anything else starting with # stays; an active #error raises)."""
+    out: list[str] = []
+    stack: list[tuple[bool, bool]] = []          # (this branch active, parent active)
+    active = True
+    for line in _iss().splitlines():
+        word = line.strip().split(" ", 1)
+        cmd, arg = word[0], (word[1].strip() if len(word) > 1 else "")
+        if cmd in ("#ifdef", "#ifndef", "#if"):
+            if cmd == "#if":
+                assert arg == 'Vendor != ""', f"the test doesn't know: {line}"
+                cond = defines.get("Vendor", "") != ""
+            else:
+                cond = (arg in defines) == (cmd == "#ifdef")
+            stack.append((cond, active))
+            active = active and cond
+        elif cmd == "#else":
+            cond, parent = stack.pop()
+            stack.append((not cond, parent))
+            active = parent and not cond
+        elif cmd == "#endif":
+            _, active = stack.pop()
+        elif active:
+            if cmd == "#error":
+                raise AssertionError(f"compile error with {defines}: {arg}")
+            out.append(line)
+    assert not stack
+    return "\n".join(out) + "\n"
+
+
+def _proc(text: str, name: str) -> str:
+    return text.split(f"\n{name}", 1)[1].split("\nend;", 1)[0]
+
+
+def test_generic_installer_is_unchanged_without_a_profile():
+    iss = _preprocess(GENERIC)
+    code = "\n".join(ln for ln in iss.splitlines() if not ln.lstrip().startswith((";", "//")))
+    for word in ("provision", "ProfileDir", "CafeSlug", "FORCEOTHERCAFE", "ExtractTemporaryFiles", "dontcopy"):
+        assert word not in code, word
+    assert "OutputBaseFilename={#ExeName}-Setup-{#AppVersion}" in iss
+    assert "AppPublisher={#Vendor}" in iss and "VersionInfoCompany={#Vendor}" in iss
+    # the program build's stamp never goes to a cafe
+    (program,) = [ln for ln in iss.splitlines() if ln.startswith(r'Source: "..\dist\{#ExeName}\*"')]
+    assert 'Excludes: "build-stamp.json"' in program
+
+
+def test_cafe_installer_needs_its_names_and_bakes_the_profile():
+    with __import__("pytest").raises(AssertionError, match="Build with"):
+        _preprocess({k: v for k, v in GENERIC.items() if k != "Vendor"})
+    with __import__("pytest").raises(AssertionError, match="CafeSlug"):
+        _preprocess({k: v for k, v in CAFE.items() if k != "CafeSlug"})
+    iss = _preprocess(CAFE)
+    assert "OutputBaseFilename={#ExeName}-Setup-{#CafeSlug}" in iss
+    assert "OutputBaseFilename={#ExeName}-Setup-{#AppVersion}" not in iss
+    files = _section("Files")
+    (baked,) = [ln for ln in iss.splitlines() if "{#ProfileDir}" in ln and ln.startswith("Source:")]
+    assert baked == r'Source: "{#ProfileDir}\*"; DestDir: "{tmp}\profile"; Flags: dontcopy'
+    # before the task XML line, whose AfterInstall must stay last
+    assert files.index("{#ProfileDir}") < files.index('Source: "pitwall-task.xml"')
+    # taken out in PrepareToInstall (dontcopy files are only in the installer until then), literally '{tmp}\...'
+    assert "ExtractTemporaryFiles('{tmp}\\profile\\*')" in _proc(iss, "function ExtractProfile")
+
+
+def test_whose_pc_check_runs_before_the_hub_is_stopped():
+    iss = _preprocess(CAFE)
+    prep = _proc(iss, "function PrepareToInstall")
+    assert prep.index("ExtractProfile") < prep.index("CheckWhosePC") < prep.index("if IsHub then StopHub")
+    assert "Result := 'This installer is damaged" in prep                    # no profile: refuse, nothing changed
+    check = _proc(iss, "function CheckWhosePC")
+    # the hub program already installed answers, reading only; no program yet = nothing to check
+    assert "ExpandConstant('{app}\\{#ExeName}.exe')" in check and "if not FileExists(Exe) then" in check
+    assert "RunProvision(Exe, ' --check', Output) = PROVISION_OTHER_CAFE" in check
+    assert "Result := Output;" in check and "Nothing was changed on this PC." in check
+    # the seller's override skips the check and is passed on to provision
+    assert check.index("if ForceOtherCafe then") < check.index("RunProvision")
+    assert "'/FORCEOTHERCAFE'" in _proc(iss, "function ForceOtherCafe")
+    assert "--force-other-cafe" in _proc(iss, "function RunProvision")
+
+
+def test_only_exit_code_3_refuses():
+    """An installed 0.5.0 program has no provision command: argparse exits 2. Only 3 means another cafe's PC."""
+    iss = _preprocess(CAFE)
+    assert "PROVISION_OTHER_CAFE = 3;" in iss
+    code = iss.split("[Code]", 1)[1]
+    import re
+    # every test of provision's exit code: the check's call, and ProvisionCafe's Code
+    compares = re.findall(r"(?:RunProvision\([^;]*?\)|\bCode)\s*(=|<>|<|>)\s*(\w+)", code)
+    assert sorted(set(compares)) == [("=", "0"), ("=", "PROVISION_OTHER_CAFE")]
+    for exit_code in ("1", "2"):
+        assert f"= {exit_code} then" not in _proc(iss, "function CheckWhosePC")
+        assert f"Code = {exit_code}" not in _proc(iss, "procedure ProvisionCafe")
+
+
+def test_provision_output_is_stdout_only_and_utf8():
+    run = _proc(_preprocess(CAFE), "function RunProvision")
+    assert "set PYTHONIOENCODING=utf-8&&" in run
+    assert "' > \"' +" in run and "2>nul" in run                              # stdout to a file, stderr dropped
+    assert "'provision \"' + ProfileFolder + '\"' + Extra" in run
+    assert "Output := TextOf(OutFile)" in run and "ResultCode := -1" in run
+
+
+def test_provision_runs_after_permissions_and_before_the_hub_starts():
+    iss = _preprocess(CAFE)
+    after = _proc(iss, "procedure AfterAllFiles")
+    order = ["DetectInstallState", "SetDataPermissions", "ProvisionCafe", "setup-code --new", "/Create /F /TN",
+             "/Run /TN"]
+    assert [after.index(step) for step in order] == sorted(after.index(step) for step in order)
+    prov = _proc(iss, "procedure ProvisionCafe")
+    assert "RunProvision(ExpandConstant('{app}\\{#ExeName}.exe'), ''" in prov
+    # never stops the install (files are already replaced): shows the reason, the hub still starts
+    assert "if Code = 0 then Exit;" in prov and "SuppressibleMsgBox(Shown" in prov
+    assert "The hub starts" in prov and "Abort" not in prov and "RaiseException" not in prov
+
+
+def test_publisher_comes_only_from_the_vendor_define():
+    from simtelemetry import brand
+    raw = _iss()
+    assert "9t7" not in raw.lower() and brand.COMPANY.lower() not in raw.lower()
+    assert "{#Company}" not in raw and "AppPublisherURL" not in raw and "AppCopyright" not in raw
+    for defines in (GENERIC, CAFE):
+        setup = _preprocess(defines).split("[Setup]\n", 1)[1].split("\n[", 1)[0]
+        for key in ("AppPublisher", "VersionInfoCompany", "VersionInfoCopyright"):
+            assert f"{key}={{#Vendor}}" in setup
+    setup = _preprocess(UNBRANDED).split("[Setup]\n", 1)[1].split("\n[", 1)[0]
+    for key in ("AppPublisher=", "VersionInfoCompany=", "VersionInfoCopyright="):
+        assert key not in setup                                               # no company string at all
+    assert "{#Vendor}" not in _preprocess(UNBRANDED)
+    # {#Vendor} is used nowhere but those three lines
+    assert raw.count("{#Vendor}") == 3
+
+
+def test_build_script_cafe_parameters_and_program_stamp():
+    build = (PKG / "build.ps1").read_text(encoding="utf-8")
+    params = build.split("param(", 1)[1].split("\n)", 1)[0]
+    for name in ("[string]$ProfileDir", "[string]$CafeSlug", "[string]$Vendor", "[switch]$InstallerOnly"):
+        assert name in params, name
+    assert build.index("param(") < build.index("$ErrorActionPreference")      # param must come first
+    # publisher: brand.COMPANY unless -Vendor is given; "none" (or empty) = unbranded
+    assert 'if (-not $PSBoundParameters.ContainsKey("Vendor")) { $Vendor = $brand.COMPANY }' in build
+    assert 'if ($Vendor -eq "none") { $Vendor = "" }' in build
+    assert '"/DProfileDir=$ProfileDir"' in build and '"/DCafeSlug=$CafeSlug"' in build
+    assert "-ProfileDir needs -CafeSlug" in build and "'^[A-Za-z0-9][A-Za-z0-9-]{0,59}$'" in build
+    assert '"$root\\dist\\$($brand.EXE_NAME)-Setup-$CafeSlug.exe"' in build
+    # the stamp: removed before a program build, written last after the smoke test, compared for -InstallerOnly
+    assert "build-stamp.json" in build
+    assert build.index("Remove-Item -LiteralPath $stampFile") < build.index("PyInstaller --noconfirm")
+    assert build.index("Logo upload OK") < build.index("[IO.File]::WriteAllText($stampFile")
+    stamp = build.split("$stampJson = [ordered]@{", 1)[1].split("}", 1)[0]
+    for key in ("version = $sourceVersion", "commit = $commit", "dirty = $dirty", "built = "):
+        assert key in stamp, key
+    reuse = build.split("if ($InstallerOnly) {", 1)[1].split("\nif (-not $reuse) {", 1)[0]
+    for check in ("$stamp.version -ne $sourceVersion", "$stamp.commit -ne $commit", "elseif ($dirty)",
+                  "Test-Path -LiteralPath $exe"):
+        assert check in reuse, check
+    assert "git -C $root rev-parse HEAD" in build
+    assert build.index("if ($signCert) {") < build.index("if ($InstallerOnly) {")   # signing is known before
+    assert "if (-not $reuse) {" in build and build.index("if (-not $reuse) {") < build.index("npm ci")
+    assert build.index("if ($version -ne $sourceVersion)") < build.index("& $iscc")
+
+
+def test_factory_is_never_bundled_into_the_program():
+    spec = (PKG / "pitwall.spec").read_text(encoding="utf-8")
+    excludes = spec.split("excludes=[", 1)[1].split("]", 1)[0]
+    assert '"factory"' in excludes

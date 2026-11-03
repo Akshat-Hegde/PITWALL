@@ -40,7 +40,7 @@ a = Analysis(
     hiddenimports=["uvicorn.logging", "uvicorn.loops.auto", "uvicorn.protocols.http.auto",
                    "uvicorn.protocols.websockets.auto", "uvicorn.lifespan.on",
                    "python_multipart", "multipart"],
-    excludes=["pytest", "tkinter"],
+    excludes=["pytest", "tkinter", "factory"],          # factory/: the seller's tools, never shipped to cafes
 )
 pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name=brand.EXE_NAME, console=True,

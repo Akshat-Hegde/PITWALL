@@ -11,8 +11,18 @@
 #ifndef AppVersion
   #error Build with packaging\build.ps1
 #endif
-#ifndef Company
+; The publisher (installer details, Add or remove programs): brand.COMPANY for the branded variant and the generic
+; installer, empty for an unbranded cafe build (then the installer names no company at all). Never write a company
+; name anywhere else in this file.
+#ifndef Vendor
   #error Build with packaging\build.ps1
+#endif
+; A cafe's installer (factory, spec 2.4): ProfileDir is the folder with that cafe's profile.json, logo and licence.txt;
+; CafeSlug names the installer file. Without ProfileDir this is the generic installer, exactly as before.
+#ifdef ProfileDir
+  #ifndef CafeSlug
+    #error A cafe installer needs CafeSlug (build.ps1 -CafeSlug)
+  #endif
 #endif
 #define HttpPort "8000"
 
@@ -20,13 +30,17 @@
 AppId={{B7C1E0A4-5D2F-4C57-9A53-2E6F4D8A9C11}
 AppName={#AppName}
 AppVersion={#AppVersion}
-AppPublisher={#Company}
-VersionInfoCompany={#Company}
+#if Vendor != ""
+AppPublisher={#Vendor}
+VersionInfoCompany={#Vendor}
+VersionInfoCopyright={#Vendor}
+#endif
+; (With no Vendor, AppPublisher, VersionInfoCompany and VersionInfoCopyright are left out: Inno Setup then writes
+; them empty.)
 VersionInfoProductName={#AppName}
 VersionInfoProductVersion={#AppVersion}
 VersionInfoVersion={#AppVersion}
 VersionInfoDescription={#AppName} installer
-VersionInfoCopyright={#Company}
 DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
@@ -34,7 +48,11 @@ PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=..\dist
+#ifdef CafeSlug
+OutputBaseFilename={#ExeName}-Setup-{#CafeSlug}
+#else
 OutputBaseFilename={#ExeName}-Setup-{#AppVersion}
+#endif
 SetupIconFile=pitwall.ico
 UninstallDisplayIcon={app}\{#ExeName}.ico
 WizardStyle=modern
@@ -80,13 +98,22 @@ Type: files; Name: "{autoprograms}\{#AppName} Open backups folder.lnk"; Componen
 Type: files; Name: "{autoprograms}\{#AppName} Open logs folder.lnk"; Components: tvonly
 
 [Files]
-Source: "..\dist\{#ExeName}\*"; DestDir: "{app}"; Components: hub; Flags: recursesubdirs createallsubdirs ignoreversion
+Source: "..\dist\{#ExeName}\*"; DestDir: "{app}"; Excludes: "build-stamp.json"; Components: hub; Flags: recursesubdirs createallsubdirs ignoreversion
 Source: "..\tools\windows\*"; DestDir: "{app}\tools"; Flags: recursesubdirs createallsubdirs ignoreversion
 Source: "pitwall.ico"; DestDir: "{app}"; DestName: "{#ExeName}.ico"; Flags: ignoreversion
 ; The commented reference config, always the current version's, next to hub.toml.
 Source: "..\config\hub.example.toml"; DestDir: "{commonappdata}\{#AppName}\config"; Components: hub; Flags: ignoreversion uninsneveruninstall
 ; A commented starter config for a fresh install; an existing hub.toml (even after an uninstall) is never touched.
 Source: "..\config\hub.example.toml"; DestDir: "{commonappdata}\{#AppName}\config"; DestName: "hub.toml"; Components: hub; Flags: onlyifdoesntexist uninsneveruninstall
+#ifdef ProfileDir
+; The cafe's profile.json, logo and licence.txt. dontcopy: they are never installed as files; PrepareToInstall takes
+; them out into {tmp}\profile (ExtractProfile) so the installed hub program can check whose PC this is before
+; anything is replaced, and AfterAllFiles hands the same folder to the new program's "provision". {tmp} is deleted
+; when Setup ends, so nothing of the profile stays behind except what provision writes into the data folder.
+; (A normal [Files] entry to {tmp} would arrive only during the file copy, after PrepareToInstall.) No
+; recursesubdirs: the folder is flat.
+Source: "{#ProfileDir}\*"; DestDir: "{tmp}\profile"; Flags: dontcopy
+#endif
 ; Last, so AfterInstall runs once the exe and everything else is in place. It writes the task XML, sets the data
 ; folder's permissions, makes the setup code, sets up the firewall and the boot task, and starts the hub.
 Source: "pitwall-task.xml"; DestDir: "{tmp}"; Components: hub; Flags: ignoreversion deleteafterinstall; AfterInstall: AfterAllFiles
@@ -128,6 +155,9 @@ var
   FreshInstall, SetupDone, HubAnswered, StartupTvDefaulted, IcaclsFailed: Boolean;
   SetupCodeText, StartErrorLine, DataPath: String;
   TaskDisabled, TaskRecreated: Boolean;
+#ifdef ProfileDir
+  ProfileExtracted: Boolean;
+#endif
   CodeLabel, HelpLabel, WarnLabel: TNewStaticText;
   HubAddrPage: TInputQueryWizardPage;
 
@@ -468,6 +498,152 @@ begin
   end;
 end;
 
+#ifdef ProfileDir
+// --- A cafe's installer: whose PC this is, and the cafe's details (spec 2.4, hub provision.py) --------------------
+
+const
+  // provision's exit codes: 0 done, 1 couldn't save, 2 the baked files can't be used, 3 another cafe's PC. Only 3
+  // refuses: an installed 0.5.0 program has no "provision" command and exits 2 (its usage message) on the check.
+  PROVISION_OTHER_CAFE = 3;
+
+// The seller's override for a PC that belongs to another cafe: /FORCEOTHERCAFE on the installer's command line
+// (never offered in the wizard). The whose-PC check is then skipped and provision gets --force-other-cafe, which
+// keeps the PC's own settings and PINs and only re-registers it and installs this licence.
+function ForceOtherCafe: Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  for I := 1 to ParamCount do
+    if CompareText(ParamStr(I), '/FORCEOTHERCAFE') = 0 then Result := True;
+end;
+
+function ProfileFolder: String;
+begin
+  Result := ExpandConstant('{tmp}\profile');
+end;
+
+// Takes the cafe's baked files ([Files], dontcopy) out of the installer into {tmp}\profile, once. The pattern is
+// matched against the entry's DestDir as written, so {tmp} stays unexpanded here; the files land in {tmp}\profile.
+function ExtractProfile: Boolean;
+begin
+  if not ProfileExtracted then
+  begin
+    try
+      ProfileExtracted := ExtractTemporaryFiles('{tmp}\profile\*') > 0;
+    except
+      Log('Could not take the cafe''s details out of the installer: ' + GetExceptionMessage);
+      ProfileExtracted := False;
+    end;
+  end;
+  Result := ProfileExtracted;
+end;
+
+// Every non-empty line of a text file (UTF-8), trimmed and joined with line breaks; at most 600 characters.
+function TextOf(FileName: String): String;
+var
+  Lines: TArrayOfString;
+  I: Integer;
+begin
+  Result := '';
+  if not LoadStringsFromFile(FileName, Lines) then Exit;
+  for I := 0 to GetArrayLength(Lines) - 1 do
+    if Trim(Lines[I]) <> '' then
+    begin
+      if Result <> '' then Result := Result + #13#10;
+      Result := Result + Trim(Lines[I]);
+    end;
+  if Length(Result) > 600 then Result := Copy(Result, 1, 597) + '...';
+end;
+
+// Runs "<Exe> provision <profile folder><Extra>" and returns its exit code (-1 when it could not be run at all).
+// Output is only what it printed on stdout, which is plain English for the owner; stderr is dropped (hub.toml
+// warnings in settings-file terms, an older program's usage text). UTF-8, so a cafe name in any language comes back
+// intact.
+function RunProvision(Exe, Extra: String; var Output: String): Integer;
+var
+  OutFile, Params: String;
+  ResultCode: Integer;
+begin
+  OutFile := ExpandConstant('{tmp}\provision.txt');
+  DeleteFile(OutFile);
+  Params := 'provision "' + ProfileFolder + '"' + Extra;
+  if ForceOtherCafe then Params := Params + ' --force-other-cafe';
+  // cmd strips the outer quotes of /c "..."
+  if not Exec(ExpandConstant('{cmd}'), '/c "set PYTHONIOENCODING=utf-8&& "' + Exe + '" ' + Params + ' > "' +
+      OutFile + '" 2>nul"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    ResultCode := -1;
+  Output := TextOf(OutFile);
+  DeleteFile(OutFile);
+  Log('provision' + Extra + ' -> ' + IntToStr(ResultCode) + ': ' + Output);
+  Result := ResultCode;
+end;
+
+// Before anything is stopped or replaced: may this cafe's installer go on this PC? Asks the hub program already
+// installed here ("provision --check" reads only and writes nothing, so the running hub is not disturbed). '' = go
+// on, else the plain reason to refuse. With no hub program yet there is nothing to ask (provision itself refuses
+// another cafe's PC later, after the files are in; see ProvisionCafe).
+function CheckWhosePC: String;
+var
+  Exe, Output: String;
+begin
+  Result := '';
+  if ForceOtherCafe then
+  begin
+    Log('/FORCEOTHERCAFE: whose PC this is was not checked.');
+    Exit;
+  end;
+  Exe := ExpandConstant('{app}\{#ExeName}.exe');
+  if not FileExists(Exe) then
+  begin
+    Log('No hub program on this PC yet: nothing to check.');
+    Exit;
+  end;
+  if RunProvision(Exe, ' --check', Output) = PROVISION_OTHER_CAFE then
+  begin
+    Result := Output;
+    if Result = '' then Result := 'This installer is for a different cafe.';
+    Result := Result + #13#10#13#10 + 'Nothing was changed on this PC. Ask your supplier for the right installer.';
+  end
+  else
+    Log('Whose-PC check passed (only exit code 3 refuses).');
+end;
+
+// After the files are in and the data folder's permissions are set (what provision writes inherits them), before the
+// hub starts: the cafe's details and licence (a fresh PC), or only a newer licence (an upgrade). It never stops the
+// install: the program files are already replaced, so the hub still starts, on this PC's own details (and, with no
+// licence, the hub's fallback), and the owner is told why.
+procedure ProvisionCafe;
+var
+  Output, Shown: String;
+  Code: Integer;
+begin
+  WizardForm.StatusLabel.Caption := 'Setting up the cafe''s details...';
+  if not ExtractProfile then
+  begin
+    Code := -1;
+    Output := '';
+  end
+  else
+    Code := RunProvision(ExpandConstant('{app}\{#ExeName}.exe'), '', Output);
+  if Code = 0 then Exit;
+  if (Code = PROVISION_OTHER_CAFE) and (Output = '') then Output := 'This installer is for a different cafe.';
+  if Code = PROVISION_OTHER_CAFE then
+    Shown := Output + #13#10#13#10 + 'Nothing from this installer''s cafe was set up. The hub starts with this ' +
+      'PC''s own details.'
+  else
+  begin
+    Shown := 'The cafe''s details could not be set up on this PC.';
+    if Output <> '' then
+      Shown := Shown + #13#10#13#10 + Output
+    else
+      Shown := Shown + ' Run this installer again; if this stays, contact your supplier.';
+    Shown := Shown + #13#10#13#10 + 'The hub starts anyway.';
+  end;
+  SuppressibleMsgBox(Shown, mbError, MB_OK, IDOK);
+end;
+#endif
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := '';
@@ -478,6 +654,23 @@ begin
     Log(Result);
     Exit;
   end;
+#ifdef ProfileDir
+  // A cafe's installer: refuse another cafe's PC before the hub is stopped or anything replaced. A silent install
+  // then ends with exit code 7 (Inno Setup: "Preparing to Install" stopped it), so a script sees it failed.
+  if IsHub then
+  begin
+    if not ExtractProfile then
+      Result := 'This installer is damaged: the cafe''s details are missing from it. Ask your supplier for a new ' +
+        'installer.'
+    else
+      Result := CheckWhosePC;
+    if Result <> '' then
+    begin
+      Log(Result);
+      Exit;
+    end;
+  end;
+#endif
   if IsHub then StopHub          // a TV-only PC has no hub to stop...
   else if HubInstalledHere then  // ...unless it was the hub until now
   begin
@@ -647,6 +840,11 @@ begin
   DetectInstallState;
   WriteTaskXml;
   SetDataPermissions;
+#ifdef ProfileDir
+  // FreshInstall and SetupDone were decided above, before provision pre-fills settings.json (with setup not done),
+  // so a fresh cafe PC still gets a new setup code below.
+  ProvisionCafe;
+#endif
   if FreshInstall or not SetupDone then
   begin
     // A fresh install gets a new code; an install that was never set up keeps the code it has (or gets one).
