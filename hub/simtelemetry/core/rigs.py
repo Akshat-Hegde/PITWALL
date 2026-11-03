@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from ..config import AppConfig
-from .drivers import ZWJ, ZWNJ, _keep_joiner
+from .drivers import ZWJ, ZWNJ, keep_joiner
 
 log = logging.getLogger(__name__)
 
@@ -71,7 +71,7 @@ def clean_rig_name(value: Any) -> str | None:
     dropped, except the joiners that shape an Indic (or other non-Latin) word, as in driver names."""
     raw = unicodedata.normalize("NFC", str(value or ""))
     text = "".join(c for i, c in enumerate(raw)
-                   if unicodedata.category(c) not in ("Cc", "Cf") or (c in (ZWJ, ZWNJ) and _keep_joiner(raw, i)))
+                   if unicodedata.category(c) not in ("Cc", "Cf") or (c in (ZWJ, ZWNJ) and keep_joiner(raw, i)))
     name = " ".join(text.split())
     if len(name) > RIG_NAME_MAX:
         raise RigError(f"A rig name can be at most {RIG_NAME_MAX} characters.")

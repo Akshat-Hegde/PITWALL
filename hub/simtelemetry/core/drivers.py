@@ -71,7 +71,7 @@ def _base_script(text: str, i: int) -> str | None:
     return _script(text[i]) if i >= 0 else None
 
 
-def _keep_joiner(text: str, i: int) -> bool:
+def keep_joiner(text: str, i: int) -> bool:
     """ZWJ/ZWNJ shape Indic and other non-Latin scripts (the Marathi eyelash "rya" needs the ZWJ): keep the one at
     text[i] between two characters of the same non-Latin script, and ZWJ inside an emoji sequence (family, flag).
     Drop it elsewhere. Combining marks count as their base letter's script, so marks around a joiner can't smuggle
@@ -103,7 +103,7 @@ def clean_name(value: Any) -> str:
         if c in _BLANKS:
             continue
         if unicodedata.category(c) == "Cf":
-            if c in (ZWJ, ZWNJ) and _keep_joiner(text, i):
+            if c in (ZWJ, ZWNJ) and keep_joiner(text, i):
                 kept.append(c)
             continue
         kept.append(c)

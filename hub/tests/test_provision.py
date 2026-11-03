@@ -150,6 +150,37 @@ def test_the_hub_starts_with_the_prefilled_details_and_setup_asks_for_pins(tmp_p
     assert s.logo.startswith("logo-")
 
 
+def test_a_provisioned_pc_without_pins_is_closed_until_setup_is_finished(tmp_path, pc, signer):
+    """No PINs yet must never mean "no PIN needed": owner, staff and /setup stay shut without the setup code."""
+    data, config = pc
+    provision(bake(tmp_path / "baked", signer), data, config)
+    code = SetupCode(data).new()
+    hub = make_hub(data)
+    apply_settings(hub.config, SettingsStore(data).load())
+    client = TestClient(create_app(hub, dashboard_dir=tmp_path / "none"))
+    for headers in ({}, {"X-Owner-PIN": ""}, {"X-Staff-PIN": ""}):
+        assert client.get("/api/owner/report", headers=headers).status_code == 403
+        assert client.get("/api/staff/rigs", headers=headers).status_code == 403
+    body = {"name": "Mine now", "owner_pin": "1111", "staff_pin": "2222"}
+    assert client.post("/api/setup", json=body).status_code == 401
+    assert client.post("/api/setup", json=body, headers={"X-Setup-Code": "WRONG-CODE"}).status_code == 401
+    assert client.get("/api/setup").json()["authed"] is False
+    assert SettingsStore(data).read().name == "Apex Lounge" and code
+
+
+def test_a_hub_run_on_hub_toml_pins_is_adopted_not_filled_in(tmp_path, pc, signer):
+    """No settings.json but PINs in hub.toml: pre-filled settings would replace them with none."""
+    data, config = pc
+    config.write_text(EXAMPLE.replace('pin = ""                               # owner PIN',
+                                      'pin = "2468"                           # owner PIN'), encoding="utf-8")
+    assert load_config(config).owner.pin == "2468"
+    before = snapshot(data, config)
+    r = provision(bake(tmp_path / "baked", signer), data, config)
+    assert r.code == EXIT_OK and r.mode == "adopt"
+    after = snapshot(data, config)
+    assert {k for k in after if before.get(k) != after[k]} == {"data/licence.txt", "data/cafe.json"}
+
+
 def test_rig_names_are_applied_as_rigs_register(tmp_path, pc, signer):
     data, config = pc
     provision(bake(tmp_path / "baked", signer, profile(rig_names=["Senna", None, "Lauda", "Rig 4"])), data, config)

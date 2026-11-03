@@ -24,15 +24,17 @@ profile.json, version 1 (unknown keys are ignored, so a newer factory's v1 file 
      "variant": "9t7"}                       # or "unbranded"
 
 What it does, decided by the PC's state (data folder, `cafe.json` stamp):
-- **fresh** (no settings.json, or one left by an unfinished provisioning: no owner PIN and setup not done; and no
-  stamp): installs the licence; pre-fills settings.json (name, tagline, logo, accent, Wi-Fi, hours) with no PINs and
-  setup_done false, so the owner still finishes /setup with the setup code; writes the rig names as pending names
-  into rigs.json (core/rigs.py applies them as rigs appear); sets hub.toml's [features] to the profile's, keeping
-  the rest of the file and its comments; writes the stamp last (an interrupted run is simply run again).
+- **fresh** (no settings.json and no PIN in hub.toml, or a settings.json left by an unfinished provisioning: no
+  owner PIN and setup not done; and no stamp): installs the licence; pre-fills settings.json (name, tagline, logo,
+  accent, Wi-Fi, hours) with no PINs and setup_done false, so the owner still finishes /setup with the setup code;
+  writes the rig names as pending names into rigs.json (core/rigs.py applies them as rigs appear); sets hub.toml's
+  [features] to the profile's, keeping the rest of the file and its comments; writes the stamp last (an
+  interrupted run is simply run again).
 - **upgrade** (stamp of this cafe): only a newer licence of the same cafe is installed (licence.accept_new).
   Settings, PINs, rig names, logo, Wi-Fi and hub.toml are never touched.
-- **adopt** (no stamp, but the PC is already set up, e.g. a 0.5.0 cafe upgraded with its first cafe installer, or
-  settings that can't be read): like upgrade, and the stamp is written.
+- **adopt** (no stamp, but the PC is already set up, e.g. a 0.5.0 cafe upgraded with its first cafe installer, a hub
+  run on hub.toml's PINs without the setup page, or settings that can't be read): like upgrade, and the stamp is
+  written.
 - **another cafe** (the stamp, or with no stamp the installed licence, names another cafe): refused with exit code
   3, unless --force-other-cafe: then the PC is re-stamped and given this licence, but its settings, PINs, rigs and
   hub.toml are kept (fresh only when there is nothing to keep).
@@ -365,6 +367,18 @@ def settings_state(data_dir: Path) -> Literal["missing", "unfinished", "set_up"]
     return "set_up"
 
 
+def hub_toml_has_pins(config_path: Path) -> bool:
+    """Whether hub.toml sets an owner or staff PIN: a hub run without the setup page, whose PINs and details live
+    in hub.toml. Pre-filled settings (with no PINs) would shut its owner out, so such a PC is adopted, not filled
+    in. A file that can't be read gives the hub no PINs either (it starts on defaults), so it counts as none."""
+    try:
+        data = tomllib.loads(Path(config_path).read_bytes().decode("utf-8-sig"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return False
+    return any(isinstance(data.get(section), dict) and str(data[section].get("pin") or "").strip()
+               for section in ("owner", "staff"))
+
+
 # --- hub.toml [features] ----------------------------------------------------------------------
 
 class HubTomlError(Exception):
@@ -534,7 +548,8 @@ def _provision(src: Path, data_dir: Path, config_path: Path, check: bool, force:
 
     if stamp is not None and not other:
         mode = "upgrade"
-    elif settings_state(data_dir) in ("missing", "unfinished"):
+    elif (state := settings_state(data_dir)) == "unfinished" or (
+            state == "missing" and not hub_toml_has_pins(config_path)):
         mode = "fresh"
     else:
         mode = "adopt"
