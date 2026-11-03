@@ -6,6 +6,8 @@ take the words from here, so they never drift apart. The labels are the game's o
 
 from __future__ import annotations
 
+import html
+
 GAME = "F1 25"
 MENU = "Game Options › Settings › UDP Telemetry Settings"
 HUB_ADDRESS = "the hub PC's address"          # what to type, when the real address isn't known (printed guides)
@@ -37,6 +39,7 @@ del _rest
 
 
 def page_fill() -> dict[str, str]:
-    """{{RIG_SETUP_...}} placeholders for the hub's HTML pages (plain text: none of it needs escaping)."""
-    return {"RIG_SETUP_GAME": GAME, "RIG_SETUP_BEFORE_ADDRESS": BEFORE_ADDRESS, "RIG_SETUP_BEFORE_PORT": BEFORE_PORT,
-            "RIG_SETUP_AFTER_PORT": AFTER_PORT, "RIG_SETUP_RESTRICTED": RESTRICTED_NOTE}
+    """{{RIG_SETUP_...}} placeholders for the hub's HTML pages, HTML-escaped (today's text has nothing to escape)."""
+    raw = {"RIG_SETUP_GAME": GAME, "RIG_SETUP_BEFORE_ADDRESS": BEFORE_ADDRESS, "RIG_SETUP_BEFORE_PORT": BEFORE_PORT,
+           "RIG_SETUP_AFTER_PORT": AFTER_PORT, "RIG_SETUP_RESTRICTED": RESTRICTED_NOTE}
+    return {key: html.escape(value, quote=False) for key, value in raw.items()}

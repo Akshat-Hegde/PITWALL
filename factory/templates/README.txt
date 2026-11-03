@@ -36,8 +36,8 @@ The licence code is printed on the licence certificate, also as a QR code. The
 installer puts it in for you, so you only need it if you are asked for it.
 
 To add rigs, games or features later, contact ${supplier}. You get a new code:
-on the owner page, find the Licence card, choose "Enter new code" and paste it.
-There is no reinstall.
+on the owner page, find the Licence card, paste it into the "Enter new code"
+box and press "Use this code". There is no reinstall.
 
 
 HELP

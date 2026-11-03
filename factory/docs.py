@@ -206,13 +206,14 @@ def _note(profile: CafeProfile) -> str:
     return f'<p class="muted small">{esc(note)}</p>' if note else ""
 
 
-def price_rows(b: pricing.Breakdown) -> str:
+def price_rows(b: pricing.Breakdown, rigs: int | None = None) -> str:
     """The certificate's price table: base, extra rigs, other add-ons, discount, total (9t7); the agreed price
-    only (unbranded)."""
+    only (unbranded). `rigs`: the licensed rigs; fewer than the base covers says "up to"."""
     inr = pricing.format_inr
     if b.base is None:
         return _row("Agreed price", esc(inr(b.total)), "total")
-    rows = [_row(f"{esc(brand.PRODUCT_NAME)} licence, including {_plural(b.base_rigs or 0, 'rig')}",
+    up_to = "up to " if rigs is not None and rigs < (b.base_rigs or 0) else ""
+    rows = [_row(f"{esc(brand.PRODUCT_NAME)} licence, including {up_to}{_plural(b.base_rigs or 0, 'rig')}",
                  esc(inr(b.base)))]
     if b.extra_rigs:
         rows.append(_row(f"{_plural(b.extra_rigs, 'extra rig')} at {esc(inr(b.extra_rig_price))} each",
@@ -309,8 +310,9 @@ def _guide(profile: CafeProfile, payload: licence.LicencePayload | None, common:
                     "<strong>New code</strong> for a rig, and when the hub address changes.</p>\n</section>")
         step += 1
     if wifi is not None:
-        wifi_text = (f"Test it on your guest Wi-Fi, <strong>{esc(_one_line(wifi.ssid))}</strong>: the TV shows it "
-                     "to guests as a QR code.")
+        wifi_text = f"Test it on your guest Wi-Fi, <strong>{esc(_one_line(wifi.ssid))}</strong>"
+        # the TV's "Join our Wi-Fi" QR comes with the driver cards (hub core/wifi.py: only with `sharing`)
+        wifi_text += ": the TV shows it to guests as a QR code." if "sharing" in features else "."
     else:
         wifi_text = "Test it on the Wi-Fi your guests use."
 
@@ -349,7 +351,7 @@ def _certificate(profile: CafeProfile, payload: licence.LicencePayload, common: 
         rigs=esc(str(payload.rigs)), games=esc(_and(_games(payload.games))),
         features=('<ul class="features">' + "".join(f"<li>{esc(f)}</li>" for f in features) + "</ul>"
                   if features else "The standard live timing screens"),
-        price_rows=price_rows(b), price_note=_note(profile),
+        price_rows=price_rows(b, payload.rigs), price_note=_note(profile),
     )
     return _template("certificate.html").substitute(values)
 

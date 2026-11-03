@@ -277,6 +277,29 @@ def test_guide_follows_spec_2_6():
     assert numbers == list(range(1, len(numbers) + 1))
 
 
+def test_guide_promises_the_tv_wifi_qr_only_with_driver_cards():
+    p = cafe(wifi=Wifi(ssid="Apex Guests", password="12345678"))
+    assert "the TV shows it to guests as a QR code" in text_of(render_html("guide", p, issued(p)))
+    p.features["sharing"] = False                        # the hub shows the Wi-Fi QR only with `sharing`
+    t = text_of(render_html("guide", p, issued(p)))
+    assert "Apex Guests" in t and "QR code." not in t.split("Apex Guests")[1][:40]
+
+
+def test_new_code_steps_name_the_owner_page_box_and_button():
+    p, up = upgrade_pair(rigs=6)
+    pages = [render_html("guide", p, up), render_html("certificate", p, up),
+             render_html("upgrade_certificate", p, up), render_readme(p, up)]
+    for page in pages:
+        assert "Use this code" in text_of(page)
+        assert "choose Enter new code" not in text_of(page)
+
+
+def test_certificate_under_four_rigs_says_up_to():
+    p = cafe(rigs=2)
+    assert price_lines(render_html("certificate", p, issued(p))) == [
+        (f"{brand.PRODUCT_NAME} licence, including up to 4 rigs", "₹20,000"), ("Total", "₹20,000")]
+
+
 def test_guide_without_check_in_leaves_out_the_stickers_and_keeps_steps_in_order():
     p = cafe()
     p.features = {**p.features, "self_checkin": False}
