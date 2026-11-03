@@ -134,14 +134,20 @@ def test_assert_not_inside(tmp_path):
     K.assert_not_inside(tmp_path / "usb", [None, root])
     link = tmp_path / "usb-link"
     root.mkdir()
-    link.symlink_to(root, target_is_directory=True)
+    if os.name == "nt":
+        import _winapi
+        _winapi.CreateJunction(str(root), str(link))              # symlinks need a privilege on Windows
+    else:
+        link.symlink_to(root, target_is_directory=True)
     with pytest.raises(KeysError):                                  # a link into Shipments is still Shipments
         K.assert_not_inside(link / "k", [root])
 
 
 # --- Windows ACL (never run here) ------------------------------------------------------------------
 
-def test_icacls_command():
+def test_icacls_command(monkeypatch):
+    for name in ("SystemRoot", "SYSTEMROOT"):
+        monkeypatch.delenv(name, raising=False)           # plain "icacls" (Windows sets SystemRoot)
     p = K.Path(r"C:\Users\ravi\AppData\Roaming\F\keys\signing.key")
     assert K.icacls_command(p, r"CAFE-PC\ravi") == ["icacls", str(p), "/inheritance:r", "/grant:r", r"CAFE-PC\ravi:F"]
     assert K.icacls_command(p.parent, "ravi", folder=True)[-1] == "ravi:(OI)(CI)F"
@@ -162,6 +168,8 @@ def windows_mocked(monkeypatch, returncode=0):
     monkeypatch.setattr(K, "_run", run)
     monkeypatch.setenv("USERNAME", "ravi")
     monkeypatch.setenv("USERDOMAIN", "CAFE-PC")
+    for name in ("SystemRoot", "SYSTEMROOT"):
+        monkeypatch.delenv(name, raising=False)
     return calls
 
 

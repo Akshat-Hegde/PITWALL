@@ -15,9 +15,14 @@ def _hub_on_path() -> None:
         sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "hub"))
 
 
+def _windows() -> bool:
+    """Tests replace this (patching os.name instead would break pathlib)."""
+    return os.name == "nt"
+
+
 def _tell(message: str) -> None:
     """A plain message: in a message box under pythonw (the launcher has no console), else printed."""
-    if sys.stdout is None and os.name == "nt":
+    if sys.stdout is None and _windows():
         try:
             import ctypes
             ctypes.windll.user32.MessageBoxW(None, message, "Factory", 0x40)    # type: ignore[attr-defined]

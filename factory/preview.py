@@ -459,7 +459,7 @@ def _join_job(job: Any, proc: Any) -> None:
 
 def start_preview(profile: CafeProfile, settings: build.FactorySettings, keys: Keys | None = None, *,
                   store: ProfileStore | None = None, popen: Callable[..., Any] = subprocess.Popen,
-                  run: Callable[..., Any] = subprocess.run, opener: Callable[[str], Any] = webbrowser.open,
+                  run: Callable[..., Any] = subprocess.run, opener: Callable[[str], Any] | None = None,
                   port_picker: Callable[[], int] = free_port, program: HubProgram | None = None,
                   temp_root: Path | None = None, health_timeout: float = HEALTH_TIMEOUT_S,
                   get: Callable[..., tuple[int, bytes]] = http_get, checkin_wait: float = CHECKIN_WAIT_S,
@@ -558,7 +558,7 @@ def start_preview(profile: CafeProfile, settings: build.FactorySettings, keys: K
         preview.notes = notes
         preview.details = "\n".join(details)
         if open_windows:
-            _open_windows(preview, settings, popen, opener)
+            _open_windows(preview, settings, popen, opener or webbrowser.open)
         log.info("Preview of cafe %s on %s", profile.cafe_id, preview.base_url)
         return preview
     except BaseException:

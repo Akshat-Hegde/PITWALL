@@ -108,6 +108,13 @@ class FakeHub:
         return 404, b""
 
 
+class FakeOpener(list):
+    """The usual browser: never opened for real."""
+
+    def __call__(self, url):
+        self.append(url)
+
+
 @pytest.fixture
 def trusted(env, monkeypatch):  # noqa: F811
     """The hub (the in-process provision) trusts the factory key, as a rebuilt hub would after Set up keys."""
@@ -124,6 +131,7 @@ def start(env, p, **kw):  # noqa: F811
     kw.setdefault("temp_root", env.tmp / "temp")
     kw.setdefault("job_factory", lambda: None)
     kw.setdefault("program", P.HubProgram(("python", "-m", "simtelemetry"), "python", str(ROOT / "hub")))
+    kw.setdefault("opener", FakeOpener())
     kw.setdefault("health_timeout", 2)
     kw.setdefault("checkin_wait", 0.5)
     (env.tmp / "temp").mkdir(exist_ok=True)
@@ -552,6 +560,7 @@ def test_health_wait_times_out_when_nothing_listens():
 
 # --- the real thing ------------------------------------------------------------------------------------
 
+@pytest.mark.skipif(os.name == "nt", reason="starts a real hub: never on the developer's Windows PC (L4 does it)")
 def test_real_preview_runs_the_demo_with_the_cafe(env, monkeypatch):  # noqa: F811
     """`python -m simtelemetry provision` and `run --demo` for real on a spare port: the hub answers, shows the
     provisioned cafe, and Stop preview ends it and deletes everything. (No Edge here: open_windows=False.)"""

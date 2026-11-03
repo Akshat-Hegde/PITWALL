@@ -152,13 +152,21 @@ class Action:
 
 # --- injectable outside world --------------------------------------------------------------------------------
 
+def _desktop() -> str:
+    """"windows", "mac" or "other". Tests replace this (patching os.name instead would break pathlib)."""
+    if os.name == "nt":
+        return "windows"
+    return "mac" if sys.platform == "darwin" else "other"
+
+
 def open_folder(path: Path) -> None:
     """Show a folder in Explorer (Windows) or the desktop's file manager. Never raises for a missing program."""
     path = Path(path)
     try:
-        if os.name == "nt":
+        desktop = _desktop()
+        if desktop == "windows":
             os.startfile(str(path))                  # type: ignore[attr-defined]
-        elif sys.platform == "darwin":
+        elif desktop == "mac":
             subprocess.Popen(["open", str(path)])
         else:
             subprocess.Popen(["xdg-open", str(path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

@@ -1,6 +1,7 @@
 """Smoke test of the factory window (spec 4: construct it under xvfb when there is one; skip otherwise).
 
-Skips cleanly when tkinter isn't installed (the cloud Python) or there is no screen. On Linux without $DISPLAY it
+Skips cleanly when tkinter isn't installed (the cloud Python) or there is no screen, and on Windows unless
+PITWALL_GUI_TESTS=1 (there it would show windows on the desktop). On Linux without $DISPLAY it
 starts its own Xvfb when that program is installed. The back end is faked; nothing is built or signed for real
 beyond a throwaway key in a temporary folder.
 """
@@ -27,6 +28,10 @@ PNG_1PX = (b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01
 
 @pytest.fixture(scope="module")
 def display():
+    if os.name == "nt" and os.environ.get("PITWALL_GUI_TESTS") != "1":
+        # On Windows this would open real windows and dialogs on the developer's desktop and replace the clipboard;
+        # run it on purpose with PITWALL_GUI_TESTS=1 (L1 checks the window by hand anyway).
+        pytest.skip("opens real windows on this desktop: set PITWALL_GUI_TESTS=1 to run it")
     if os.name == "nt" or os.environ.get("DISPLAY"):
         yield
         return

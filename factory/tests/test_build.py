@@ -22,6 +22,9 @@ from simtelemetry import __version__, brand, licence
 
 DAY = dt.date(2026, 11, 3)
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
+# The child Python for the real Runner tests. On Windows a venv's python.exe is a launcher that starts the real one
+# as a second process, which could start before the job holds the first; the base interpreter is a single process.
+PY = getattr(sys, "_base_executable", sys.executable) if os.name == "nt" else sys.executable
 
 
 # --- fakes --------------------------------------------------------------------------------------------
@@ -726,10 +729,12 @@ def test_build_command(env):
     assert B.powershell_exe({"SystemRoot": r"D:\Win"}).endswith("powershell.exe") if os.name == "nt" else True
 
 
-# --- the real Runner (Linux) -----------------------------------------------------------------------------
+# --- the real Runner (a child Python; on Windows in a real job object that holds only that child) -----------------------------------------------------------------------------
 
 def test_runner_captures_output_and_exit_code(tmp_path):
-    r = B.Runner().run([sys.executable, "-c", "import sys; print('hello ü'); sys.exit(3)"], cwd=tmp_path)
+    # the child writes UTF-8 bytes itself: a Windows Python would otherwise print in the ANSI code page
+    r = B.Runner().run([PY, "-c", "import sys; sys.stdout.buffer.write('hello ü\\n'.encode()); sys.exit(3)"],
+                       cwd=tmp_path)
     assert r.returncode == 3 and "hello ü" in r.output and r.stopped is None
 
 
@@ -737,13 +742,13 @@ def test_runner_cancel_stops_the_command(tmp_path):
     cancel = threading.Event()
     threading.Timer(0.3, cancel.set).start()
     start = time.monotonic()
-    r = B.Runner().run([sys.executable, "-c", "import time; print('x', flush=True); time.sleep(30)"],
+    r = B.Runner().run([PY, "-c", "import time; print('x', flush=True); time.sleep(30)"],
                        cwd=tmp_path, cancel=cancel)
     assert r.stopped == "cancelled" and time.monotonic() - start < 10 and "x" in r.output
 
 
 def test_runner_timeout(tmp_path):
-    r = B.Runner().run([sys.executable, "-c", "import time; time.sleep(30)"], cwd=tmp_path, timeout=0.5)
+    r = B.Runner().run([PY, "-c", "import time; time.sleep(30)"], cwd=tmp_path, timeout=0.5)
     assert r.stopped == "timeout"
 
 
@@ -802,33 +807,34 @@ class FakeJob:
 
     def terminate(self):
         self.terminated = True
-        os.killpg(self.proc.pid, 9)
+        if os.name == "nt":
+            self.proc.kill()                              # only the child this test started
+        else:
+            os.killpg(self.proc.pid, 9)
 
     def close(self):
         self.closed = True
 
 
-@pytest.mark.skipif(os.name == "nt", reason="the Windows path is faked on Linux")
 def test_runner_on_windows_cancel_ends_the_job(tmp_path):
     FakeJob.made = []
     r = B.Runner()
     r.windows, r.job_factory = True, FakeJob
     cancel = threading.Event()
     threading.Timer(0.3, cancel.set).start()
-    out = r.run([sys.executable, "-c", "import time; time.sleep(30)"], cwd=tmp_path, cancel=cancel)
+    out = r.run([PY, "-c", "import time; time.sleep(30)"], cwd=tmp_path, cancel=cancel)
     job = FakeJob.made[0]
     assert out.stopped == "cancelled" and job.terminated and job.closed
 
 
-@pytest.mark.skipif(os.name == "nt", reason="the Windows path is faked on Linux")
 def test_runner_on_windows_without_a_job_still_runs(tmp_path):
     FakeJob.made = []
     r = B.Runner()
     r.windows, r.job_factory = True, lambda: FakeJob(assign=False)
-    out = r.run([sys.executable, "-c", "print('ok')"], cwd=tmp_path)
+    out = r.run([PY, "-c", "print('ok')"], cwd=tmp_path)
     assert out.returncode == 0 and "ok" in out.output and FakeJob.made[0].closed and not FakeJob.made[0].terminated
     r.job_factory = lambda: (_ for _ in ()).throw(OSError("no jobs"))
-    assert r.run([sys.executable, "-c", "print('ok')"], cwd=tmp_path).returncode == 0
+    assert r.run([PY, "-c", "print('ok')"], cwd=tmp_path).returncode == 0
 
 
 def test_decode_mixed_output_line_by_line():

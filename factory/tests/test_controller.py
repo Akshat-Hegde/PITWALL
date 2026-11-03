@@ -3,6 +3,8 @@ field and tab, prices, presets, the key banner and Set up keys / Copy key to…,
 flows (start, progress, cancel, finish, error) with the back end faked."""
 
 import datetime as dt
+import os
+import sys
 import threading
 from pathlib import Path
 
@@ -891,7 +893,9 @@ def test_settings_update_saves_and_switches_the_list(env):
     assert c.settings.shipments == new
 
 
-def test_settings_problem_on_load_shows_in_the_status(env):
+def test_settings_problem_on_load_shows_in_the_status(env, monkeypatch):
+    from factory import keys as K
+    monkeypatch.setenv(K.KEYS_ENV, str(env.tmp / "default-keys"))     # never the seller's real key folder
     env.settings_file.parent.mkdir(parents=True)
     env.settings_file.write_text("{oops", encoding="utf-8")
     c = Controller(settings_file=env.settings_file, backend=env.backend, opener=env.opened)
@@ -910,17 +914,35 @@ def test_edge_text(env):
 
 
 def test_open_folder_uses_the_desktop_opener(monkeypatch, tmp_path):
+    # The platform is picked through C._desktop: patching os.name would break pathlib (PosixPath can't be made on
+    # Windows, WindowsPath can't on Linux). Nothing real opens: Popen and os.startfile are fakes.
     calls = []
     monkeypatch.setattr(C.subprocess, "Popen", lambda args, **kw: calls.append(args))
-    monkeypatch.setattr(C.os, "name", "posix")
-    monkeypatch.setattr(C.sys, "platform", "linux")
+    monkeypatch.setattr(C, "_desktop", lambda: "other")
     C.open_folder(tmp_path)
     assert calls == [["xdg-open", str(tmp_path)]]
+    monkeypatch.setattr(C, "_desktop", lambda: "mac")
+    C.open_folder(tmp_path)
+    assert calls[-1] == ["open", str(tmp_path)]
+
+    started = []
+    monkeypatch.setattr(C.os, "startfile", started.append, raising=False)
+    monkeypatch.setattr(C, "_desktop", lambda: "windows")
+    C.open_folder(tmp_path)
+    assert started == [str(tmp_path)]
 
     def boom(*a, **k):
         raise OSError("no xdg-open")
     monkeypatch.setattr(C.subprocess, "Popen", boom)
-    C.open_folder(tmp_path)                               # never raises
+    monkeypatch.setattr(C.os, "startfile", boom, raising=False)
+    for desktop in ("other", "windows"):
+        monkeypatch.setattr(C, "_desktop", lambda d=desktop: d)
+        C.open_folder(tmp_path)                           # never raises
+
+
+def test_desktop_kind_follows_the_system():
+    expected = "windows" if os.name == "nt" else ("mac" if sys.platform == "darwin" else "other")
+    assert C._desktop() == expected
 
 
 def test_no_network_in_the_window_modules():
@@ -952,10 +974,8 @@ def test_main_message_without_a_console_doesnt_fail(monkeypatch):
     from factory import __main__ as entry
     shown = []
     monkeypatch.setattr(entry.sys, "stdout", None)
-    monkeypatch.setattr(entry.os, "name", "posix")
+    monkeypatch.setattr(entry, "_windows", lambda: False)  # not os.name: patching it would break pathlib
     entry._tell("hello")                                   # nothing to print to: no error
-    if hasattr(__import__("ctypes"), "windll"):
-        return
     import ctypes
 
     class User32:
@@ -963,7 +983,8 @@ def test_main_message_without_a_console_doesnt_fail(monkeypatch):
         def MessageBoxW(_h, text, title, _flags):
             shown.append((text, title))
 
+    # a fake windll on every system, so no real message box ever shows on the developer's desktop
     monkeypatch.setattr(ctypes, "windll", type("W", (), {"user32": User32})(), raising=False)
-    monkeypatch.setattr(entry.os, "name", "nt")
+    monkeypatch.setattr(entry, "_windows", lambda: True)
     entry._tell("hello")
     assert shown == [("hello", "Factory")]
