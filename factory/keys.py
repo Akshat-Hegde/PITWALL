@@ -62,6 +62,10 @@ NO_KEYS = "There's no signing key on this PC yet. Use Set up keys first."
 DAMAGED = ("The signing key file is damaged. Copy it back from your backup (for example your USB drive) "
            "into {folder}.")
 ALREADY = "There are signing keys in {folder} already. They were not replaced."
+NO_ACCESS = ("This Windows account can't open the signing key in {folder}. Sign in with the account that made "
+             "the keys, or copy the key back from your backup.")
+ONLY_PUBLIC = ("There's a {public} in {folder} but no {private}. If you have a backup, copy {private} back into that "
+               "folder. If the signing key is lost, delete {public} there and use Set up keys again.")
 NOT_PRIVATE = ("The signing key couldn't be made private to your Windows account, so no key was made. "
                "Try again; if it keeps happening, restart the PC.")
 
@@ -160,10 +164,17 @@ def windows_user(env: dict[str, str] | None = None) -> str:
     return f"{env['USERDOMAIN']}\\{user}" if env.get("USERDOMAIN") else user
 
 
+def icacls_exe(env: dict[str, str] | None = None) -> str:
+    """The real icacls.exe in System32 (not whatever "icacls" is first on PATH)."""
+    env = os.environ if env is None else env
+    root = env.get("SystemRoot") or env.get("SYSTEMROOT")
+    return str(Path(root) / "System32" / "icacls.exe") if root else "icacls"
+
+
 def icacls_command(path: Path, user: str, folder: bool = False) -> list[str]:
     """Remove inherited rights and give only `user` full control (a folder passes it on to new files)."""
     grant = f"{user}:(OI)(CI)F" if folder else f"{user}:F"
-    return ["icacls", str(path), "/inheritance:r", "/grant:r", grant]
+    return [icacls_exe(), str(path), "/inheritance:r", "/grant:r", grant]
 
 
 def _protect(path: Path, folder: bool = False) -> None:
@@ -171,7 +182,10 @@ def _protect(path: Path, folder: bool = False) -> None:
     if _is_windows():
         cmd = icacls_command(path, windows_user(), folder)
         try:
-            done = _run(cmd, capture_output=True, text=True, timeout=60)
+            # Output is not read: icacls prints in the console code page, and decoding it could fail on
+            # a non-English path. No console window flashes up from the windowed factory app.
+            done = _run(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                        timeout=60, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         except (OSError, subprocess.SubprocessError):
             raise KeysError(NOT_PRIVATE) from None
         if done.returncode != 0:
@@ -195,11 +209,52 @@ def _write_new(path: Path, data: bytes, private: bool) -> None:
             f.flush()
             os.fsync(f.fileno())
         try:
-            os.link(tmp, path)
+            _link_new(tmp, path, data)
         except FileExistsError:
             raise KeysError(ALREADY.format(folder=path.parent)) from None
     finally:
         tmp.unlink(missing_ok=True)
+
+
+def _link_new(tmp: Path, path: Path, data: bytes) -> None:
+    """Give `tmp` the name `path` without ever replacing a file there (FileExistsError if one is).
+    A hard link first; on a drive without hard links, a rename on Windows (which never replaces a file) or an
+    exclusive create elsewhere."""
+    try:
+        os.link(tmp, path)
+        return
+    except FileExistsError:
+        raise
+    except (OSError, NotImplementedError):
+        if path.exists():
+            raise FileExistsError(path) from None
+    if _is_windows():
+        os.rename(tmp, path)                                       # keeps tmp's private ACL
+        return
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "wb") as f:
+        f.write(data)
+        f.flush()
+        os.fsync(f.fileno())
+
+
+def _write_private_copy(path: Path, data: bytes) -> None:
+    """Like write_atomic, but the temporary file is 0600 from the start (POSIX; on Windows the folder's rights)."""
+    tmp = path.with_name(path.name + ".tmp")
+    try:
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_BINARY", 0), 0o600)
+        with os.fdopen(fd, "wb") as f:
+            if not _is_windows():
+                os.chmod(tmp, 0o600)                               # an old tmp may have had other rights
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    finally:
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 # --- create and load -----------------------------------------------------------------------------
@@ -217,8 +272,10 @@ def create_keys(folder: Path | None = None, forbidden: Iterable[Path | None] = (
     the folder is inside the repo or a forbidden folder (pass the Shipments folder)."""
     folder = keys_dir(folder)
     assert_not_inside(folder, _forbidden(forbidden))
-    if (folder / PRIVATE_FILE).exists() or (folder / PUBLIC_FILE).exists():
+    if (folder / PRIVATE_FILE).exists():
         raise KeysError(ALREADY.format(folder=folder))
+    if (folder / PUBLIC_FILE).exists():
+        raise KeysError(ONLY_PUBLIC.format(folder=folder, public=PUBLIC_FILE, private=PRIVATE_FILE))
     try:
         new_folder = not folder.exists()
         folder.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -246,6 +303,8 @@ def load_private(folder: Path | None = None) -> Keys:
         if path.stat().st_size > MAX_KEY_FILE:
             raise damaged
         data = path.read_bytes()
+    except PermissionError:
+        raise KeysError(NO_ACCESS.format(folder=folder)) from None
     except OSError:
         raise damaged from None
     try:
@@ -283,9 +342,9 @@ def read_trusted_keys(path: Path) -> tuple[bytes, ...]:
     bad = KeysError(f"{path} couldn't be read, so it wasn't changed. Restore it from the repo and try again.")
     try:
         tree = ast.parse(path.read_text(encoding="utf-8"))
-    except (OSError, SyntaxError, UnicodeDecodeError, ValueError):
+    except (OSError, SyntaxError, UnicodeDecodeError, ValueError, RecursionError, MemoryError):
         raise bad from None
-    found: tuple[bytes, ...] | None = None
+    found: list[bytes] | None = None
     for node in tree.body:
         targets = node.targets if isinstance(node, ast.Assign) else [node.target] if isinstance(node, ast.AnnAssign) else []
         names = {t.id for t in targets if isinstance(t, ast.Name)}
@@ -293,7 +352,7 @@ def read_trusted_keys(path: Path) -> tuple[bytes, ...]:
             continue
         try:
             value = ast.literal_eval(node.value)
-        except ValueError:
+        except (ValueError, TypeError, SyntaxError, RecursionError, MemoryError):
             if "TRUSTED_KEYS" in names:                           # the generated form: built from the hex below
                 continue
             raise bad from None
@@ -309,10 +368,10 @@ def read_trusted_keys(path: Path) -> tuple[bytes, ...]:
             if not isinstance(item, bytes) or not _valid_public(item):
                 raise bad
             keys.append(item)
-        found = tuple(keys)
+        found = [*(found or []), *keys]                           # every assignment's keys: never drop one
     if found is None:
         raise bad
-    return found
+    return tuple(dict.fromkeys(found))
 
 
 def public_key_py(public: bytes, existing: Iterable[bytes] = ()) -> str:
@@ -343,6 +402,9 @@ def public_key_py(public: bytes, existing: Iterable[bytes] = ()) -> str:
 def write_public_key_py(repo_root: Path, keys: Keys) -> Path:
     """Add the key pair's public key to <repo>/hub/simtelemetry/licence_pubkey.py, keeping the keys there."""
     path = Path(repo_root) / PUBKEY_MODULE
+    if not path.parent.is_dir():
+        raise KeysError(f"{Path(repo_root)} isn't the program's source folder, so the hub's key file wasn't "
+                        "written. Choose the source folder and try again.")
     existing = read_trusted_keys(path) if path.exists() else ()
     text = public_key_py(keys.public, existing)
     count = len(dict.fromkeys([*existing, keys.public]))
@@ -414,9 +476,10 @@ def copy_backup(dest: Path, folder: Path | None = None, forbidden: Iterable[Path
     failed = KeysError(f"The key couldn't be copied to {dest} correctly. Check the drive and try again.")
     try:
         for name, data in files.items():
-            write_atomic(dest / name, data)
-            if name == PRIVATE_FILE and not _is_windows():
-                os.chmod(dest / name, 0o600)
+            if name == PRIVATE_FILE:
+                _write_private_copy(dest / name, data)
+            else:
+                write_atomic(dest / name, data)
         copied = all((dest / name).read_bytes() == data for name, data in files.items())
     except OSError:
         raise failed from None

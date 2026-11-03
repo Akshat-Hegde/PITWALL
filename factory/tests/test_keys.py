@@ -76,7 +76,7 @@ def test_create_refuses_to_overwrite(kdir, made):
         K.create_keys(kdir)
     assert (kdir / K.PRIVATE_FILE).read_bytes() == before
     (kdir / K.PRIVATE_FILE).unlink()                     # a public key alone is still refused
-    with pytest.raises(KeysError, match="already"):
+    with pytest.raises(KeysError, match="no signing.key"):
         K.create_keys(kdir)
 
 
@@ -328,3 +328,70 @@ def test_key_bytes_never_logged(tmp_path, kdir, caplog, monkeypatch):
         assert s not in caplog.text
     assert keys.fingerprint in caplog.text
     assert "Ed25519PrivateKey" not in repr(keys)
+
+
+# --- C8 review ------------------------------------------------------------------------------------
+
+def test_icacls_is_the_system32_one_and_its_output_is_never_decoded(kdir, monkeypatch):
+    kws = []
+    windows_mocked(monkeypatch)
+    monkeypatch.setenv("SystemRoot", r"C:\Windows")
+    monkeypatch.setattr(K, "_run", lambda cmd, **kw: kws.append((cmd, kw)) or subprocess.CompletedProcess(cmd, 0))
+    K.create_keys(kdir)
+    assert all(cmd[0] == str(K.Path(r"C:\Windows") / "System32" / "icacls.exe") for cmd, _ in kws)
+    for _, kw in kws:                                     # no text=True: a non-English path can't crash the decode
+        assert not kw.get("text") and kw["stdout"] == subprocess.DEVNULL and kw["stderr"] == subprocess.DEVNULL
+    assert K.icacls_exe({}) == "icacls"
+
+
+@pytest.mark.parametrize("windows", [False, True])
+def test_write_new_works_on_a_drive_without_hard_links(tmp_path, monkeypatch, windows):
+    def no_links(*a, **k):
+        raise OSError(1, "Operation not permitted")
+    monkeypatch.setattr(K.os, "link", no_links)
+    monkeypatch.setattr(K, "_is_windows", lambda: windows)
+    monkeypatch.setattr(K, "_protect", lambda *a, **k: None)
+    target = tmp_path / "signing.key"
+    K._write_new(target, b"key", private=True)
+    assert target.read_bytes() == b"key" and not list(tmp_path.glob("*.tmp"))
+    with pytest.raises(KeysError, match="not replaced"):
+        K._write_new(target, b"new", private=True)
+    assert target.read_bytes() == b"key"
+
+
+def test_write_public_key_py_refuses_a_folder_that_isnt_the_source(tmp_path, made):
+    with pytest.raises(KeysError, match="isn't the program's source folder"):
+        K.write_public_key_py(tmp_path / "somewhere", made)
+    assert not (tmp_path / "somewhere").exists()
+
+
+def test_read_trusted_keys_keeps_keys_from_every_assignment(tmp_path, made):
+    old = K.create_keys(tmp_path / "old")
+    path = tmp_path / "m.py"
+    path.write_text(K.public_key_py(made.public) + f"TRUSTED_KEYS = (bytes.fromhex('{old.public.hex()}'),)\n"
+                    + f"TRUSTED_KEYS = ({old.public!r},)\n")
+    assert K.read_trusted_keys(path) == (made.public, old.public)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX modes")
+def test_backup_private_copy_is_never_readable_by_others(tmp_path, kdir, made):
+    usb = tmp_path / "usb"
+    usb.mkdir()
+    old = os.umask(0)
+    try:
+        K.copy_backup(usb, kdir)
+    finally:
+        os.umask(old)
+    assert (usb / K.PRIVATE_FILE).stat().st_mode & 0o777 == 0o600
+
+
+def test_unreadable_key_says_which_account(kdir, made, monkeypatch):
+    real = K.Path.read_bytes
+
+    def denied(self):
+        if self.name == K.PRIVATE_FILE:
+            raise PermissionError(13, "denied")
+        return real(self)
+    monkeypatch.setattr(K.Path, "read_bytes", denied)
+    with pytest.raises(KeysError, match="account can't open"):
+        K.load_private(kdir)
