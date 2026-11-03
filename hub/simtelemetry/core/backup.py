@@ -342,7 +342,7 @@ def restore(zip_path: Path, data_dir: Path, config_path: Path | None) -> None:
                     continue
                 dest = data_dir / name
                 if name == LICENCE_FILE and _keep_current_licence(staging, data_dir):
-                    log.info("Restore kept this PC's licence: it is newer than the one in the backup")
+                    log.info("Restore kept this PC's licence: the backup's is older or damaged")
                     continue
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 if name == "laps.db":

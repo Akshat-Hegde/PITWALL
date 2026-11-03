@@ -96,6 +96,19 @@ describe("hub link watchdog", () => {
     expect(Object.keys(store.getState().frames).length).toBeGreaterThan(0);
   });
 
+  test("a second snapshot on the same connection (a new licence) replaces all state, with no reconnect", () => {
+    const { store } = start();
+    latest().send(snapshot());
+    latest().send({ v: 1, type: "status", seq: 1, ts: Date.now(), status: store.getState().status });
+    const again = snapshot() as HubMessage & { cafe: { name: string } };
+    latest().send({ ...again, seq: 2, cafe: { ...again.cafe, name: "Apex Lounge" } });
+    expect(store.getState().cafe?.name).toBe("Apex Lounge");
+    latest().send({ v: 1, type: "status", seq: 3, ts: Date.now(), status: store.getState().status });
+    expect(FakeSocket.all).toHaveLength(1);
+    expect(FakeSocket.all[0]!.closed).toBe(false);
+    expect(store.getState().link).toBe("live");
+  });
+
   test("a changed hub version or schema asks for a reload", () => {
     const { onHubChanged } = start();
     latest().send(snapshot("0.5.0"));

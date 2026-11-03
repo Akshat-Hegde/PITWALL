@@ -121,8 +121,10 @@ def owner_router(hub: Hub) -> APIRouter:
         return hub.licence_info()
 
     @router.post("/api/owner/licence", dependencies=[Depends(check)])
-    def licence_post(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
-        """{"code": "PW1-..."}: a new licence code (add-ons). Applies at once; errors are plain sentences."""
+    async def licence_post(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+        """{"code": "PW1-..."}: a new licence code (add-ons). Applies at once; errors are plain sentences.
+        async on purpose: the entitlement hooks change state the feed and the UDP path read, so they run on the
+        event loop like those, never in a worker thread (a check and one small file write: quick)."""
         code = body.get("code")
         if not isinstance(code, str) or not code.strip():
             raise HTTPException(400, INVALID)

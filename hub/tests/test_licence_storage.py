@@ -203,6 +203,23 @@ def test_owner_licence_api_needs_the_owner_pin_and_shares_the_lock_out(tmp_path,
     assert hub.entitlements is FALLBACK and not (tmp_path / LICENCE_FILE).exists()
 
 
+def test_owner_licence_api_applies_on_the_event_loop(tmp_path, signer):
+    """The hooks change state the feed and UDP path read on the event loop: never run them in a worker thread."""
+    import asyncio
+    hub, client = owner_client(tmp_path)
+    on_loop = []
+
+    def hook(_):
+        try:
+            asyncio.get_running_loop()
+            on_loop.append(True)
+        except RuntimeError:
+            on_loop.append(False)
+    hub.entitlement_hooks.append(hook)
+    assert client.post("/api/owner/licence", json={"code": signer.code()}, headers=OWNER).status_code == 200
+    assert on_loop == [True]
+
+
 def test_owner_licence_api_follows_the_owner_page_rules(tmp_path, signer):
     hub = make_hub(tmp_path)                                                      # no owner PIN yet
     client = TestClient(create_app(hub, dashboard_dir=tmp_path / "none"))

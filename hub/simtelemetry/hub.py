@@ -117,7 +117,7 @@ class Hub:
         # Licence (spec 2.2): the fallback until load_licence() runs at start-up (tests and replays keep it).
         self._entitlements: licence.Entitlements = licence.FALLBACK
         self.licence_problem: str | None = None       # "missing" / "damaged": staff, setup and owner pages say so
-        self._licence_lock = threading.Lock()
+        self._licence_lock = threading.RLock()      # re-entrant: a hook may read or re-apply the licence
         # Called with the new entitlements whenever they change (start-up load, a new code): enforcement hooks.
         self.entitlement_hooks: list[Callable[[licence.Entitlements], None]] = []
         # Bumped when every TV must get a fresh snapshot (a new licence): see FeedConnection.tick.
@@ -591,6 +591,10 @@ class Hub:
     def load_licence(self, warn_missing: bool = True) -> licence.Entitlements:
         """Read <data>/licence.txt at start-up. Missing or damaged: the fallback, and staff Health, /setup and the
         owner page say so (never the TV). `warn_missing=False` (demo) runs on the fallback quietly."""
+        with self._licence_lock:
+            return self._load_licence(warn_missing)
+
+    def _load_licence(self, warn_missing: bool) -> licence.Entitlements:
         try:
             found = licence.read_file(self.config.data_dir)
         except licence.LicenceError:
@@ -611,7 +615,8 @@ class Hub:
     def apply_licence(self, code: Any) -> licence.Entitlements:
         """A new code from the owner page: verified, checked against the current licence (same cafe, higher seq;
         a missing or damaged file counts as no licence yet, so the owner can recover), saved, and applied at once
-        with no restart; every TV gets a fresh snapshot. Raises LicenceError with the owner's plain message."""
+        with no restart; every TV gets a fresh snapshot. Raises LicenceError with the owner's plain message.
+        Call it on the event loop thread (the owner route is async): the hooks change state the feed reads."""
         with self._licence_lock:
             new = licence.verify(code)
             ent = licence.accept_new(self._entitlements, new)
