@@ -36,11 +36,13 @@ class CafeSettings(BaseModel):
     tagline: str = Field("", max_length=60)
     accent: str = "#E10600"
     logo: str | None = None
+    # Before owner_pin, so its check can see it: settings pre-filled by provisioning (provision.py) have no PINs
+    # yet and setup_done false; the owner chooses the PINs on /setup, which needs an owner PIN to finish.
+    setup_done: bool = False
     owner_pin: str                  # stored as a salted hash (core/pins.py); plain digits are hashed on the way in
     staff_pin: str = ""
     open_hour: int = Field(10, ge=0, le=23)
     close_hour: int = Field(22, ge=0, le=24)    # 0-6 at or before open_hour: the next day
-    setup_done: bool = False
     wifi_ssid: str = ""             # at most 32 BYTES of UTF-8 (checked below)
     wifi_password: str = Field("", max_length=63)
     wifi_security: str = "WPA"
@@ -69,6 +71,8 @@ class CafeSettings(BaseModel):
     def _digits(cls, value: str, info: ValidationInfo) -> str:
         if is_hashed(value):
             return value
+        if not value and info.field_name == "owner_pin" and info.data.get("setup_done") is False:
+            return value                      # pre-filled by provisioning: no owner PIN until /setup is finished
         if not _PIN.match(value) or (info.field_name == "owner_pin" and not value):
             raise ValueError("PINs are 4 to 8 digits")
         return hash_pin(value)

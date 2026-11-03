@@ -1,4 +1,4 @@
-"""Command line: python -m simtelemetry {run,listen,record,replay,setup-code} ..."""
+"""Command line: python -m simtelemetry {run,listen,record,replay,setup-code,provision,...} ..."""
 
 from __future__ import annotations
 
@@ -161,6 +161,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--config", type=Path, default=None, help="TOML config (default: config/hub.toml if present)")
     p.add_argument("--data-dir", type=Path, default=None, help="override data_dir from config")
     p.add_argument("--http-port", type=int, default=None, help="HTTP port the hub uses, to check it is stopped")
+
+    p = sub.add_parser("provision", help="apply a cafe's details baked into its installer (the installer runs this)")
+    p.add_argument("dir", type=Path, help="folder with profile.json, the logo and licence.txt")
+    p.add_argument("--check", action="store_true",
+                   help="only check that this installer is for this PC's cafe (exit code 3 if not); writes nothing")
+    p.add_argument("--force-other-cafe", action="store_true",
+                   help="install even though this PC belongs to another cafe (keeps its settings)")
+    p.add_argument("--config", type=Path, default=None, help="TOML config (default: config/hub.toml if present)")
+    p.add_argument("--data-dir", type=Path, default=None, help="override data_dir from config")
 
     p = sub.add_parser("folder", help="print one of the hub's folders (the Start-menu shortcuts open it); reads only")
     p.add_argument("which", choices=("data", "logs", "backups"))
@@ -386,6 +395,11 @@ def main(argv: list[str] | None = None) -> int:
     for problem in problems:
         print(f"WARNING: {problem.detail}", file=sys.stderr)
     blocking = admin_blockers(args, problems)
+    if blocking and args.command == "provision":
+        _plain_output()
+        print("The settings file (hub.toml) has a mistake, so the cafe's details weren't installed. Ask your "
+              "supplier to check this PC.", flush=True)
+        return 1
     if blocking:
         print(f"ERROR: the settings file (hub.toml) has a problem, so '{args.command}' won't run on guessed "
               "settings:", file=sys.stderr)
@@ -404,6 +418,8 @@ def main(argv: list[str] | None = None) -> int:
         return restore_command(args, config)
     if args.command == "folder":
         return folder_command(args, config)
+    if args.command == "provision":
+        return provision_command(args, config)
     raise AssertionError(args.command)
 
 
@@ -411,7 +427,7 @@ def admin_blockers(args: argparse.Namespace, problems: list[ConfigProblem]) -> l
     """hub.toml problems that would make an admin command act on the wrong folder or port: a file that couldn't be
     used at all, or a dropped data_dir (or, for backup and restore, a [backup] / [network] key). The hub itself
     starts anyway (load_config_safe); these commands write or replace data, so they refuse instead."""
-    if args.command not in ("setup-code", "backup", "restore"):
+    if args.command not in ("setup-code", "backup", "restore", "provision"):
         return []
     prefixes: list[tuple] = [("data_dir",)]
     if args.command in ("backup", "restore"):
@@ -499,6 +515,38 @@ def folder_command(args: argparse.Namespace, config: AppConfig) -> int:
             config.set_owner_backup_dir(Path(chosen.strip()))
         print(config.backups_dir)
     return 0
+
+
+def _plain_output() -> None:
+    """The installer shows what provision prints: never fail on a cafe name the console's code page can't show."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, ValueError, OSError):
+            pass
+
+
+def provision_command(args: argparse.Namespace, config: AppConfig) -> int:
+    """`provision <dir> [--check] [--force-other-cafe]`: apply the cafe's baked-in details (provision.py). Prints
+    plain-English lines for the installer; exit codes 0 done, 1 couldn't save, 2 bad files, 3 another cafe's PC."""
+    from .provision import provision
+    _plain_output()
+    if not args.check:          # --check writes nothing, not even a log line (the hub may be running)
+        setup_logging(config.data_dir / "logs")
+    try:
+        result = provision(args.dir, config.data_dir, args.config or paths.config_path(),
+                           check=args.check, force=args.force_other_cafe)
+    except Exception:           # never a stack trace on the installer's screen
+        log.exception("Provisioning failed")
+        print(f"{brand.PRODUCT_NAME} couldn't install the cafe's details. Restart the PC and run the installer "
+              "again; if it keeps happening, contact your supplier.", flush=True)
+        return 1
+    finally:
+        if not args.check:
+            teardown_logging()
+    for line in result.lines:
+        print(line, flush=True)
+    return result.code
 
 
 def backup_command(args: argparse.Namespace, config: AppConfig) -> int:

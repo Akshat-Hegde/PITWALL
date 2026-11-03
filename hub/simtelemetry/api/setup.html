@@ -283,8 +283,10 @@
     $("code-panel").hidden = !s.needs_code;
     renderWarnings(s.warnings || [], s.hidden_warnings || 0);
     // Once set up, the PINs are never sent back: blank means "keep the current PIN".
-    $("owner-pin").required = !s.has_settings;
-    $("owner-pin-label").textContent = s.has_settings ? "Owner PIN (leave blank to keep the current PIN)" : "Owner PIN (4 to 8 digits)";
+    // Settings pre-filled by the cafe's installer have no owner PIN yet: ask for one.
+    const hasOwnerPin = s.has_owner_pin === undefined ? s.has_settings : s.has_owner_pin;
+    $("owner-pin").required = !hasOwnerPin;
+    $("owner-pin-label").textContent = hasOwnerPin ? "Owner PIN (leave blank to keep the current PIN)" : "Owner PIN (4 to 8 digits)";
     $("staff-pin").required = !s.has_staff_pin;      // required: until one is set the form asks for it
     $("staff-pin-label").textContent = s.has_staff_pin ? "Staff PIN (leave blank to keep the current PIN)" : "Staff PIN (4 to 8 digits)";
     $("owner-pin").value = "";

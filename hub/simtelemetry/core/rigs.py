@@ -6,9 +6,14 @@ senders never become rigs. The auto name is saved to rigs.json so it stays stabl
 The owner edits rigs on the setup page: a name (rename), forget a rig that no longer exists, and "same rig as…"
 (merge) when a rig PC got a new address. Names and colours given there are saved in rigs.json too:
 
-    {"auto_names": {ip: "Rig N"}, "names": {ip: name}, "colours": {ip: "#rrggbb"}, "forgotten": [ip, ...]}
+    {"auto_names": {ip: "Rig N"}, "names": {ip: name}, "colours": {ip: "#rrggbb"}, "forgotten": [ip, ...],
+     "pending_names": {"N": name}}
 
 A name from the setup page wins over a name in hub.toml, which wins over the auto name.
+
+`pending_names` are rig names baked into a cafe's installer (provision.py), by rig number: the rig that gets (or
+already has) number N takes that name once, unless it was already given a name on the setup page. A used name
+leaves the list. Pending names never look like "Rig N", so they never change how rigs are numbered.
 """
 
 from __future__ import annotations
@@ -25,6 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from ..config import AppConfig
+from .drivers import ZWJ, ZWNJ, _keep_joiner
 
 log = logging.getLogger(__name__)
 
@@ -61,12 +67,28 @@ class Rig:
 
 
 def clean_rig_name(value: Any) -> str | None:
-    """A rig name as typed on the setup page; None (empty) means "back to its number"."""
-    text = "".join(c for c in str(value or "") if unicodedata.category(c) not in ("Cc", "Cf"))
+    """A rig name as typed on the setup page; None (empty) means "back to its number". Invisible characters are
+    dropped, except the joiners that shape an Indic (or other non-Latin) word, as in driver names."""
+    raw = unicodedata.normalize("NFC", str(value or ""))
+    text = "".join(c for i, c in enumerate(raw)
+                   if unicodedata.category(c) not in ("Cc", "Cf") or (c in (ZWJ, ZWNJ) and _keep_joiner(raw, i)))
     name = " ".join(text.split())
     if len(name) > RIG_NAME_MAX:
         raise RigError(f"A rig name can be at most {RIG_NAME_MAX} characters.")
     return name or None
+
+
+def _by_number(rig: Rig) -> tuple[int, str]:
+    return (rig.number if rig.number is not None else 1 << 30, rig.ip)
+
+
+def _pending_names(raw: Any) -> dict[int, str]:
+    """rigs.json "pending_names" ({"3": "Senna"}); entries that don't make sense are left out."""
+    out: dict[int, str] = {}
+    for key, name in (raw.items() if isinstance(raw, dict) else ()):
+        if isinstance(key, str) and key.isdigit() and isinstance(name, str) and name.strip() and int(key) >= 1:
+            out[int(key)] = name
+    return out
 
 
 class RigRegistry:
@@ -78,11 +100,14 @@ class RigRegistry:
         self._names: dict[str, str] = saved["names"]
         self._colours: dict[str, str] = saved["colours"]
         self._forgotten: set[str] = saved["forgotten"]
+        self._pending: dict[int, str] = saved["pending_names"]
         for ip, auto_name in saved["auto_names"].items():
             self._rigs[ip] = self._make(ip, auto_name)
         for rc in config.rigs:  # configured rigs show as "no data" until they send
             if rc.ip not in self._rigs and rc.ip not in self._forgotten:
                 self._rigs[rc.ip] = self._make(rc.ip, self._next_auto_name())
+        if self._pending and any([self._claim_pending(rig) for rig in sorted(self._rigs.values(), key=_by_number)]):
+            self.save()
 
     def _make(self, ip: str, auto_name: str) -> Rig:
         rc = self._config.rig_by_ip(ip)
@@ -90,6 +115,24 @@ class RigRegistry:
                    config_name=rc.name if rc else None,
                    colour=self._colours.get(ip) or (rc.colour if rc else None),
                    custom_name=self._names.get(ip))
+
+    def _claim_pending(self, rig: Rig) -> bool:
+        """Give `rig` the pending name for its number (see the module docstring). True when one was used up."""
+        name = self._pending.pop(rig.number, None) if rig.number is not None else None
+        if name is None:
+            return False
+        try:
+            name = clean_rig_name(name)
+        except RigError:
+            name = None
+        if rig.custom_name or not name or _RIG_N.fullmatch(name):
+            return True                      # a name from the setup page wins; a bad one is dropped
+        if any(r is not rig and r.name.casefold() == name.casefold() for r in self._rigs.values()):
+            log.warning("Pending rig name %r not used: another rig already has it", name)
+            return True
+        rig.custom_name = name
+        log.info("%s (%s) named %s from the cafe's installer", rig.auto_name, rig.ip, name)
+        return True
 
     def _next_auto_name(self) -> str:
         """The lowest "Rig N" not used by any rig's number or name (a rig renamed "Rig 7" takes 7 too)."""
@@ -103,7 +146,7 @@ class RigRegistry:
         return f"Rig {n}"
 
     def _load_saved(self) -> dict[str, Any]:
-        empty: dict[str, Any] = {"auto_names": {}, "names": {}, "colours": {}, "forgotten": set()}
+        empty: dict[str, Any] = {"auto_names": {}, "names": {}, "colours": {}, "forgotten": set(), "pending_names": {}}
         if not self._state_file or not self._state_file.exists():
             return empty
         try:
@@ -113,6 +156,7 @@ class RigRegistry:
                 "names": {str(ip): str(name) for ip, name in (data.get("names") or {}).items() if name},
                 "colours": {str(ip): str(c) for ip, c in (data.get("colours") or {}).items() if c},
                 "forgotten": {str(ip) for ip in (data.get("forgotten") or [])},
+                "pending_names": _pending_names(data.get("pending_names")),
             }
         except (OSError, ValueError, AttributeError, TypeError) as exc:
             log.warning("Ignoring unreadable rig registry %s: %s", self._state_file, exc)
@@ -127,6 +171,8 @@ class RigRegistry:
                 "names": {ip: rig.custom_name for ip, rig in rigs if rig.custom_name},
                 "colours": {ip: c for ip, c in colours.items() if ip in dict(rigs)},
                 "forgotten": sorted(list(self._forgotten))}
+        if self._pending:
+            data["pending_names"] = {str(n): name for n, name in sorted(self._pending.items())}
         tmp = None
         try:
             self._state_file.parent.mkdir(parents=True, exist_ok=True)
@@ -153,6 +199,7 @@ class RigRegistry:
             self._forgotten.discard(ip)          # a forgotten rig that sends again is a rig again
             rig = self._make(ip, self._next_auto_name())
             self._rigs[ip] = rig
+            self._claim_pending(rig)
             self.save()
         if rig.first_seen is None:
             rig.first_seen = now

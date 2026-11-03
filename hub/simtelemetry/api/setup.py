@@ -7,6 +7,7 @@ The setup code is never returned by any endpoint; it lives in the installer's la
 from __future__ import annotations
 
 import hashlib
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -47,6 +48,28 @@ def _plain_errors(exc: ValidationError) -> str:
         field = _FIELDS.get(str(e["loc"][0])) if e["loc"] else None
         out.append(f"{field}: {msg}" if field else msg[:1].upper() + msg[1:])
     return "; ".join(out)
+
+
+def save_logo(branding_dir: Path, data: bytes, ext: str) -> str:
+    """Save a checked logo image as <branding>/logo-<hash><ext> and remove the previous one; returns the file name.
+    A new image gets a new name, so a new URL (cache busting). Written atomically: a power cut never leaves half a
+    logo, and the old one goes only once the new one is in place. Raises OSError. Also used by provisioning."""
+    branding_dir.mkdir(parents=True, exist_ok=True)
+    name = f"logo-{hashlib.sha256(data).hexdigest()[:8]}{ext}"
+    path = branding_dir / name
+    tmp = branding_dir / (name + ".tmp")
+    try:
+        with open(tmp, "wb") as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
+    for old in branding_dir.glob("logo*"):
+        if old.name != name:
+            old.unlink()
+    return name
 
 
 def setup_router(hub: Hub) -> APIRouter:
@@ -107,6 +130,7 @@ def setup_router(hub: Hub) -> APIRouter:
             "product": brand.PRODUCT_NAME,
             "setup_done": bool(s and s.setup_done),
             "has_settings": s is not None,          # earlier settings (and PINs) exist; blank PIN fields keep them
+            "has_owner_pin": bool(s and s.owner_pin),   # settings pre-filled by provisioning have no PINs yet
             "has_staff_pin": bool(s and s.staff_pin),   # a staff PIN is required: the form asks for one until set
             "needs_code": not (s and s.setup_done),
             "name": c.cafe.name, "tagline": c.cafe.tagline, "logo": c.cafe.logo,
@@ -234,12 +258,7 @@ def setup_router(hub: Hub) -> APIRouter:
             raise HTTPException(400, "Use a PNG, JPEG or WebP image.")
         if len(data) > MAX_LOGO_BYTES:
             raise HTTPException(400, "The logo must be under 1 MB.")
-        store.branding_dir.mkdir(parents=True, exist_ok=True)
-        name = f"logo-{hashlib.sha256(data).hexdigest()[:8]}{ext}"   # new image = new name = new URL (cache busting)
-        for old in store.branding_dir.glob("logo*"):
-            old.unlink()
-        (store.branding_dir / name).write_bytes(data)
-        hub.config.cafe.logo = name
+        hub.config.cafe.logo = save_logo(store.branding_dir, data, ext)
         s = current()
         if s is not None:
             store.save(s.model_copy(update={"logo": hub.config.cafe.logo}))
